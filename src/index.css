@@ -1,0 +1,1921 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =============================================================================
+   CSS VARIABLES (DESIGN TOKENS)
+   ============================================================================= */
+:root {
+  /* Primary Colors */
+  --primary: 217 91% 60%;
+  --primary-foreground: 0 0% 100%;
+
+  /* Background */
+  --background: 0 0% 100%;
+  --foreground: 222 47% 11%;
+
+  /* Card */
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+
+  /* Muted */
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+
+  /* Accent */
+  --accent: 210 40% 96%;
+  --accent-foreground: 222 47% 11%;
+
+  /* Border */
+  --border: 214 32% 91%;
+
+  /* Success */
+  --success: 142 71% 45%;
+  --success-foreground: 0 0% 100%;
+
+  /* Warning */
+  --warning: 38 92% 50%;
+  --warning-foreground: 0 0% 100%;
+
+  /* Destructive */
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+
+  /* Sidebar */
+  --sidebar-background: 222 47% 11%;
+  --sidebar-foreground: 215 16% 47%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 217 33% 17%;
+  --sidebar-border: 217 33% 17%;
+
+  /* Radius */
+  --radius: 0.5rem;
+
+  /* Shadows */
+  --shadow-elegant: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* =============================================================================
+   GLOBAL STYLES
+   ============================================================================= */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  line-height: 1.5;
+}
+
+/* =============================================================================
+   GRADIENT UTILITIES
+   ============================================================================= */
+.bg-gradient-sidebar {
+  background: linear-gradient(180deg, hsl(222, 47%, 11%) 0%, hsl(217, 33%, 17%) 100%);
+}
+
+.bg-gradient-primary {
+  background: linear-gradient(135deg, hsl(217, 91%, 60%) 0%, hsl(217, 91%, 45%) 100%);
+}
+
+/* =============================================================================
+   SHADOW UTILITIES
+   ============================================================================= */
+.shadow-elegant {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+}
+
+.shadow-card {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* =============================================================================
+   SIDEBAR COLOR UTILITIES
+   ============================================================================= */
+.text-sidebar-foreground {
+  color: hsl(215, 16%, 47%);
+}
+
+.text-sidebar-primary-foreground {
+  color: hsl(0, 0%, 100%);
+}
+
+.bg-sidebar-accent {
+  background-color: hsl(217, 33%, 17%);
+}
+
+.border-sidebar-border {
+  border-color: hsl(217, 33%, 17%);
+}
+
+/* =============================================================================
+   COLOR UTILITIES
+   ============================================================================= */
+.text-primary {
+  color: hsl(var(--primary));
+}
+
+.text-primary-foreground {
+  color: hsl(var(--primary-foreground));
+}
+
+.text-muted-foreground {
+  color: hsl(var(--muted-foreground));
+}
+
+.text-success {
+  color: hsl(var(--success));
+}
+
+.text-warning {
+  color: hsl(var(--warning));
+}
+
+.text-destructive {
+  color: hsl(var(--destructive));
+}
+
+.text-accent-foreground {
+  color: hsl(var(--accent-foreground));
+}
+
+.bg-background {
+  background-color: hsl(var(--background));
+}
+
+.bg-muted {
+  background-color: hsl(var(--muted));
+}
+
+.bg-accent {
+  background-color: hsl(var(--accent));
+}
+
+.bg-success {
+  background-color: hsl(var(--success));
+}
+
+.bg-success\/10 {
+  background-color: hsla(var(--success), 0.1);
+}
+
+.bg-warning {
+  background-color: hsl(var(--warning));
+}
+
+.bg-warning\/10 {
+  background-color: hsla(var(--warning), 0.1);
+}
+
+.bg-destructive {
+  background-color: hsl(var(--destructive));
+}
+
+.bg-destructive\/10 {
+  background-color: hsla(var(--destructive), 0.1);
+}
+
+.bg-primary\/10 {
+  background-color: hsla(var(--primary), 0.1);
+}
+
+.border-border {
+  border-color: hsl(var(--border));
+}
+
+.border-success {
+  border-color: hsl(var(--success));
+}
+
+.border-warning {
+  border-color: hsl(var(--warning));
+}
+
+.border-destructive {
+  border-color: hsl(var(--destructive));
+}
+
+.border-accent {
+  border-color: hsl(var(--accent));
+}
+
+/* =============================================================================
+   ANIMATION UTILITIES
+   ============================================================================= */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+.slide-in-from-right-5 {
+  animation: fade-in 0.2s ease-out;
+}
+
+/* =============================================================================
+   FOCUS RING UTILITIES
+   ============================================================================= */
+.focus\:ring-2:focus {
+  box-shadow: 0 0 0 2px hsla(var(--primary), 0.3);
+}
+
+/* =============================================================================
+   SCROLLBAR STYLES
+   ============================================================================= */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* =============================================================================
+   TABLE STYLES
+   ============================================================================= */
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+thead tr {
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+tbody tr:hover {
+  background-color: hsla(var(--muted), 0.5);
+}
+
+tbody tr:not(:last-child) {
+  border-bottom: 1px solid hsla(var(--border), 0.5);
+}
+
+/* =============================================================================
+   FORM ELEMENT STYLES
+   ============================================================================= */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+input[type="month"],
+select,
+textarea {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: hsl(var(--foreground));
+  background-color: hsl(var(--background));
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+input[type="date"]:focus,
+input[type="month"]:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 2px hsla(var(--primary), 0.3);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+/* =============================================================================
+   BUTTON BASE STYLES
+   ============================================================================= */
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* =============================================================================
+   CUSTOM CLASSES FOR COMPONENTS
+   ============================================================================= */
+
+/* Card component */
+.rounded-xl {
+  border-radius: 0.75rem;
+}
+
+/* Badge variants */
+.badge-success {
+  background-color: hsla(var(--success), 0.1);
+  color: hsl(var(--success));
+  border: 1px solid hsl(var(--success));
+}
+
+.badge-warning {
+  background-color: hsla(var(--warning), 0.1);
+  color: hsl(var(--warning));
+  border: 1px solid hsl(var(--warning));
+}
+
+.badge-destructive {
+  background-color: hsla(var(--destructive), 0.1);
+  color: hsl(var(--destructive));
+  border: 1px solid hsl(var(--destructive));
+}
+
+.badge-default {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.badge-secondary {
+  background-color: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+
+.badge-outline {
+  background-color: transparent;
+  border: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+}
+
+/* =============================================================================
+   RESPONSIVE UTILITIES
+   ============================================================================= */
+@media (max-width: 768px) {
+  .hidden.md\:flex {
+    display: none;
+  }
+  
+  .grid-cols-2.md\:grid-cols-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  
+  .lg\:col-span-2 {
+    grid-column: span 1 / span 1;
+  }
+  
+  .lg\:grid-cols-3 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 768px) {
+  .md\:flex {
+    display: flex;
+  }
+  
+  .md\:hidden {
+    display: none;
+  }
+  
+  .md\:grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  
+  .md\:grid-cols-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .lg\:col-span-2 {
+    grid-column: span 2 / span 2;
+  }
+  
+  .lg\:grid-cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* =============================================================================
+   FONT UTILITIES
+   ============================================================================= */
+.font-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.tracking-tight {
+  letter-spacing: -0.025em;
+}
+
+/* =============================================================================
+   SPACING UTILITIES
+   ============================================================================= */
+.space-y-1 > * + * {
+  margin-top: 0.25rem;
+}
+
+.space-y-2 > * + * {
+  margin-top: 0.5rem;
+}
+
+.space-y-3 > * + * {
+  margin-top: 0.75rem;
+}
+
+.space-y-4 > * + * {
+  margin-top: 1rem;
+}
+
+.space-y-5 > * + * {
+  margin-top: 1.25rem;
+}
+
+.space-y-6 > * + * {
+  margin-top: 1.5rem;
+}
+
+/* =============================================================================
+   OVERFLOW UTILITIES
+   ============================================================================= */
+.overflow-x-auto {
+  overflow-x: auto;
+}
+
+.overflow-y-auto {
+  overflow-y: auto;
+}
+
+/* =============================================================================
+   Z-INDEX UTILITIES
+   ============================================================================= */
+.z-50 {
+  z-index: 50;
+}
+
+.z-\[100\] {
+  z-index: 100;
+}
+
+/* =============================================================================
+   TRANSITION UTILITIES
+   ============================================================================= */
+.transition-colors {
+  transition-property: color, background-color, border-color;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+  color: white;
+  text-decoration: none;
+}
+
+.transition-all {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+.transition-opacity {
+  transition-property: opacity;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 300ms;
+}
+
+.transition-transform {
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 300ms;
+}
+
+/* =============================================================================
+   OPACITY UTILITIES
+   ============================================================================= */
+.opacity-0 {
+  opacity: 0;
+}
+
+.opacity-50 {
+  opacity: 0.5;
+}
+
+.opacity-90 {
+  opacity: 0.9;
+}
+
+/* =============================================================================
+   TRANSFORM UTILITIES
+   ============================================================================= */
+.translate-x-1 {
+  transform: translateX(0.25rem);
+}
+
+.translate-x-5 {
+  transform: translateX(1.25rem);
+}
+
+.-translate-y-1\/2 {
+  transform: translateY(-50%);
+}
+
+/* =============================================================================
+   MAX-WIDTH UTILITIES
+   ============================================================================= */
+.max-w-sm {
+  max-width: 24rem;
+}
+
+.max-w-md {
+  max-width: 28rem;
+}
+
+.max-w-lg {
+  max-width: 32rem;
+}
+
+.max-w-2xl {
+  max-width: 42rem;
+}
+
+.max-w-3xl {
+  max-width: 48rem;
+}
+
+.max-w-\[1600px\] {
+  max-width: 1600px;
+}
+
+/* =============================================================================
+   WIDTH UTILITIES
+   ============================================================================= */
+.w-4 {
+  width: 1rem;
+}
+
+.w-5 {
+  width: 1.25rem;
+}
+
+.w-6 {
+  width: 1.5rem;
+}
+
+.w-8 {
+  width: 2rem;
+}
+
+.w-9 {
+  width: 2.25rem;
+}
+
+.w-10 {
+  width: 2.5rem;
+}
+
+.w-12 {
+  width: 3rem;
+}
+
+.w-20 {
+  width: 5rem;
+}
+
+.w-24 {
+  width: 6rem;
+}
+
+.w-28 {
+  width: 7rem;
+}
+
+.w-32 {
+  width: 8rem;
+}
+
+.w-44 {
+  width: 11rem;
+}
+
+.w-48 {
+  width: 12rem;
+}
+
+.w-64 {
+  width: 16rem;
+}
+
+.w-full {
+  width: 100%;
+}
+
+.w-10 {
+  width: 2.5rem;
+}
+
+/* =============================================================================
+   HEIGHT UTILITIES
+   ============================================================================= */
+.h-4 {
+  height: 1rem;
+}
+
+.h-5 {
+  height: 1.25rem;
+}
+
+.h-6 {
+  height: 1.5rem;
+}
+
+.h-8 {
+  height: 2rem;
+}
+
+.h-9 {
+  height: 2.25rem;
+}
+
+.h-10 {
+  height: 2.5rem;
+}
+
+.h-12 {
+  height: 3rem;
+}
+
+.min-h-screen {
+  min-height: 100vh;
+}
+
+.max-h-\[90vh\] {
+  max-height: 90vh;
+}
+
+/* =============================================================================
+   FLEXBOX UTILITIES
+   ============================================================================= */
+.flex {
+  display: flex;
+}
+
+.inline-flex {
+  display: inline-flex;
+}
+
+.hidden {
+  display: none;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
+.items-start {
+  align-items: flex-start;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.items-end {
+  align-items: flex-end;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.justify-end {
+  justify-content: flex-end;
+}
+
+.gap-1 {
+  gap: 0.25rem;
+}
+
+.gap-2 {
+  gap: 0.5rem;
+}
+
+.gap-3 {
+  gap: 0.75rem;
+}
+
+.gap-4 {
+  gap: 1rem;
+}
+
+.gap-6 {
+  gap: 1.5rem;
+}
+
+.flex-1 {
+  flex: 1 1 0%;
+}
+
+.shrink-0 {
+  flex-shrink: 0;
+}
+
+/* =============================================================================
+   GRID UTILITIES
+   ============================================================================= */
+.grid {
+  display: grid;
+}
+
+.grid-cols-1 {
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.grid-cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* =============================================================================
+   PADDING UTILITIES
+   ============================================================================= */
+.p-2 {
+  padding: 0.5rem;
+}
+
+.p-3 {
+  padding: 0.75rem;
+}
+
+.p-4 {
+  padding: 1rem;
+}
+
+.p-5 {
+  padding: 1.25rem;
+}
+
+.p-6 {
+  padding: 1.5rem;
+}
+
+.p-8 {
+  padding: 2rem;
+}
+
+.p-12 {
+  padding: 3rem;
+}
+
+.px-3 {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+.px-4 {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.px-5 {
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+.px-6 {
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+.py-1 {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.py-2 {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.py-2\.5 {
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+}
+
+.py-3 {
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.py-4 {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+.py-5 {
+  padding-top: 1.25rem;
+  padding-bottom: 1.25rem;
+}
+
+.py-8 {
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+}
+
+.py-10 {
+  padding-top: 2.5rem;
+  padding-bottom: 2.5rem;
+}
+
+.py-12 {
+  padding-top: 3rem;
+  padding-bottom: 3rem;
+}
+
+.pl-4 {
+  padding-left: 1rem;
+}
+
+.pl-9 {
+  padding-left: 2.25rem;
+}
+
+.pr-3 {
+  padding-right: 0.75rem;
+}
+
+.pt-1 {
+  padding-top: 0.25rem;
+}
+
+.pt-2 {
+  padding-top: 0.5rem;
+}
+
+.pb-2 {
+  padding-bottom: 0.5rem;
+}
+
+.pb-4 {
+  padding-bottom: 1rem;
+}
+
+/* =============================================================================
+   MARGIN UTILITIES
+   ============================================================================= */
+.m-0 {
+  margin: 0;
+}
+
+.mb-1 {
+  margin-bottom: 0.25rem;
+}
+
+.mb-2 {
+  margin-bottom: 0.5rem;
+}
+
+.mb-4 {
+  margin-bottom: 1rem;
+}
+
+.mb-6 {
+  margin-bottom: 1.5rem;
+}
+
+.mt-1 {
+  margin-top: 0.25rem;
+}
+
+.mt-4 {
+  margin-top: 1rem;
+}
+
+.mt-6 {
+  margin-top: 1.5rem;
+}
+
+.mr-auto {
+  margin-right: auto;
+}
+
+.ml-auto {
+  margin-left: auto;
+}
+
+.mx-auto {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.mx-4 {
+  margin-left: 1rem;
+  margin-right: 1rem;
+}
+
+.my-8 {
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+}
+
+/* =============================================================================
+   TEXT UTILITIES
+   ============================================================================= */
+.text-xs {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.text-sm {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.text-base {
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+
+.text-lg {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+}
+
+.text-xl {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+}
+
+.text-2xl {
+  font-size: 1.5rem;
+  line-height: 2rem;
+}
+
+.text-3xl {
+  font-size: 1.875rem;
+  line-height: 2.25rem;
+}
+
+.text-4xl {
+  font-size: 2.25rem;
+  line-height: 2.5rem;
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.font-semibold {
+  font-weight: 600;
+}
+
+.font-bold {
+  font-weight: 700;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.leading-tight {
+  line-height: 1.25;
+}
+
+.capitalize {
+  text-transform: capitalize;
+}
+
+.uppercase {
+  text-transform: uppercase;
+}
+
+.underline {
+  text-decoration: underline;
+}
+
+.tracking-tight {
+  letter-spacing: -0.025em;
+}
+
+/* =============================================================================
+   COLOR TEXT UTILITIES
+   ============================================================================= */
+.text-white {
+  color: #ffffff;
+}
+
+.text-gray-400 {
+  color: #9ca3af;
+}
+
+.text-gray-500 {
+  color: #6b7280;
+}
+
+.text-gray-600 {
+  color: #4b5563;
+}
+
+.text-gray-700 {
+  color: #374151;
+}
+
+.text-gray-800 {
+  color: #1f2937;
+}
+
+.text-gray-900 {
+  color: #111827;
+}
+
+.text-blue-500 {
+  color: #3b82f6;
+}
+
+.text-blue-600 {
+  color: #2563eb;
+}
+
+.text-blue-700 {
+  color: #1d4ed8;
+}
+
+.text-blue-800 {
+  color: #1e40af;
+}
+
+.text-green-500 {
+  color: #22c55e;
+}
+
+.text-green-600 {
+  color: #16a34a;
+}
+
+.text-green-700 {
+  color: #15803d;
+}
+
+.text-green-800 {
+  color: #166534;
+}
+
+.text-red-500 {
+  color: #ef4444;
+}
+
+.text-red-600 {
+  color: #dc2626;
+}
+
+.text-red-700 {
+  color: #b91c1c;
+}
+
+.text-red-800 {
+  color: #991b1b;
+}
+
+.text-yellow-500 {
+  color: #eab308;
+}
+
+.text-yellow-600 {
+  color: #ca8a04;
+}
+
+.text-yellow-700 {
+  color: #a16207;
+}
+
+.text-yellow-800 {
+  color: #854d0e;
+}
+
+.text-slate-300 {
+  color: #cbd5e1;
+}
+
+.text-slate-400 {
+  color: #94a3b8;
+}
+
+.text-slate-500 {
+  color: #64748b;
+}
+
+/* =============================================================================
+   BACKGROUND COLOR UTILITIES
+   ============================================================================= */
+.bg-white {
+  background-color: #ffffff;
+}
+
+.bg-gray-50 {
+  background-color: #f9fafb;
+}
+
+.bg-gray-100 {
+  background-color: #f3f4f6;
+}
+
+.bg-gray-200 {
+  background-color: #e5e7eb;
+}
+
+.bg-gray-300 {
+  background-color: #d1d5db;
+}
+
+.bg-gray-800 {
+  background-color: #1f2937;
+}
+
+.bg-gray-900 {
+  background-color: #111827;
+}
+
+.bg-blue-50 {
+  background-color: #eff6ff;
+}
+
+.bg-blue-100 {
+  background-color: #dbeafe;
+}
+
+.bg-blue-600 {
+  background-color: #2563eb;
+}
+
+.bg-green-50 {
+  background-color: #f0fdf4;
+}
+
+.bg-green-100 {
+  background-color: #dcfce7;
+}
+
+.bg-green-600 {
+  background-color: #16a34a;
+}
+
+.bg-red-50 {
+  background-color: #fef2f2;
+}
+
+.bg-red-100 {
+  background-color: #fee2e2;
+}
+
+.bg-red-600 {
+  background-color: #dc2626;
+}
+
+.bg-yellow-50 {
+  background-color: #fefce8;
+}
+
+.bg-yellow-100 {
+  background-color: #fef9c3;
+}
+
+.bg-slate-700 {
+  background-color: #334155;
+}
+
+.bg-slate-800 {
+  background-color: #1e293b;
+}
+
+.bg-slate-900 {
+  background-color: #0f172a;
+}
+
+/* =============================================================================
+   BORDER UTILITIES
+   ============================================================================= */
+.border {
+  border: 1px solid;
+}
+
+.border-0 {
+  border: 0;
+}
+
+.border-b {
+  border-bottom: 1px solid;
+}
+
+.border-t {
+  border-top: 1px solid;
+}
+
+.border-r {
+  border-right: 1px solid;
+}
+
+.border-gray-100 {
+  border-color: #f3f4f6;
+}
+
+.border-gray-200 {
+  border-color: #e5e7eb;
+}
+
+.border-gray-300 {
+  border-color: #d1d5db;
+}
+
+.border-gray-700 {
+  border-color: #374151;
+}
+
+.border-slate-700 {
+  border-color: #334155;
+}
+
+.border-blue-200 {
+  border-color: #bfdbfe;
+}
+
+.border-green-300 {
+  border-color: #86efac;
+}
+
+.border-red-300 {
+  border-color: #fca5a5;
+}
+
+.border-yellow-300 {
+  border-color: #fde047;
+}
+
+.border-white\/20 {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* =============================================================================
+   ROUNDED UTILITIES
+   ============================================================================= */
+.rounded {
+  border-radius: 0.25rem;
+}
+
+.rounded-lg {
+  border-radius: 0.875rem;
+}
+
+.rounded-xl {
+  border-radius: 0.75rem;
+}
+
+.rounded-full {
+  border-radius: 9999px;
+}
+
+/* =============================================================================
+   SHADOW UTILITIES
+   ============================================================================= */
+.shadow-sm {
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.shadow {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+}
+
+.shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
+
+.shadow-2xl {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+/* =============================================================================
+   HOVER UTILITIES
+   ============================================================================= */
+.hover\:bg-gray-50:hover {
+  background-color: #f9fafb;
+}
+
+.hover\:bg-gray-100:hover {
+  background-color: #f3f4f6;
+}
+
+.hover\:bg-gray-800:hover {
+  background-color: #1f2937;
+}
+
+.hover\:bg-blue-700:hover {
+  background-color: #1d4ed8;
+}
+
+.hover\:bg-slate-800\/50:hover {
+  background-color: rgba(30, 41, 59, 0.5);
+}
+
+.hover\:text-white:hover {
+  color: #ffffff;
+}
+
+.hover\:text-blue-800:hover {
+  color: #1e40af;
+}
+
+.hover\:from-blue-700:hover {
+  --tw-gradient-from: #1d4ed8;
+}
+
+.hover\:to-blue-800:hover {
+  --tw-gradient-to: #1e40af;
+}
+
+.hover\:opacity-90:hover {
+  opacity: 0.9;
+}
+
+/* =============================================================================
+   FOCUS UTILITIES
+   ============================================================================= */
+.focus\:outline-none:focus {
+  outline: none;
+}
+
+.focus\:ring-2:focus {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+}
+
+.focus\:ring-blue-500:focus {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+}
+
+.focus\:border-blue-500:focus {
+  border-color: #3b82f6;
+}
+
+/* =============================================================================
+   DISABLED UTILITIES
+   ============================================================================= */
+.disabled\:opacity-30:disabled {
+  opacity: 0.3;
+}
+
+/* =============================================================================
+   LAST CHILD UTILITIES
+   ============================================================================= */
+.last\:border-0:last-child {
+  border: 0;
+}
+
+/* =============================================================================
+   FIXED / ABSOLUTE / RELATIVE POSITIONING
+   ============================================================================= */
+.fixed {
+  position: fixed;
+}
+
+.absolute {
+  position: absolute;
+}
+
+.relative {
+  position: relative;
+}
+
+.inset-0 {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.top-1\/2 {
+  top: 50%;
+}
+
+.top-4 {
+  top: 1rem;
+}
+
+.right-4 {
+  right: 1rem;
+}
+
+.bottom-4 {
+  bottom: 1rem;
+}
+
+.left-3 {
+  left: 0.75rem;
+}
+
+/* =============================================================================
+   LIST STYLE
+   ============================================================================= */
+.list-decimal {
+  list-style-type: decimal;
+}
+
+/* =============================================================================
+   BACKGROUND GRADIENT UTILITIES
+   ============================================================================= */
+.bg-gradient-to-br {
+  background-image: linear-gradient(to bottom right, var(--tw-gradient-stops));
+}
+
+.bg-gradient-to-r {
+  background-image: linear-gradient(to right, var(--tw-gradient-stops));
+}
+
+.from-blue-500 {
+  --tw-gradient-from: #3b82f6;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(59, 130, 246, 0));
+}
+
+.from-blue-600 {
+  --tw-gradient-from: #2563eb;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(37, 99, 235, 0));
+}
+
+.from-slate-800 {
+  --tw-gradient-from: #1e293b;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(30, 41, 59, 0));
+}
+
+.to-blue-700 {
+  --tw-gradient-to: #1d4ed8;
+}
+
+.to-blue-800 {
+  --tw-gradient-to: #1e40af;
+}
+
+.to-slate-900 {
+  --tw-gradient-to: #0f172a;
+}
+
+/* =============================================================================
+   OVERFLOW UTILITIES
+   ============================================================================= */
+.overflow-auto {
+  overflow: auto;
+}
+
+.overflow-hidden {
+  overflow: hidden;
+}
+
+/* =============================================================================
+   CURSOR UTILITIES
+   ============================================================================= */
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.cursor-not-allowed {
+  cursor: not-allowed;
+}
+
+/* =============================================================================
+   WHITESPACE UTILITIES
+   ============================================================================= */
+.whitespace-nowrap {
+  white-space: nowrap;
+}
+
+/* =============================================================================
+   BREAK-WORDS UTILITIES
+   ============================================================================= */
+.break-words {
+  word-wrap: break-word;
+}
+
+/* =============================================================================
+   PRINT STYLES
+   ============================================================================= */
+@media print {
+  .hidden.md\:flex {
+    display: none !important;
+  }
+  
+  aside {
+    display: none !important;
+  }
+  
+  body {
+    background: white !important;
+  }
+  
+  .shadow-sm,
+  .shadow,
+  .shadow-lg,
+  .shadow-2xl,
+  .shadow-elegant,
+  .shadow-card {
+    box-shadow: none !important;
+  }
+}
+/* =============================================================================
+   SIDEBAR SPECIFIC STYLES
+   ============================================================================= */
+
+/* Sidebar background gradient */
+.bg-gradient-sidebar {
+  background: linear-gradient(180deg, hsl(222, 47%, 11%) 0%, hsl(217, 33%, 17%) 100%);
+}
+
+/* Sidebar colors */
+.text-sidebar-foreground {
+  color: hsl(215, 16%, 47%);
+}
+
+.text-sidebar-primary-foreground {
+  color: hsl(0, 0%, 100%);
+}
+
+.bg-sidebar-accent {
+  background-color: hsl(217, 33%, 17%);
+}
+
+.bg-sidebar-accent\/50 {
+  background-color: hsla(217, 33%, 17%, 0.5);
+}
+
+.hover\:bg-sidebar-accent\/50:hover {
+  background-color: hsla(217, 33%, 17%, 0.5);
+}
+
+.hover\:text-sidebar-primary-foreground:hover {
+  color: hsl(0, 0%, 100%);
+}
+
+.border-sidebar-border {
+  border-color: hsl(217, 33%, 17%);
+}
+
+/* Sidebar shadow */
+.shadow-elegant {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+}
+
+/* Sidebar width */
+.w-64 {
+  width: 16rem;
+}
+
+.shrink-0 {
+  flex-shrink: 0;
+}
+
+/* Sidebar flex layout */
+.flex-col {
+  flex-direction: column;
+}
+
+/* Sidebar spacing */
+.space-y-1 > * + * {
+  margin-top: 0.25rem;
+}
+
+/* Sidebar text */
+.text-xs {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.text-sm {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.font-bold {
+  font-weight: 700;
+}
+
+.leading-tight {
+  line-height: 1.25;
+}
+
+.capitalize {
+  text-transform: capitalize;
+}
+
+/* Sidebar padding */
+.p-3 {
+  padding: 0.75rem;
+}
+
+.px-3 {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+.px-6 {
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+.py-2 {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.py-2\.5 {
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+}
+
+.py-4 {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+.py-5 {
+  padding-top: 1.25rem;
+  padding-bottom: 1.25rem;
+}
+
+/* Sidebar margin */
+.mb-2 {
+  margin-bottom: 0.5rem;
+}
+
+/* Sidebar flex */
+.flex {
+  display: flex;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.gap-3 {
+  gap: 0.75rem;
+}
+
+/* Sidebar rounded */
+.rounded-lg {
+  border-radius: 0.875rem;
+}
+
+/* Sidebar height */
+.h-4 {
+  height: 1rem;
+}
+
+.h-5 {
+  height: 1.25rem;
+}
+
+.h-9 {
+  height: 2.25rem;
+}
+
+.h-10 {
+  height: 2.5rem;
+}
+
+/* Sidebar width */
+.w-4 {
+  width: 1rem;
+}
+
+.w-5 {
+  width: 1.25rem;
+}
+
+.w-9 {
+  width: 2.25rem;
+}
+
+.w-10 {
+  width: 2.5rem;
+}
+
+.w-full {
+  width: 100%;
+}
+
+/* Sidebar border */
+.border-r {
+  border-right-width: 1px;
+}
+
+.border-b {
+  border-bottom-width: 1px;
+}
+
+.border-t {
+  border-top-width: 1px;
+}
+
+.border-sidebar-border {
+  border-color: hsl(217, 33%, 17%);
+}
+
+/* Sidebar text colors */
+.text-primary-foreground {
+  color: hsl(0, 0%, 100%);
+}
+
+.text-sidebar-foreground {
+  color: hsl(215, 16%, 47%);
+}
+
+.text-sidebar-primary-foreground {
+  color: hsl(0, 0%, 100%);
+}
+
+/* Sidebar background colors */
+.bg-gradient-primary {
+  background: linear-gradient(135deg, hsl(217, 91%, 60%) 0%, hsl(217, 91%, 45%) 100%);
+}
+
+.bg-sidebar-accent {
+  background-color: hsl(217, 33%, 17%);
+}
+
+/* Sidebar transitions */
+.transition-colors {
+  transition-property: color, background-color, border-color;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Sidebar hover states */
+.hover\:bg-sidebar-accent\/50:hover {
+  background-color: hsla(217, 33%, 17%, 0.5);
+}
+
+.hover\:text-sidebar-primary-foreground:hover {
+  color: hsl(0, 0%, 100%);
+}
+
+/* Sidebar responsive */
+@media (max-width: 767px) {
+  .hidden {
+    display: none;
+  }
+}
+
+@media (min-width: 768px) {
+  .md\:flex {
+    display: flex;
+  }
+}
+
+/* Sidebar active link */
+.bg-sidebar-accent {
+  background-color: hsl(217, 33%, 17%);
+}
+
+/* NavLink active state */
+.nav-active {
+  background-color: hsl(217, 33%, 17%);
+  color: hsl(0, 0%, 100%);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+}
+
+/* Sidebar icon colors */
+.text-primary-foreground {
+  color: hsl(0, 0%, 100%);
+}
+
+/* Sidebar flex utilities */
+.flex-1 {
+  flex: 1 1 0%;
+}
+
+.overflow-auto {
+  overflow: auto;
+}
+
+.min-h-screen {
+  min-height: 100vh;
+}
+
+/* Sidebar layout when used with main content */
+.flex {
+  display: flex;
+}
+
+.w-full {
+  width: 100%;
+}
+
+/* Sidebar z-index */
+aside {
+  z-index: 40;
+}
+
+/* Sidebar backdrop for mobile (optional) */
+@media (max-width: 767px) {
+  aside {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 50;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+  
+  aside.open {
+    transform: translateX(0);
+  }
+}
+/* =============================================================================
+   MOBILE MENU BUTTON SPACING
+   ============================================================================= */
+
+/* Add top padding to main content on mobile to prevent overlap with fixed menu button */
+@media (max-width: 767px) {
+  /* Target the main content area when sidebar is not visible */
+  .min-h-screen.flex .flex-1.overflow-auto > div {
+    padding-top: 4rem !important;
+  }
+  
+  /* Alternative: Target the main element directly */
+  main .p-6.md\:p-8 {
+    padding-top: 4rem !important;
+  }
+  
+  /* Also add spacing to page headers on mobile */
+  .sales-page-header,
+  .products-page-header,
+  .clients-page-header,
+  .invoices-page-header,
+  .users-page-header,
+  .settings-page-header,
+  .activation-page-header,
+  .check-page-header {
+    margin-top: 0.5rem;
+  }
+  
+  /* Adjust first heading to have extra space */
+  .sales-title,
+  .products-title,
+  .clients-title,
+  .invoices-title,
+  .users-title,
+  .settings-title,
+  .activation-title,
+  .check-title {
+    padding-top: 0.5rem;
+  }
+}
+
+/* For very small screens, ensure button doesn't cover critical elements */
+@media (max-width: 480px) {
+  main .p-6.md\:p-8 {
+    padding-top: 4.5rem !important;
+  }
+}
