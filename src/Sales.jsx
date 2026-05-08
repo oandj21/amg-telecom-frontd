@@ -1690,7 +1690,7 @@ const getCompanyInfo = () => {
   };
 };
 
-const API_URL = window.REACT_APP_API_URL || "http://127.0.0.1:8000/api";
+const API_URL = window.REACT_APP_API_URL || "http://amg-telecom-backd-production.up.railway.app/api";
 
 const safeNumber = (value) => {
   const num = Number(value);

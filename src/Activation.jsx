@@ -36,7 +36,7 @@ const PLAN_LABEL = { '1m': '1 mois', '3m': '3 mois', '6m': '6 mois', '12m': '12 
 const PLAN_MONTHS = { '1m': 1, '3m': 3, '6m': 6, '12m': 12 };
 const OPERATORS = ['Inwi', 'Maroc Telecom', 'Orange', 'Autre'];
 
-const API_URL = window.REACT_APP_API_URL || "http://127.0.0.1:8000/api";
+const API_URL = window.REACT_APP_API_URL || "http://amg-telecom-backd-production.up.railway.app/api";
 
 // ==================== STYLES ====================
 const styles = `
