@@ -1473,21 +1473,65 @@ const Activation = () => {
       setActionHistory(historyMap);
     }
   }, [activations]);
-  
+  // Auto-expand sales that have expiring activations when showExpiringOnly is true
+useEffect(() => {
+  if (showExpiringOnly && sales && sales.length > 0) {
+    const newExpandedState = {};
+    sales.forEach(sale => {
+      const saleActivations = getSaleActivations(sale.id);
+      const hasExpiring = saleActivations.some(activation => {
+        if (!activation.expires_at) return false;
+        const expiryDate = new Date(activation.expires_at);
+        expiryDate.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const daysRemaining = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+        return daysRemaining > 0 && daysRemaining <= 7 && 
+               activation.status !== 'expired' && 
+               activation.status !== 'suspended';
+      });
+      if (hasExpiring) {
+        newExpandedState[sale.id] = true;
+      }
+    });
+    setExpandedSales(prev => ({ ...prev, ...newExpandedState }));
+  }
+}, [showExpiringOnly, sales]);
   const getSaleActivations = (saleId) => {
     if (!activations || !Array.isArray(activations)) return [];
     return activations.filter(act => act.vente_id === saleId || act.sale_id === saleId || act.vente?.id === saleId);
   };
   
-  const filteredSales = useMemo(() => {
-    if (!sales || !Array.isArray(sales)) return [];
-    return sales.filter(sale => {
-      const matchesSearch = search === '' || 
-        sale.client?.nom?.toLowerCase().includes(search.toLowerCase()) ||
-        sale.id?.toString().includes(search);
-      return matchesSearch;
+const filteredSales = useMemo(() => {
+  if (!sales || !Array.isArray(sales)) return [];
+  
+  let filtered = sales.filter(sale => {
+    const matchesSearch = search === '' || 
+      sale.client?.nom?.toLowerCase().includes(search.toLowerCase()) ||
+      sale.id?.toString().includes(search);
+    return matchesSearch;
+  });
+  
+  // If showing expiring only, filter sales that have at least one expiring activation
+  if (showExpiringOnly) {
+    filtered = filtered.filter(sale => {
+      const saleActivations = getSaleActivations(sale.id);
+      return saleActivations.some(activation => {
+        if (!activation.expires_at) return false;
+        const expiryDate = new Date(activation.expires_at);
+        expiryDate.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const daysRemaining = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+        return daysRemaining > 0 && daysRemaining <= 7 && 
+               activation.status !== 'expired' && 
+               activation.status !== 'suspended';
+      });
     });
-  }, [sales, search]);
+  }
+  
+  return filtered;
+}, [sales, search, showExpiringOnly]);
   
   // Paginated sales - 12 per page
   const paginatedSales = useMemo(() => {
@@ -1542,22 +1586,34 @@ const Activation = () => {
     return filtered;
   }, [activations, search, statusFilter, operatorFilter, showExpiringOnly, expiringActivations]);
   
-  const handleAlertClick = () => {
-    setShowExpiringOnly(true);
-    setAlertDismissed(true);
-    setCurrentPage(1);
-    setTimeout(() => {
-      const tableElement = document.querySelector('.activation-table-container');
-      if (tableElement) tableElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
-  };
+const handleAlertClick = () => {
+  setShowExpiringOnly(true);
+  setAlertDismissed(true);
+  setCurrentPage(1);
+  setSalesPage(1);
+  // Clear any existing search that might hide expiring items
+  setSearch('');
+  setStatusFilter('all');
+  setOperatorFilter('all');
+  setTimeout(() => {
+    const tableElement = document.querySelector('.activation-table-container');
+    if (tableElement) tableElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 100);
+};
   
-  const clearExpiringFilter = () => {
-    setShowExpiringOnly(false);
-    setAlertDismissed(false);
-    setCurrentPage(1);
-    dispatch(fetchActivations({ page: 1, per_page: itemsPerPage }));
-  };
+ const clearExpiringFilter = () => {
+  setShowExpiringOnly(false);
+  setAlertDismissed(false);
+  setCurrentPage(1);
+  setSalesPage(1);
+  setSearch('');
+  setStatusFilter('all');
+  setOperatorFilter('all');
+  // Optionally collapse all expanded rows
+  setExpandedSales({});
+  // Refresh data from server
+  dispatch(fetchActivations({ page: 1, per_page: itemsPerPage }));
+};
   
   const getImeiOptions = (productId) => {
     if (selectedSaleData?.activation_details) {

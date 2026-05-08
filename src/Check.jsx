@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo,useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
   Plus, Search, Filter, Download, Edit, Trash2, X, 
@@ -28,6 +28,237 @@ import {
   clearSelectedCheck,
   setPage
 } from './Store/store';
+// Add this near the top of your file, before the SearchableSelect component
+const formatCurrencyHelper = (amount) => {
+  if (amount === undefined || amount === null) return '0 MAD';
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+  if (isNaN(num)) return '0 MAD';
+  return new Intl.NumberFormat('fr-MA', { style: 'currency', currency: 'MAD' }).format(num);
+};
+// ==================== SEARCHABLE SELECT COMPONENT ====================
+const SearchableSelect = ({ 
+  options, 
+  value, 
+  onChange, 
+  placeholder = "Sélectionner...",
+  disabled = false,
+  renderOption = null,
+  formatCurrency = null
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const containerRef = useRef(null);
+  const searchInputRef = useRef(null);
+  
+  const selectedOption = options.find(opt => 
+    (opt.id && opt.id === value) || (opt.nom && opt.nom === value) || opt === value
+  );
+  
+  const filteredOptions = options.filter(opt => {
+    if (!searchTerm) return true;
+    const searchLower = searchTerm.toLowerCase();
+    const optionValue = typeof opt === 'object' ? (opt.nom || opt.name || '') : opt;
+    return optionValue.toLowerCase().includes(searchLower);
+  });
+  
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm('');
+        setHighlightedIndex(-1);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+  
+  useEffect(() => {
+    if (isOpen && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [isOpen]);
+  
+  const handleSelect = (option) => {
+    const optionValue = typeof option === 'object' ? (option.nom || option.name) : option;
+    onChange(optionValue, option);
+    setIsOpen(false);
+    setSearchTerm('');
+    setHighlightedIndex(-1);
+  };
+  
+  const handleKeyDown = (e) => {
+    if (!isOpen) {
+      if (e.key === 'Enter' || e.key === 'ArrowDown') {
+        setIsOpen(true);
+      }
+      return;
+    }
+    
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setHighlightedIndex(prev => 
+          prev < filteredOptions.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setHighlightedIndex(prev => prev > 0 ? prev - 1 : -1);
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (highlightedIndex >= 0 && filteredOptions[highlightedIndex]) {
+          handleSelect(filteredOptions[highlightedIndex]);
+        }
+        break;
+      case 'Escape':
+        setIsOpen(false);
+        setSearchTerm('');
+        setHighlightedIndex(-1);
+        break;
+    }
+  };
+  
+const defaultRenderOption = (option) => {
+    const optionName = typeof option === 'object' ? (option.nom || option.name) : option;
+    const hasVenteInfo = typeof option === 'object' && (option.vente_id || option.vente_reference);
+    const paymentStatus = option.payment_status;
+    const saleStatus = option.vente_status;
+    
+    // Determine status badge color
+    const getStatusBadge = () => {
+        if (saleStatus !== 'confirmed') {
+            return { bg: '#fef3c7', color: '#92400e', text: 'Vente en attente' };
+        }
+        if (paymentStatus === 'unpaid') {
+            return { bg: '#fee2e2', color: '#dc2626', text: 'Impayé' };
+        }
+        if (paymentStatus === 'partial') {
+            return { bg: '#fef3c7', color: '#d97706', text: 'Partiel' };
+        }
+        return null;
+    };
+    
+    const statusBadge = getStatusBadge();
+    
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between' }}>
+                <span style={{ fontWeight: 500 }}>{optionName}</span>
+                {statusBadge && (
+                    <span style={{ 
+                        fontSize: '0.65rem', 
+                        background: statusBadge.bg, 
+                        padding: '2px 8px', 
+                        borderRadius: '12px', 
+                        color: statusBadge.color,
+                        fontWeight: 'bold'
+                    }}>
+                        {statusBadge.text}
+                    </span>
+                )}
+                {hasVenteInfo && (
+                    <span style={{ fontSize: '0.65rem', background: '#e2e8f0', padding: '2px 6px', borderRadius: '12px', color: '#475569' }}>
+                        Vente #{option.vente_reference}
+                    </span>
+                )}
+            </div>
+            {typeof option === 'object' && option.ice_client && (
+                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>ICE: {option.ice_client}</span>
+            )}
+            {typeof option === 'object' && option.telephone && (
+                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>{option.telephone}</span>
+            )}
+            {hasVenteInfo && (
+                <div style={{ display: 'flex', gap: '12px', marginTop: '2px' }}>
+                    <span style={{ fontSize: '0.65rem', color: '#3b82f6' }}>
+                        📅 {option.vente_date}
+                    </span>
+                    <span style={{ fontSize: '0.65rem', color: '#10b981' }}>
+                        💰 {formatCurrencyHelper(option.vente_total)}
+                    </span>
+                    {option.cheque_amount && (
+                        <span style={{ fontSize: '0.65rem', color: '#8b5cf6' }}>
+                            Chèque: {formatCurrencyHelper(option.cheque_amount)}
+                        </span>
+                    )}
+                </div>
+            )}
+            {paymentStatus === 'unpaid' && (
+                <div style={{ fontSize: '0.65rem', color: '#dc2626', marginTop: '2px' }}>
+                    ⚠️ Aucun paiement effectué
+                </div>
+            )}
+            {paymentStatus === 'partial' && option.cheque_amount && (
+                <div style={{ fontSize: '0.65rem', color: '#d97706', marginTop: '2px' }}>
+                   💰 Chèque reçu: {formatCurrencyHelper(option.cheque_amount)} / {formatCurrencyHelper(option.vente_total)}
+                </div>
+            )}
+        </div>
+    );
+};
+  
+  return (
+    <div className="searchable-select" ref={containerRef} onKeyDown={handleKeyDown}>
+      <div 
+        className={`searchable-select-trigger ${isOpen ? 'open' : ''}`}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        style={{ cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1 }}
+      >
+        <span className={selectedOption ? 'searchable-select-trigger-value' : 'searchable-select-trigger-placeholder'}>
+          {selectedOption ? (typeof selectedOption === 'object' ? (selectedOption.nom || selectedOption.name) : selectedOption) : placeholder}
+        </span>
+        <ChevronDown size={16} className={`searchable-select-icon ${isOpen ? 'open' : ''}`} />
+      </div>
+      
+      {isOpen && !disabled && (
+        <div className="searchable-select-dropdown">
+          <div className="searchable-select-search">
+            <input
+              ref={searchInputRef}
+              type="text"
+              className="searchable-select-search-input"
+              placeholder="Rechercher..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          <div className="searchable-select-options">
+            {filteredOptions.length === 0 ? (
+              <div className="searchable-select-no-results">
+                Aucun résultat trouvé
+              </div>
+            ) : (
+              filteredOptions.map((option, index) => {
+                const optionName = typeof option === 'object' ? (option.nom || option.name) : option;
+                const isSelected = selectedOption && (
+                  (typeof selectedOption === 'object' ? selectedOption.nom === optionName : selectedOption === optionName)
+                );
+                return (
+                  <div
+                    key={typeof option === 'object' ? (option.id || index) : index}
+                    className={`searchable-select-option ${isSelected ? 'selected' : ''} ${highlightedIndex === index ? 'highlighted' : ''}`}
+                    onClick={() => handleSelect(option)}
+                    onMouseEnter={() => setHighlightedIndex(index)}
+                  >
+                    {renderOption ? renderOption(option) : defaultRenderOption(option)}
+                    {isSelected && (
+                      <Check size={16} className="searchable-select-option-check" />
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ==================== STYLES ====================
 const styles = `
@@ -790,7 +1021,7 @@ const styles = `
     margin-left: 0.25rem;
   }
   
-  .check-input {
+  .check-input, .check-select {
     width: 100%;
     height: 2.5rem;
     padding: 0.5rem 0.75rem;
@@ -803,12 +1034,12 @@ const styles = `
     transition: all 0.2s ease;
   }
   
-  .check-input:focus {
+  .check-input:focus, .check-select:focus {
     border-color: #3b82f6;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
   
-  .check-input:disabled {
+  .check-input:disabled, .check-select:disabled {
     background: #f8fafc;
     cursor: not-allowed;
   }
@@ -1070,6 +1301,147 @@ const styles = `
     white-space: nowrap;
     border-width: 0;
   }
+    /* Searchable Select Styles */
+.searchable-select {
+  position: relative;
+  width: 100%;
+}
+
+.searchable-select-trigger {
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0.5rem 2rem 0.5rem 0.75rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
+  color: #1e293b;
+}
+
+.searchable-select-trigger:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.searchable-select-trigger.open {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.searchable-select-trigger-placeholder {
+  color: #94a3b8;
+}
+
+.searchable-select-trigger-value {
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.searchable-select-icon {
+  color: #94a3b8;
+  transition: transform 0.2s ease;
+}
+
+.searchable-select-icon.open {
+  transform: rotate(180deg);
+}
+
+.searchable-select-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  max-height: 280px;
+  overflow: hidden;
+  animation: dropdownFadeIn 0.2s ease;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.searchable-select-search {
+  position: sticky;
+  top: 0;
+  padding: 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: white;
+}
+
+.searchable-select-search-input {
+  width: 100%;
+  height: 2.25rem;
+  padding: 0.5rem 0.75rem 0.5rem 2rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  font-size: 0.813rem;
+  background: #f8fafc;
+  transition: all 0.2s ease;
+}
+
+.searchable-select-search-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: white;
+}
+
+.searchable-select-options {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.searchable-select-option {
+  padding: 0.625rem 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 0.875rem;
+  color: #334155;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.searchable-select-option:hover {
+  background: #f1f5f9;
+}
+
+.searchable-select-option.selected {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.searchable-select-option.highlighted {
+  background: #e2e8f0;
+}
+
+.searchable-select-option-check {
+  color: #3b82f6;
+}
+
+.searchable-select-no-results {
+  padding: 1rem;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 0.813rem;
+}
 `;
 
 // Bank list with logo file names
@@ -1293,6 +1665,14 @@ const Check = () => {
   const [printing, setPrinting] = useState(false);
   const [toasts, setToasts] = useState([]);
   
+  // Clients who paid with cheque
+  const [clientsWithChequePayments, setClientsWithChequePayments] = useState([]);
+  const [loadingClients, setLoadingClients] = useState(false);
+  
+  // Company info for RIB
+  const [companyInfo, setCompanyInfo] = useState(null);
+  const [loadingCompanyInfo, setLoadingCompanyInfo] = useState(false);
+  
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
@@ -1309,7 +1689,21 @@ const Check = () => {
     montant_max: ''
   });
   
-  const [formData, setFormData] = useState({
+  // Replace the initial formData useState with this:
+const [formData, setFormData] = useState(() => {
+  // Try to get company info from localStorage synchronously
+  let ribValue = '';
+  try {
+    const saved = localStorage.getItem('company_info');
+    if (saved) {
+      const localInfo = JSON.parse(saved);
+      ribValue = localInfo.rib || '';
+    }
+  } catch (e) {
+    console.error('Error reading company info from localStorage:', e);
+  }
+  
+  return {
     reference_remise: '',
     date_et_heure: new Date().toISOString().slice(0, 16),
     ville: '',
@@ -1317,14 +1711,15 @@ const Check = () => {
     nom_agence_remise: '',
     code_agence_compte: '',
     nom_agence_compte: '',
-    rib_remettant: '',
+    rib_remettant: ribValue,
     client_remettant: '',
     nombre_de_valeurs: 1,
     montant_total_dh: '',
     type_remise: '',
     taux_escompte: 0,
     utilisateur: user?.name || ''
-  });
+  };
+});
   const [existingFiles, setExistingFiles] = useState([]);
 
   // Toast management
@@ -1345,12 +1740,136 @@ const Check = () => {
     dispatch(fetchChecks({ page: 1 }));
     dispatch(fetchCheckSummary());
     dispatch(fetchCheckFilterOptions());
+    fetchClientsWithChequePayments();
+    fetchCompanyInfo();
     return () => {
       dispatch(clearSelectedCheck());
       dispatch(clearCheckError());
     };
   }, [dispatch]);
 
+const fetchClientsWithChequePayments = async () => {
+    setLoadingClients(true);
+    try {
+        const token = localStorage.getItem('token');
+        const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
+        
+        // Use the endpoint that includes sale details
+        const response = await fetch(`${API_URL}/payments/cheque-payments`, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            
+            // Filter clients where sale status is CONFIRMED and payment status is UNPAID or PARTIAL
+            // Also filter out clients that already have a check remise? (optional)
+            const formattedClients = (data.cheque_payments || [])
+                .filter(payment => {
+                    // CRITICAL: Only include if sale is confirmed AND payment status is unpaid or partial
+                    const isValidSaleStatus = payment.vente_status === 'confirmed';
+                    const isValidPaymentStatus = payment.payment_status === 'unpaid' || payment.payment_status === 'partial';
+                    
+                    // Also check if there's actually a cheque payment
+                    const hasChequePayment = payment.payment_method === 'check' || 
+                                            payment.payment_method === 'cheque' ||
+                                            (payment.cheque_amount && payment.cheque_amount > 0);
+                    
+                    console.log(`Client: ${payment.client_nom}, Sale Status: ${payment.vente_status}, Payment Status: ${payment.payment_status}, Has Cheque: ${hasChequePayment}`);
+                    
+                    return isValidSaleStatus && isValidPaymentStatus && hasChequePayment;
+                })
+                .map(payment => ({
+                    id: payment.client_id,
+                    nom: payment.client_nom,
+                    email: payment.client_email,
+                    telephone: payment.client_telephone,
+                    ice_client: payment.client_ice_client || '',
+                    adresse: payment.client_adresse || '',
+                    vente_id: payment.vente_id,
+                    vente_reference: payment.vente_reference,
+                    vente_date: payment.vente_date,
+                    vente_total: payment.vente_total,
+                    vente_status: payment.vente_status,
+                    payment_status: payment.payment_status,
+                    payment_method: payment.payment_method,
+                    cheque_amount: payment.cheque_amount,
+                    cheque_reference: payment.cheque_reference,
+                    payment_date: payment.payment_date,
+                }));
+            
+            console.log(`Found ${formattedClients.length} clients with cheque payments on confirmed sales with unpaid/partial status`);
+            setClientsWithChequePayments(formattedClients);
+        } else {
+            console.warn('Failed to fetch cheque payments');
+            setClientsWithChequePayments([]);
+        }
+    } catch (error) {
+        console.error('Error fetching cheque payments:', error);
+        setClientsWithChequePayments([]);
+    } finally {
+        setLoadingClients(false);
+    }
+};
+  // Fetch company info for RIB
+  // Find the fetchCompanyInfo function and update it:
+const fetchCompanyInfo = async () => {
+  setLoadingCompanyInfo(true);
+  try {
+    const token = localStorage.getItem('token');
+    const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
+    
+    const response = await fetch(`${API_URL}/settings/company`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      setCompanyInfo(data.company_info);
+      // Update formData if RIB is empty
+      setFormData(prev => ({
+        ...prev,
+        rib_remettant: prev.rib_remettant || data.company_info?.rib || ''
+      }));
+    } else {
+      const saved = localStorage.getItem('company_info');
+      if (saved) {
+        const localInfo = JSON.parse(saved);
+        setCompanyInfo(localInfo);
+        setFormData(prev => ({
+          ...prev,
+          rib_remettant: prev.rib_remettant || localInfo.rib || ''
+        }));
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching company info:', error);
+    const saved = localStorage.getItem('company_info');
+    if (saved) {
+      const localInfo = JSON.parse(saved);
+      setCompanyInfo(localInfo);
+      setFormData(prev => ({
+        ...prev,
+        rib_remettant: prev.rib_remettant || localInfo.rib || ''
+      }));
+    }
+  } finally {
+    setLoadingCompanyInfo(false);
+  }
+};
+// Add this useEffect after the fetchCompanyInfo call or near other useEffects
+useEffect(() => {
+  // Only update if not editing and RIB is empty
+  if (!editingId && companyInfo?.rib && !formData.rib_remettant) {
+    setFormData(prev => ({ ...prev, rib_remettant: companyInfo.rib }));
+  }
+}, [companyInfo, editingId, formData.rib_remettant]);
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
@@ -1439,6 +1958,15 @@ const Check = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleClientSelect = (clientName, clientData) => {
+    setFormData(prev => ({
+      ...prev,
+      client_remettant: clientName,
+      // Optionally auto-fill other fields from the client data
+      ville: clientData?.ville || prev.ville,
+    }));
+  };
+
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
     const validFiles = files.filter(file => {
@@ -1461,7 +1989,7 @@ const Check = () => {
   };
 
   const handlePreviewFile = (fileName) => {
-    const fileUrl = `${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/files/${fileName}`;
+    const fileUrl = `${import.meta.env.VITE_API_URL || 'https://amg-telecom-backd-production.up.railway.app'}/api/files/${fileName}`;
     setPreviewFileUrl(fileUrl);
     setPreviewFileName(fileName);
     setShowFilePreview(true);
@@ -1512,7 +2040,7 @@ const Check = () => {
         `;
         
         for (const imageFile of imageFiles) {
-          const fileUrl = `${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/files/${imageFile}`;
+          const fileUrl = `${import.meta.env.VITE_API_URL || 'https://amg-telecom-backd-production.up.railway.app'}/api/files/${imageFile}`;
           filesHtml += `
             <div style="margin-bottom: 10px; border: 1px solid #e5e7eb; border-radius: 4px; overflow: hidden; max-width: 200px;">
               <img 
@@ -1816,33 +2344,33 @@ const Check = () => {
   };
 
   const handleEdit = async (id) => {
-    try {
-      const result = await dispatch(fetchCheckById(id)).unwrap();
-      setFormData({
-        reference_remise: result.reference_remise || '',
-        date_et_heure: result.date_et_heure ? result.date_et_heure.slice(0, 16) : new Date().toISOString().slice(0, 16),
-        ville: result.ville || '',
-        code_agence_remise: result.code_agence_remise || '',
-        nom_agence_remise: result.nom_agence_remise || '',
-        code_agence_compte: result.code_agence_compte || '',
-        nom_agence_compte: result.nom_agence_compte || '',
-        rib_remettant: result.rib_remettant || '',
-        client_remettant: result.client_remettant || '',
-        nombre_de_valeurs: result.nombre_de_valeurs || 1,
-        montant_total_dh: result.montant_total_dh || '',
-        type_remise: result.type_remise || '',
-        taux_escompte: result.taux_escompte || 0,
-        utilisateur: result.utilisateur || user?.name || ''
-      });
-      setExistingFiles(result.files || []);
-      setSelectedFiles([]);
-      setFilesToDelete([]);
-      setEditingId(id);
-      setShowModal(true);
-    } catch (err) {
-      showToast('Erreur lors du chargement de la remise', 'error');
-    }
-  };
+  try {
+    const result = await dispatch(fetchCheckById(id)).unwrap();
+    setFormData({
+      reference_remise: result.reference_remise || '',
+      date_et_heure: result.date_et_heure ? result.date_et_heure.slice(0, 16) : new Date().toISOString().slice(0, 16),
+      ville: result.ville || '',
+      code_agence_remise: result.code_agence_remise || '',
+      nom_agence_remise: result.nom_agence_remise || '',
+      code_agence_compte: result.code_agence_compte || '',
+      nom_agence_compte: result.nom_agence_compte || '',
+      rib_remettant: result.rib_remettant || companyInfo?.rib || '',  // Fallback to companyInfo RIB if empty
+      client_remettant: result.client_remettant || '',
+      nombre_de_valeurs: result.nombre_de_valeurs || 1,
+      montant_total_dh: result.montant_total_dh || '',
+      type_remise: result.type_remise || '',
+      taux_escompte: result.taux_escompte || 0,
+      utilisateur: result.utilisateur || user?.name || ''
+    });
+    setExistingFiles(result.files || []);
+    setSelectedFiles([]);
+    setFilesToDelete([]);
+    setEditingId(id);
+    setShowModal(true);
+  } catch (err) {
+    showToast('Erreur lors du chargement de la remise', 'error');
+  }
+};
 
   const confirmDelete = (check) => {
     setShowDeleteDialog(check);
@@ -1873,27 +2401,27 @@ const Check = () => {
   };
 
   const resetForm = () => {
-    setFormData({
-      reference_remise: '',
-      date_et_heure: new Date().toISOString().slice(0, 16),
-      ville: '',
-      code_agence_remise: '',
-      nom_agence_remise: '',
-      code_agence_compte: '',
-      nom_agence_compte: '',
-      rib_remettant: '',
-      client_remettant: '',
-      nombre_de_valeurs: 1,
-      montant_total_dh: '',
-      type_remise: '',
-      taux_escompte: 0,
-      utilisateur: user?.name || ''
-    });
-    setEditingId(null);
-    setSelectedFiles([]);
-    setExistingFiles([]);
-    setFilesToDelete([]);
-  };
+  setFormData({
+    reference_remise: '',
+    date_et_heure: new Date().toISOString().slice(0, 16),
+    ville: '',
+    code_agence_remise: '',
+    nom_agence_remise: '',
+    code_agence_compte: '',
+    nom_agence_compte: '',
+    rib_remettant: companyInfo?.rib || '',  // Use companyInfo here
+    client_remettant: '',
+    nombre_de_valeurs: 1,
+    montant_total_dh: '',
+    type_remise: '',
+    taux_escompte: 0,
+    utilisateur: user?.name || ''
+  });
+  setEditingId(null);
+  setSelectedFiles([]);
+  setExistingFiles([]);
+  setFilesToDelete([]);
+};
 
   const openFilesModal = async (check) => {
     await dispatch(fetchCheckById(check.id));
@@ -2162,8 +2690,6 @@ const Check = () => {
               />
             </div>
 
-
-            
             <div className="check-filter-select">
               <Calendar className="check-filter-icon" />
               <select 
@@ -2255,10 +2781,10 @@ const Check = () => {
                         {check.taux_escompte > 0 ? (
                           <span className="check-badge">{check.taux_escompte}%</span>
                         ) : '-'}
-                       </td>
+                      </td>
                       <td className="check-text-right" style={{ fontWeight: '600', color: '#059669' }}>
                         {formatCurrency(check.montant_total_dh - (check.montant_total_dh * (check.taux_escompte || 0) / 100))}
-                       </td>
+                      </td>
                       <td>{check.type_remise || '-'}</td>
                       <td>
                         {isApproaching && daysUntil >= 0 ? (
@@ -2372,17 +2898,36 @@ const Check = () => {
                       required 
                     />
                   </div>
-                  <div className="check-form-group">
-                    <label className="check-label check-label-required">Client Remettant</label>
-                    <input 
-                      type="text" 
-                      name="client_remettant" 
-                      value={formData.client_remettant} 
-                      onChange={handleInputChange} 
-                      className="check-input" 
-                      required 
-                    />
-                  </div>
+                  
+              {/* Client Remettant - Searchable Select */}
+<div className="check-form-group">
+  <label className="check-label check-label-required">Client Remettant</label>
+  <SearchableSelect
+    options={clientsWithChequePayments}
+    value={formData.client_remettant}
+    onChange={(clientName, clientData) => {
+      setFormData(prev => ({
+        ...prev,
+        client_remettant: clientName,
+        ville: clientData?.ville || prev.ville,
+      }));
+    }}
+    placeholder="Rechercher un client..."
+    disabled={editingId !== null}  // Add this line to disable in edit mode
+  />
+  {clientsWithChequePayments.length > 0 && (
+    <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.25rem' }}>
+      {clientsWithChequePayments.length} client(s) avec paiement par chèque
+    </div>
+  )}
+  {editingId && (
+    <div style={{ fontSize: '0.75rem', color: '#f59e0b', marginTop: '0.25rem' }}>
+      <Info size={12} style={{ display: 'inline', marginRight: '0.25rem' }} />
+      Le client remettant ne peut pas être modifié en mode édition
+    </div>
+  )}
+</div>
+                  
                   <div className="check-form-group">
                     <label className="check-label">Ville</label>
                     <input 
@@ -2433,6 +2978,8 @@ const Check = () => {
                       className="check-input" 
                     />
                   </div>
+                  
+                  {/* RIB Remettant - Auto-filled from settings */}
                   <div className="check-form-group">
                     <label className="check-label">RIB Remettant</label>
                     <input 
@@ -2441,8 +2988,17 @@ const Check = () => {
                       value={formData.rib_remettant} 
                       onChange={handleInputChange} 
                       className="check-input" 
+                      placeholder={loadingCompanyInfo ? "Chargement..." : "Auto-rempli depuis les paramètres"}
+                      readOnly
+                      style={{ backgroundColor: '#f8fafc', cursor: 'default' }}
                     />
+                    {companyInfo && (
+                      <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.25rem' }}>
+                        RIB de l'entreprise: {companyInfo.bank_name || 'Banque'} - {formData.rib_remettant}
+                      </div>
+                    )}
                   </div>
+                  
                   <div className="check-form-group">
                     <label className="check-label">Nombre de Valeurs</label>
                     <input 
@@ -2569,7 +3125,6 @@ const Check = () => {
                   </div>
                 </div>
               </div>
-              
               
               <div className="check-dialog-footer">
                 <Button type="button" variant="outline" onClick={() => { setShowModal(false); resetForm(); }}>
@@ -3026,7 +3581,6 @@ const Button = ({ children, variant = 'default', size = 'default', className = '
   const sizeClass = size === 'icon' ? 'check-btn-icon' : 'check-btn-default';
   
   return (
-      <>
     <button 
       type={type}
       className={`check-btn ${variantClass} ${sizeClass} ${className}`}
@@ -3036,7 +3590,6 @@ const Button = ({ children, variant = 'default', size = 'default', className = '
     >
       {children}
     </button>
-    </>
   );
 };
 

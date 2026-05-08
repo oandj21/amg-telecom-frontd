@@ -4,44 +4,268 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/logo1.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    
-    <!-- Meta tags multilingues pour la bibliothèque Fantasia -->
-       <meta name="description" content="مكتبة فانتازيا - الموقع الرسمي. كتب عربية، فرنسية وإنجليزية. روايات، تنمية بشرية، كتب دينية، وكتب مالية. فانتازيا، حيث تبدأ الحكاية." />
-    
-    <!-- Primary Keywords - FOCUS ON "مكتبة فانتازيا" EXACT MATCH -->
-    <meta name="keywords" content="مكتبة فانتازيا, fantasia library, مكتبة فانتازيا الرسمية, موقع مكتبة فانتازيا, فانتازيا, fantasia, libfantasia, fantasia book, كتب فانتازيا, مكتبة, كتب عربية, كتب فرنسية, كتب إنجليزية" />
-    
-    <!-- Google Site Verification -->
-    <meta name="google-site-verification" content="qfPSlYtjzOkKRKg3YiMnt39pPgQ2qqzT93Rabsc75jM" />
-    
-    <meta name="author" content="Fantasia Library" />
-    
-    <!-- Meta tags pour les moteurs de recherche -->
+
+    <!-- Description SEO (will be updated dynamically by JS) -->
+    <meta
+      name="description"
+      content="AMG Telecom - Solutions GPS professionnelles au Maroc. Géolocalisation en temps réel, gestion de flotte, suivi de véhicules, télématique et sécurité."
+    />
+
+    <!-- Keywords -->
+    <meta
+      name="keywords"
+      content="AMG Telecom, gps maroc, suivi gps, geolocalisation maroc, gestion flotte, tracking vehicule, tracker gps, localisation vehicule, solution gps entreprise, télématique"
+    />
+
+    <!-- Author -->
+    <meta name="author" content="AMG Telecom" />
+
+    <!-- Search Engines -->
     <meta name="robots" content="index, follow" />
     <meta name="googlebot" content="index, follow" />
     <meta name="bingbot" content="index, follow" />
-    
-    <!-- Meta tags pour les réseaux sociaux (Open Graph) -->
-    <meta property="og:title" content="Fantasia Bibliothèque - Library - مكتبة" />
-    <meta property="og:description" content="Fantasia Bibliothèque - Livres en français, arabe et anglais. Fantasia Library - Books in French, Arabic and English. مكتبة فانتازيا - كتب بالفرنسية والعربية والإنجليزية." />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="AMG Telecom | Solutions GPS & Gestion de Flotte" />
+    <meta
+      property="og:description"
+      content="Solutions GPS professionnelles : suivi en temps réel, gestion de flotte et sécurité des véhicules avec AMG Telecom."
+    />
     <meta property="og:type" content="website" />
+    <meta property="og:image" content="/logo1.png" />
     <meta property="og:locale" content="fr_FR" />
-    <meta property="og:locale:alternate" content="en_US" />
-    <meta property="og:locale:alternate" content="ar_AR" />
-    
-    <!-- Meta tags pour Twitter -->
+
+    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Fantasia Bibliothèque - Library - مكتبة" />
-    <meta name="twitter:description" content="Fantasia - Livres en 3 langues / Books in 3 languages / كتب بثلاث لغات" />
-    
-    <!-- Meta tags de couverture linguistique -->
-    <meta name="language" content="fr, en, ar" />
-    <meta http-equiv="content-language" content="fr, en, ar" />
-    
-    <title>Fantasia - Bibliothèque française, arabe et anglaise</title>
+    <meta name="twitter:title" content="AMG Telecom | Solutions GPS" />
+    <meta
+      name="twitter:description"
+      content="Suivi GPS, gestion de flotte et solutions de géolocalisation professionnelles."
+    />
+    <meta name="twitter:image" content="/logo1.png" />
+
+    <!-- Language -->
+    <meta name="language" content="fr" />
+    <meta http-equiv="content-language" content="fr" />
+
+    <!-- Default title (will be updated by React Router) -->
+    <title>AMG Telecom | Solutions GPS & Gestion de Flotte</title>
+
+    <!-- Optional: Preconnect to important origins -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!-- Tailwind CSS CDN (optional - if not already included in your build) -->
+    <script src="https://cdn.tailwindcss.com"></script>
   </head>
+
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+
+    <script>
+      // =================================================================
+      // DYNAMIC TITLE & META UPDATER FOR REACT ROUTER
+      // This script works alongside your React app to ensure proper
+      // title and meta description updates even before React hydrates.
+      // =================================================================
+      (function() {
+        // Route title mappings (matches your sidebar.jsx routes)
+        const routeTitles = {
+          '/dashboard': 'Tableau de bord | AMG TELECOM',
+          '/produits': 'Gestion des produits | AMG TELECOM',
+          '/clients': 'Gestion des clients | AMG TELECOM',
+          '/ventes': 'Historique des ventes | AMG TELECOM',
+          '/remises': 'Alertes remises | AMG TELECOM',
+          '/activation': 'Activation GPS | AMG TELECOM',
+          '/utilisateurs': 'Gestion utilisateurs | AMG TELECOM',
+          '/parametres': 'Paramètres | AMG TELECOM',
+          '/profile': 'Mon profil | AMG TELECOM',
+          '/login': 'Connexion | AMG TELECOM',
+          '/register': 'Inscription | AMG TELECOM',
+          '/forgot-password': 'Mot de passe oublié | AMG TELECOM'
+        };
+
+        // Route description mappings for SEO
+        const routeDescriptions = {
+          '/dashboard': 'Tableau de bord administrateur AMG TELECOM - Vue d\'ensemble des activités, indicateurs clés et notifications.',
+          '/produits': 'Gérez votre catalogue de produits Télécom et GPS. Ajoutez, modifiez ou supprimez des produits et suivez les stocks.',
+          '/clients': 'Gérez votre base de clients et leurs informations. Consultez l\'historique des achats et les détails de chaque client.',
+          '/ventes': 'Consultez l\'historique complet des ventes et transactions. Suivez les revenus et générez des rapports détaillés.',
+          '/remises': 'Suivez les remises et dates d\'échéance importantes. Alertes sur les remises approchant dans les 7, 3 ou 1 jour(s).',
+          '/activation': 'Gérez les activations GPS et suivez les expirations. Alertes pour les activations expirant prochainement.',
+          '/utilisateurs': 'Gérez les utilisateurs de la plateforme. Contrôlez les rôles, permissions et accès administrateur.',
+          '/parametres': 'Configurez les paramètres généraux de l\'application. Personnalisez l\'expérience selon vos besoins.',
+          '/profile': 'Consultez et modifiez vos informations personnelles, changez votre mot de passe et préférences.',
+          '/login': 'Connectez-vous à votre espace administrateur AMG TELECOM pour gérer vos solutions GPS et de géolocalisation.',
+          '/register': 'Créez un compte administrateur AMG TELECOM pour accéder aux fonctionnalités de gestion.',
+          '/forgot-password': 'Réinitialisez votre mot de passe AMG TELECOM en toute sécurité.'
+        };
+
+        // Default values
+        const defaultTitle = 'AMG Telecom | Solutions GPS & Gestion de Flotte';
+        const defaultDescription = 'AMG Telecom - Solutions GPS professionnelles au Maroc. Géolocalisation en temps réel, gestion de flotte, suivi de véhicules, télématique et sécurité.';
+
+        // Function to update title and meta description
+        function updateDocument(pathname) {
+          // Clean pathname (remove trailing slash and hash)
+          let cleanPath = pathname;
+          if (cleanPath.endsWith('/') && cleanPath !== '/') {
+            cleanPath = cleanPath.slice(0, -1);
+          }
+          
+          // Handle dynamic routes
+          let title = routeTitles[cleanPath];
+          let description = routeDescriptions[cleanPath];
+          
+          // Check for dynamic patterns (e.g., /clients/123)
+          if (!title) {
+            if (cleanPath.startsWith('/clients/')) {
+              title = 'Détails client | AMG TELECOM';
+              description = 'Consultez et modifiez les informations détaillées d\'un client : historique, transactions et préférences.';
+            } else if (cleanPath.startsWith('/produits/')) {
+              title = 'Détails produit | AMG TELECOM';
+              description = 'Consultez les informations complètes d\'un produit, gérez les stocks et les variantes.';
+            } else if (cleanPath.startsWith('/ventes/')) {
+              title = 'Détails vente | AMG TELECOM';
+              description = 'Consultez les détails complets d\'une transaction de vente, factures et informations client.';
+            } else if (cleanPath.startsWith('/remises/')) {
+              title = 'Détails remise | AMG TELECOM';
+              description = 'Consultez et gérez les détails d\'une remise, dates d\'échéance et notifications.';
+            } else if (cleanPath.startsWith('/activation/')) {
+              title = 'Détails activation GPS | AMG TELECOM';
+              description = 'Consultez et gérez les activations GPS, suivez les dates d\'expiration et renouvellements.';
+            } else if (cleanPath.startsWith('/utilisateurs/')) {
+              title = 'Détails utilisateur | AMG TELECOM';
+              description = 'Consultez et modifiez les informations d\'un utilisateur, rôles et permissions.';
+            } else {
+              title = defaultTitle;
+              description = defaultDescription;
+            }
+          }
+          
+          // Special case for root path
+          if (cleanPath === '/' || cleanPath === '') {
+            title = defaultTitle;
+            description = defaultDescription;
+          }
+          
+          // Also check for exact match with additional patterns
+          if (cleanPath.includes('/edit') || cleanPath.includes('/create') || cleanPath.includes('/ajouter')) {
+            if (cleanPath.includes('client')) {
+              title = 'Modifier client | AMG TELECOM';
+              description = 'Modifiez les informations d\'un client existant ou créez un nouveau client.';
+            } else if (cleanPath.includes('produit')) {
+              title = 'Modifier produit | AMG TELECOM';
+              description = 'Modifiez les informations d\'un produit ou créez un nouveau produit.';
+            } else if (cleanPath.includes('utilisateur')) {
+              title = 'Modifier utilisateur | AMG TELECOM';
+              description = 'Modifiez les informations d\'un utilisateur ou créez un nouvel utilisateur.';
+            }
+          }
+          
+          // Apply the title
+          if (title && title !== document.title) {
+            document.title = title;
+          }
+          
+          // Apply meta description
+          if (description) {
+            let metaDesc = document.querySelector('meta[name="description"]');
+            if (metaDesc) {
+              if (metaDesc.getAttribute('content') !== description) {
+                metaDesc.setAttribute('content', description);
+              }
+            } else {
+              // Create meta description if it doesn't exist
+              metaDesc = document.createElement('meta');
+              metaDesc.name = 'description';
+              metaDesc.content = description;
+              document.head.appendChild(metaDesc);
+            }
+          }
+          
+          // Update Open Graph title and description for better social sharing
+          const ogTitle = document.querySelector('meta[property="og:title"]');
+          if (ogTitle && title) {
+            const ogTitleValue = title.replace(' | AMG TELECOM', '');
+            if (ogTitle.getAttribute('content') !== ogTitleValue) {
+              ogTitle.setAttribute('content', ogTitleValue);
+            }
+          }
+          
+          const ogDesc = document.querySelector('meta[property="og:description"]');
+          if (ogDesc && description) {
+            if (ogDesc.getAttribute('content') !== description) {
+              ogDesc.setAttribute('content', description);
+            }
+          }
+          
+          // Update Twitter card title
+          const twitterTitle = document.querySelector('meta[name="twitter:title"]');
+          if (twitterTitle && title) {
+            const twitterValue = title.replace(' | AMG TELECOM', '');
+            if (twitterTitle.getAttribute('content') !== twitterValue) {
+              twitterTitle.setAttribute('content', twitterValue);
+            }
+          }
+          
+          const twitterDesc = document.querySelector('meta[name="twitter:description"]');
+          if (twitterDesc && description) {
+            if (twitterDesc.getAttribute('content') !== description) {
+              twitterDesc.setAttribute('content', description);
+            }
+          }
+        }
+        
+        // Listen for route changes (works with React Router via popstate)
+        let lastPathname = window.location.pathname;
+        
+        // Update on initial load
+        updateDocument(lastPathname);
+        
+        // Listen for popstate (back/forward navigation)
+        window.addEventListener('popstate', function() {
+          const currentPath = window.location.pathname;
+          if (currentPath !== lastPathname) {
+            lastPathname = currentPath;
+            updateDocument(currentPath);
+          }
+        });
+        
+        // Monkey patch history.pushState and replaceState to detect route changes
+        const originalPushState = history.pushState;
+        const originalReplaceState = history.replaceState;
+        
+        history.pushState = function() {
+          originalPushState.apply(this, arguments);
+          const newPath = window.location.pathname;
+          if (newPath !== lastPathname) {
+            lastPathname = newPath;
+            updateDocument(newPath);
+          }
+        };
+        
+        history.replaceState = function() {
+          originalReplaceState.apply(this, arguments);
+          const newPath = window.location.pathname;
+          if (newPath !== lastPathname) {
+            lastPathname = newPath;
+            updateDocument(newPath);
+          }
+        };
+        
+        // Also listen for hash changes (just in case)
+        window.addEventListener('hashchange', function() {
+          const currentPath = window.location.pathname;
+          if (currentPath !== lastPathname) {
+            lastPathname = currentPath;
+            updateDocument(currentPath);
+          }
+        });
+        
+        console.log('Dynamic title updater initialized for AMG TELECOM');
+      })();
+    </script>
   </body>
 </html>
