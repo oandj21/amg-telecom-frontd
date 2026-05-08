@@ -141,7 +141,7 @@ const styles = `
   }
 `;
 
-const API_URL = window.REACT_APP_API_URL || "http://amg-telecom-backd-production.up.railway.app/api";
+const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
 
 // Helper to get company info from localStorage
 const getCompanyInfo = () => {

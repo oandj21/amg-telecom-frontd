@@ -7,7 +7,7 @@ import axios from "axios";
 // ==============================================
 
 // Use a hardcoded URL or a window environment variable
-const API_URL = window.REACT_APP_API_URL || "http://amg-telecom-backd-production.up.railway.app/api";
+const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
 
 const api = axios.create({
   baseURL: API_URL,
