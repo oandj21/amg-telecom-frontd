@@ -257,6 +257,7 @@ const styles = `
     pointer-events: none;
   }
   
+  
   .check-search-input {
     width: 100%;
     height: 2.75rem;
