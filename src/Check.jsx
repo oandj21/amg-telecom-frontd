@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo,useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
   Plus, Search, Filter, Download, Edit, Trash2, X, 
@@ -13,7 +13,6 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { ExportMenu } from './ExportMenu';
 import logo from './assets/logo.png';
-import imageCompression from 'browser-image-compression';
 import {
   fetchChecks,
   fetchCheckById,
@@ -30,61 +29,109 @@ import {
   setPage
 } from './Store/store';
 
-// ==================== COMPRESSION HELPERS ====================
-const compressImage = async (file) => {
-  const options = {
-    maxSizeMB: 0.5, // Max 500KB after compression
-    maxWidthOrHeight: 1200, // Max dimension
-    useWebWorker: true,
-    initialQuality: 0.7,
-    fileType: 'image/jpeg', // Force JPEG for better compression
-  };
-  
-  try {
-    const compressedFile = await imageCompression(file, options);
-    // Preserve the original filename extension for JPEG
-    let finalFile = compressedFile;
-    if (file.type === 'image/png' && compressedFile.type === 'image/jpeg') {
-      // Create a new File with .jpg extension
-      finalFile = new File([compressedFile], file.name.replace(/\.png$/i, '.jpg'), {
-        type: 'image/jpeg',
-        lastModified: Date.now(),
-      });
+// ==================== IMAGE COMPRESSION UTILITY ====================
+// ==================== IMAGE COMPRESSION UTILITY ====================
+const compressImage = async (file, maxWidth = 1200, quality = 0.8) => {
+  return new Promise((resolve, reject) => {
+    // If file is not an image, return as is
+    if (!file.type.startsWith('image/')) {
+      resolve(file);
+      return;
     }
-    console.log(`Compressed: ${file.name} (${(file.size / 1024).toFixed(0)}KB -> ${(finalFile.size / 1024).toFixed(0)}KB)`);
-    return finalFile;
-  } catch (error) {
-    console.error('Error compressing image:', error);
-    return file;
-  }
+    
+    // If it's a PDF, don't compress
+    if (file.type === 'application/pdf') {
+      resolve(file);
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        
+        // Calculate new dimensions
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d');
+        
+        // Set white background for transparent PNGs
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw image
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Determine output format and quality
+        let outputFormat = 'image/jpeg';
+        let outputQuality = quality;
+        
+        // Keep PNG for images that need transparency (but compress)
+        if (file.type === 'image/png') {
+          outputFormat = 'image/png';
+          outputQuality = 0.9; // PNG compression is lossless, quality parameter affects compression level
+        } else if (file.type === 'image/webp') {
+          outputFormat = 'image/webp';
+        }
+        
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(file);
+              return;
+            }
+            
+            // Preserve original extension for PDF files, use webp for images
+            let newFileName = file.name;
+            if (file.type.startsWith('image/')) {
+              const extension = outputFormat === 'image/jpeg' ? '.jpg' : 
+                               outputFormat === 'image/png' ? '.png' : '.webp';
+              newFileName = file.name.replace(/\.[^/.]+$/, '') + extension;
+            }
+            
+            // Create new file from blob - use window.File to avoid naming conflict
+            const compressedFile = new window.File([blob], newFileName, {
+              type: outputFormat,
+              lastModified: Date.now()
+            });
+            
+            const originalSize = (file.size / 1024 / 1024).toFixed(2);
+            const compressedSize = (compressedFile.size / 1024 / 1024).toFixed(2);
+            console.log(`Compressed ${file.name}: ${originalSize}MB -> ${compressedSize}MB`);
+            resolve(compressedFile);
+          },
+          outputFormat,
+          outputQuality
+        );
+      };
+      
+      img.onerror = () => {
+        console.warn('Image compression failed, using original file');
+        resolve(file);
+      };
+    };
+    
+    reader.onerror = () => {
+      console.warn('File reading failed, using original file');
+      resolve(file);
+    };
+  });
 };
 
-const compressPDF = async (file) => {
-  const MAX_PDF_SIZE_MB = 5;
-  if (file.size > MAX_PDF_SIZE_MB * 1024 * 1024) {
-    console.warn(`PDF file ${file.name} is ${(file.size / (1024 * 1024)).toFixed(2)}MB, may be large`);
-  }
-  return file;
-};
-
-const compressFile = async (file) => {
-  const fileType = file.type;
-  
-  if (fileType.startsWith('image/')) {
-    return await compressImage(file);
-  } else if (fileType === 'application/pdf') {
-    return await compressPDF(file);
-  }
-  
-  return file;
-};
-
-const getFileSizeDisplay = (file) => {
-  const sizeMB = file.size / (1024 * 1024);
-  if (sizeMB < 1) return `${(sizeMB * 1024).toFixed(0)} KB`;
-  return `${sizeMB.toFixed(2)} MB`;
-};
-
+// Add this near the top of your file, before the SearchableSelect component
 const formatCurrencyHelper = (amount) => {
   if (amount === undefined || amount === null) return '0 MAD';
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -185,6 +232,7 @@ const SearchableSelect = ({
     const paymentStatus = option.payment_status;
     const saleStatus = option.vente_status;
     
+    // Determine status badge color
     const getStatusBadge = () => {
         if (saleStatus !== 'confirmed') {
             return { bg: '#fef3c7', color: '#92400e', text: 'Vente en attente' };
@@ -255,7 +303,7 @@ const SearchableSelect = ({
             )}
         </div>
     );
-  };
+};
   
   return (
     <div className="searchable-select" ref={containerRef} onKeyDown={handleKeyDown}>
@@ -303,7 +351,7 @@ const SearchableSelect = ({
                   >
                     {renderOption ? renderOption(option) : defaultRenderOption(option)}
                     {isSelected && (
-                      <CheckCircle size={16} className="searchable-select-option-check" />
+                      <Check size={16} className="searchable-select-option-check" />
                     )}
                   </div>
                 );
@@ -1499,6 +1547,33 @@ const styles = `
     color: #94a3b8;
     font-size: 0.813rem;
   }
+  
+  /* Compression progress indicator */
+  .compression-progress {
+    position: fixed;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e293b;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 2rem;
+    font-size: 0.875rem;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+  
+  .compression-progress .spinner {
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
 `;
 
 // Bank list with logo file names
@@ -1685,23 +1760,6 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
   );
 };
 
-// Helper function to convert image URL to base64
-const imageToBase64 = async (url) => {
-  try {
-    const response = await fetch(url);
-    const blob = await response.blob();
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  } catch (error) {
-    console.error('Error converting image to base64:', error);
-    return null;
-  }
-};
-
 // ==================== MAIN COMPONENT ====================
 const Check = () => {
   const dispatch = useDispatch();
@@ -1734,7 +1792,6 @@ const Check = () => {
   const [compressing, setCompressing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
-  const [imagePreviews, setImagePreviews] = useState([]);
   const [filesToDelete, setFilesToDelete] = useState([]);
   const [selectedBank, setSelectedBank] = useState(bankOptions[2]);
   const [printCheck, setPrintCheck] = useState(null);
@@ -1765,7 +1822,9 @@ const Check = () => {
     montant_max: ''
   });
   
+  // Replace the initial formData useState with this:
   const [formData, setFormData] = useState(() => {
+    // Try to get company info from localStorage synchronously
     let ribValue = '';
     try {
       const saved = localStorage.getItem('company_info');
@@ -1795,15 +1854,6 @@ const Check = () => {
     };
   });
   const [existingFiles, setExistingFiles] = useState([]);
-
-  // Clean up image previews when modal closes
-  useEffect(() => {
-    return () => {
-      imagePreviews.forEach(preview => {
-        URL.revokeObjectURL(preview.url);
-      });
-    };
-  }, [imagePreviews]);
 
   // Toast management
   const showToast = (message, type = 'success') => {
@@ -1837,6 +1887,7 @@ const Check = () => {
       const token = localStorage.getItem('token');
       const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
       
+      // Use the endpoint that includes sale details
       const response = await fetch(`${API_URL}/payments/cheque-payments`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1847,13 +1898,20 @@ const Check = () => {
       if (response.ok) {
         const data = await response.json();
         
+        // Filter clients where sale status is CONFIRMED and payment status is UNPAID or PARTIAL
+        // Also filter out clients that already have a check remise? (optional)
         const formattedClients = (data.cheque_payments || [])
           .filter(payment => {
+            // CRITICAL: Only include if sale is confirmed AND payment status is unpaid or partial
             const isValidSaleStatus = payment.vente_status === 'confirmed';
             const isValidPaymentStatus = payment.payment_status === 'unpaid' || payment.payment_status === 'partial';
+            
+            // Also check if there's actually a cheque payment
             const hasChequePayment = payment.payment_method === 'check' || 
                                     payment.payment_method === 'cheque' ||
                                     (payment.cheque_amount && payment.cheque_amount > 0);
+            
+            console.log(`Client: ${payment.client_nom}, Sale Status: ${payment.vente_status}, Payment Status: ${payment.payment_status}, Has Cheque: ${hasChequePayment}`);
             
             return isValidSaleStatus && isValidPaymentStatus && hasChequePayment;
           })
@@ -1876,8 +1934,10 @@ const Check = () => {
             payment_date: payment.payment_date,
           }));
         
+        console.log(`Found ${formattedClients.length} clients with cheque payments on confirmed sales with unpaid/partial status`);
         setClientsWithChequePayments(formattedClients);
       } else {
+        console.warn('Failed to fetch cheque payments');
         setClientsWithChequePayments([]);
       }
     } catch (error) {
@@ -1888,6 +1948,7 @@ const Check = () => {
     }
   };
   
+  // Fetch company info for RIB
   const fetchCompanyInfo = async () => {
     setLoadingCompanyInfo(true);
     try {
@@ -1904,6 +1965,7 @@ const Check = () => {
       if (response.ok) {
         const data = await response.json();
         setCompanyInfo(data.company_info);
+        // Update formData if RIB is empty
         setFormData(prev => ({
           ...prev,
           rib_remettant: prev.rib_remettant || data.company_info?.rib || ''
@@ -1935,16 +1997,20 @@ const Check = () => {
     }
   };
   
+  // Add this useEffect after the fetchCompanyInfo call or near other useEffects
   useEffect(() => {
+    // Only update if not editing and RIB is empty
     if (!editingId && companyInfo?.rib && !formData.rib_remettant) {
       setFormData(prev => ({ ...prev, rib_remettant: companyInfo.rib }));
     }
   }, [companyInfo, editingId, formData.rib_remettant]);
   
+  // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [search, agencyFilter, typeFilter, statusFilter, filters]);
 
+  // Load checks when filters or pagination change
   useEffect(() => {
     const activeFilters = {};
     Object.keys(filters).forEach(key => {
@@ -1960,6 +2026,7 @@ const Check = () => {
     dispatch(fetchCheckSummary(activeFilters));
   }, [dispatch, filters, search, agencyFilter, typeFilter, currentPage]);
 
+  // Filter checks by status and paginate
   const filteredByStatus = useMemo(() => {
     if (statusFilter === 'all') return checks;
     if (statusFilter === 'approaching') {
@@ -1977,6 +2044,7 @@ const Check = () => {
     return checks;
   }, [checks, statusFilter]);
 
+  // Pagination calculations
   const totalPages = Math.ceil(filteredByStatus.length / itemsPerPage);
   const paginatedChecks = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -2029,69 +2097,48 @@ const Check = () => {
     setFormData(prev => ({
       ...prev,
       client_remettant: clientName,
+      // Optionally auto-fill other fields from the client data
       ville: clientData?.ville || prev.ville,
     }));
   };
 
+  // Updated handleFileSelect with compression
   const handleFileSelect = async (e) => {
     const files = Array.from(e.target.files);
-    const validFiles = [];
     
-    // Clear previous previews
-    setImagePreviews([]);
+    // Filter valid files
+    const validFiles = files.filter(file => {
+      const isValidType = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type);
+      const isValidSize = file.size <= 10 * 1024 * 1024;
+      if (!isValidType) showToast(`Format non supporté: ${file.name} (accepté: PDF, JPG, PNG, WebP)`, 'error');
+      if (!isValidSize) showToast(`Fichier trop volumineux: ${file.name} (max 10MB)`, 'error');
+      return isValidType && isValidSize;
+    });
+    
+    if (validFiles.length === 0) return;
+    
+    // Show compression progress
     setCompressing(true);
     
     try {
-      for (const file of files) {
-        const isValidType = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'].includes(file.type);
-        const isValidSize = file.size <= 10 * 1024 * 1024;
-        
-        if (!isValidType) {
-          showToast(`Format non supporté: ${file.name}`, 'error');
-          continue;
-        }
-        
-        if (!isValidSize) {
-          showToast(`Fichier trop volumineux: ${file.name} (max 10MB)`, 'error');
-          continue;
-        }
-        
-        // Create preview for images
-        if (file.type.startsWith('image/')) {
-          const previewUrl = URL.createObjectURL(file);
-          setImagePreviews(prev => [...prev, { name: file.name, url: previewUrl }]);
-        }
-        
-        let processedFile = file;
-        const originalSizeMB = file.size / (1024 * 1024);
-        
-        if (file.type.startsWith('image/')) {
-          try {
-            processedFile = await compressImage(file);
-            const compressedSizeMB = processedFile.size / (1024 * 1024);
-            if (compressedSizeMB < originalSizeMB) {
-              console.log(`Compressed ${file.name}: ${originalSizeMB.toFixed(2)}MB -> ${compressedSizeMB.toFixed(2)}MB`);
-              showToast(`${file.name} compressé de ${originalSizeMB.toFixed(1)}MB à ${compressedSizeMB.toFixed(1)}MB`, 'info');
-            }
-          } catch (err) {
-            console.warn(`Could not compress ${file.name}:`, err);
-            processedFile = file;
-          }
-        } else if (file.type === 'application/pdf' && originalSizeMB > 3) {
-          showToast(`⚠️ ${file.name} est un PDF de ${originalSizeMB.toFixed(2)}MB, l'upload peut être lent`, 'info');
-        }
-        
-        validFiles.push(processedFile);
+      const compressedFiles = [];
+      let processed = 0;
+      
+      // Process files in batches to show progress
+      for (const file of validFiles) {
+        const compressedFile = await compressImage(file);
+        compressedFiles.push(compressedFile);
+        processed++;
+        // Update progress if needed (optional)
       }
       
-      setSelectedFiles(prev => [...prev, ...validFiles]);
-      
-      if (validFiles.length > 0) {
-        showToast(`${validFiles.length} fichier(s) prêt(s) à l'upload`, 'success');
-      }
+      setSelectedFiles(prev => [...prev, ...compressedFiles]);
+      showToast(`✅ ${compressedFiles.length} fichier(s) compressé(s) et prêt(s)`, 'success');
     } catch (error) {
-      console.error('Error processing files:', error);
-      showToast('Erreur lors du traitement des fichiers', 'error');
+      console.error('Compression error:', error);
+      // If compression fails, still add original files
+      setSelectedFiles(prev => [...prev, ...validFiles]);
+      showToast(`⚠️ Compression impossible, fichiers ajoutés sans compression`, 'warning');
     } finally {
       setCompressing(false);
     }
@@ -2116,23 +2163,6 @@ const Check = () => {
   const generatePDF = async (check, bank) => {
     setPrinting(true);
     
-    // Function to convert image to base64
-    const getBase64Image = async (url) => {
-      try {
-        const response = await fetch(url);
-        const blob = await response.blob();
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-      } catch (error) {
-        console.error('Error converting image to base64:', error);
-        return null;
-      }
-    };
-    
     const printDiv = document.createElement('div');
     printDiv.style.position = 'absolute';
     printDiv.style.left = '-9999px';
@@ -2144,57 +2174,21 @@ const Check = () => {
     
     const bankLogo = getBankLogo(bank.name);
     
-    // Pre-fetch bank logo as base64 if it exists
-    let bankLogoSrc = '';
-    if (bankLogo) {
-      const base64Logo = await getBase64Image(bankLogo);
-      bankLogoSrc = base64Logo || bankLogo;
-    }
-    
     let bankHeaderHtml = '';
-    if (bankLogoSrc) {
+    if (bankLogo) {
       bankHeaderHtml = `
         <div style="text-align: center; margin-bottom: 15px;">
-          <img src="${bankLogoSrc}" alt="${bank.name} logo" style="height: 60px; width: auto; object-fit: contain; margin-bottom: 8px;" />
+          <img src="${bankLogo}" alt="${bank.name} logo" style="height: 60px; width: auto; object-fit: contain; margin-bottom: 8px;" onerror="this.style.display='none'" />
         </div>
       `;
-    }
-    
-    // Pre-fetch all check images as base64
-    const imageBase64Map = new Map();
-    if (check.files && check.files.length > 0) {
-      const imageFiles = check.files.filter(file => file.match(/\.(jpg|jpeg|png)$/i));
-      for (const imageFile of imageFiles) {
-        const fileUrl = `${import.meta.env.VITE_API_URL || 'https://amg-telecom-backd-production.up.railway.app'}/api/files/${imageFile}`;
-        const base64Image = await getBase64Image(fileUrl);
-        if (base64Image) {
-          imageBase64Map.set(imageFile, base64Image);
-        }
-      }
-    }
-    
-    // Pre-fetch main logo as base64
-    let mainLogoSrc = '';
-    try {
-      const mainLogoResponse = await fetch(logo);
-      const mainLogoBlob = await mainLogoResponse.blob();
-      mainLogoSrc = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(mainLogoBlob);
-      });
-    } catch (error) {
-      console.error('Error converting main logo:', error);
-      mainLogoSrc = logo;
-    }
+    } 
     
     let filesHtml = '';
     
     if (check.files && check.files.length > 0) {
-      const imageFiles = check.files.filter(file => file.match(/\.(jpg|jpeg|png)$/i));
+      const imageFiles = check.files.filter(file => file.match(/\.(jpg|jpeg|png|webp)$/i));
       const pdfFiles = check.files.filter(file => file.match(/\.pdf$/i));
-      const otherFiles = check.files.filter(file => !file.match(/\.(jpg|jpeg|png|pdf)$/i));
+      const otherFiles = check.files.filter(file => !file.match(/\.(jpg|jpeg|png|webp|pdf)$/i));
       
       filesHtml = `
         <div style="margin: 20px 0;">
@@ -2211,19 +2205,18 @@ const Check = () => {
         `;
         
         for (const imageFile of imageFiles) {
-          const base64Image = imageBase64Map.get(imageFile);
-          if (base64Image) {
-            filesHtml += `
-              <div style="margin-bottom: 10px; border: 1px solid #e5e7eb; border-radius: 4px; overflow: hidden; max-width: 200px;">
-                <img 
-                  src="${base64Image}" 
-                  style="width: 100%; max-height: 150px; object-fit: cover;" 
-                  alt="${imageFile}"
-                />
-                <div style="font-size: 9px; padding: 4px; text-align: center; background: #f9fafb; word-break: break-all;">${imageFile}</div>
-              </div>
-            `;
-          }
+          const fileUrl = `${import.meta.env.VITE_API_URL || 'https://amg-telecom-backd-production.up.railway.app'}/api/files/${imageFile}`;
+          filesHtml += `
+            <div style="margin-bottom: 10px; border: 1px solid #e5e7eb; border-radius: 4px; overflow: hidden; max-width: 200px;">
+              <img 
+                src="${fileUrl}" 
+                style="width: 100%; max-height: 150px; object-fit: cover;" 
+                alt="${imageFile}"
+                onerror="this.style.display='none'"
+              />
+              <div style="font-size: 9px; padding: 4px; text-align: center; background: #f9fafb; word-break: break-all;">${imageFile}</div>
+            </div>
+          `;
         }
         
         filesHtml += `
@@ -2306,7 +2299,7 @@ const Check = () => {
       <div style="padding: 20px; max-width: 800px; margin: 0 auto; font-family: Arial, sans-serif; font-size: 11px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #1a3a5c; padding-bottom: 10px;">
           <div style="display: flex; align-items: center; gap: 10px;">
-            <img src="${mainLogoSrc}" alt="GROUPE Logo" style="height: 120px; width: 120px;" />
+            <img src="${logo}" alt="GROUPE Logo" style="height: 120px; width: 120px;" />
           </div>
           <div style="text-align: right;">
             ${bankHeaderHtml}
@@ -2556,6 +2549,7 @@ const Check = () => {
       await dispatch(deleteCheck(showDeleteDialog.id)).unwrap();
       showToast(`Remise "${showDeleteDialog.reference_remise || showDeleteDialog.client_remettant}" supprimée avec succès`, 'success');
       setShowDeleteDialog(null);
+      // Adjust current page if needed
       const newTotalPages = Math.ceil((filteredByStatus.length - 1) / itemsPerPage);
       if (currentPage > newTotalPages && newTotalPages > 0) {
         setCurrentPage(newTotalPages);
@@ -2590,7 +2584,6 @@ const Check = () => {
     });
     setEditingId(null);
     setSelectedFiles([]);
-    setImagePreviews([]);
     setExistingFiles([]);
     setFilesToDelete([]);
   };
@@ -2598,7 +2591,6 @@ const Check = () => {
   const openFilesModal = async (check) => {
     await dispatch(fetchCheckById(check.id));
     setSelectedFiles([]);
-    setImagePreviews([]);
     setShowFilesModal(true);
   };
 
@@ -2610,7 +2602,6 @@ const Check = () => {
       await dispatch(uploadCheckFiles({ id: selectedCheck.id, files: selectedFiles })).unwrap();
       showToast('Fichiers uploadés avec succès', 'success');
       setSelectedFiles([]);
-      setImagePreviews([]);
       await dispatch(fetchCheckById(selectedCheck.id));
       dispatch(fetchChecks({ page: currentPage }));
     } catch (err) {
@@ -2668,6 +2659,7 @@ const Check = () => {
     return "✓ Normal";
   };
 
+  // Prepare export columns for ExportMenu
   const exportColumns = [
     { header: 'Référence', accessor: c => c.reference_remise || '-' },
     { header: 'Date et heure', accessor: c => formatDate(c.date_et_heure) },
@@ -2705,6 +2697,14 @@ const Check = () => {
   return (
     <div className="check-page-container">
       <style>{styles}</style>
+      
+      {/* Compression Progress Indicator */}
+      {compressing && (
+        <div className="compression-progress">
+          <div className="spinner"></div>
+          <span>Compression des images en cours...</span>
+        </div>
+      )}
       
       {/* Toast Container */}
       {toasts.length > 0 && (
@@ -3202,635 +3202,586 @@ const Check = () => {
                       name="type_remise" 
                       value={formData.type_remise} 
                       onChange={handleInputChange} 
-                        className="check-input" 
-                        placeholder="Ex: Normal, Urgent" 
-                      />
-                    </div>
-                    <div className="check-form-group">
-                      <label className="check-label">Taux Escompte (%)</label>
-                      <input 
-                        type="number" 
-                        step="0.01" 
-                        name="taux_escompte" 
-                        value={formData.taux_escompte} 
-                        onChange={handleInputChange} 
-                        className="check-input" 
-                        min="0" 
-                        max="100" 
-                      />
-                    </div>
+                      className="check-input" 
+                      placeholder="Ex: Normal, Urgent" 
+                    />
                   </div>
+                  <div className="check-form-group">
+                    <label className="check-label">Taux Escompte (%)</label>
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      name="taux_escompte" 
+                      value={formData.taux_escompte} 
+                      onChange={handleInputChange} 
+                      className="check-input" 
+                      min="0" 
+                      max="100" 
+                    />
+                  </div>
+                </div>
 
-                  {/* Files Section */}
-                  <div className="check-section">
-                    <div className="check-section-title">
-                      <FileText size={18} />
-                      Fichiers attachés
+                {/* Files Section with Compression */}
+                <div className="check-section">
+                  <div className="check-section-title">
+                    <FileText size={18} />
+                    Fichiers attachés
+                  </div>
+                  
+                  {editingId && existingFiles.length > 0 && (
+                    <div style={{ marginBottom: '1rem' }}>
+                      <label className="check-label" style={{ fontSize: '0.8125rem', color: '#64748b' }}>
+                        Fichiers existants
+                      </label>
+                      <div className="check-file-list">
+                        {existingFiles.map((file, index) => (
+                          <div key={index} className="check-file-item">
+                            <div className="check-file-info">
+                              {file.match(/\.(jpg|jpeg|png|webp)$/i) ? 
+                                <ImageIcon size={18} style={{ color: '#3b82f6' }} /> : 
+                                <File size={18} style={{ color: '#64748b' }} />
+                              }
+                              <span style={{ fontSize: '0.8125rem', wordBreak: 'break-all' }}>{file}</span>
+                            </div>
+                            <div className="check-file-actions">
+                              <button type="button" className="check-icon-btn" onClick={() => handlePreviewFile(file)} title="Aperçu">
+                                <Eye size={16} />
+                              </button>
+                              <button type="button" className="check-icon-btn" onClick={() => removeExistingFile(file)} title="Supprimer">
+                                <Trash2 size={16} style={{ color: '#ef4444' }} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <div className="check-upload-area">
+                      <input
+                        type="file"
+                        multiple
+                        onChange={handleFileSelect}
+                        style={{ display: 'none' }}
+                        id="file-upload-form"
+                        accept=".pdf,.jpg,.jpeg,.png,.webp"
+                        disabled={compressing}
+                      />
+                      <label htmlFor="file-upload-form" className="check-upload-label">
+                        <Upload size={18} />
+                        {compressing ? 'Compression en cours...' : 'Sélectionner des fichiers'}
+                      </label>
+                      <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.5rem' }}>
+                        PDF, JPG, PNG, WebP (max 10MB - Les images sont automatiquement compressées)
+                      </p>
                     </div>
                     
-                    {editingId && existingFiles.length > 0 && (
-                      <div style={{ marginBottom: '1rem' }}>
-                        <label className="check-label" style={{ fontSize: '0.8125rem', color: '#64748b' }}>
-                          Fichiers existants
+                    {selectedFiles.length > 0 && (
+                      <div style={{ marginTop: '1rem' }}>
+                        <label className="check-label" style={{ fontSize: '0.8125rem' }}>
+                          Fichiers sélectionnés ({selectedFiles.length})
                         </label>
                         <div className="check-file-list">
-                          {existingFiles.map((file, index) => (
-                            <div key={index} className="check-file-item">
-                              <div className="check-file-info">
-                                {file.match(/\.(jpg|jpeg|png)$/i) ? 
-                                  <ImageIcon size={18} style={{ color: '#3b82f6' }} /> : 
-                                  <File size={18} style={{ color: '#64748b' }} />
-                                }
-                                <span style={{ fontSize: '0.8125rem', wordBreak: 'break-all' }}>{file}</span>
-                              </div>
-                              <div className="check-file-actions">
-                                <button type="button" className="check-icon-btn" onClick={() => handlePreviewFile(file)} title="Aperçu">
-                                  <Eye size={16} />
+                          {selectedFiles.map((file, index) => {
+                            // Calculate compressed size info
+                            const originalSize = (file.size / 1024).toFixed(1);
+                            const isImage = file.type.startsWith('image/');
+                            return (
+                              <div key={index} className="check-file-item">
+                                <div className="check-file-info">
+                                  {isImage ? 
+                                    <ImageIcon size={18} style={{ color: '#3b82f6' }} /> : 
+                                    <File size={18} style={{ color: '#64748b' }} />
+                                  }
+                                  <span style={{ fontSize: '0.8125rem' }}>
+                                    {file.name} ({originalSize} KB)
+                                    {isImage && file.type === 'image/webp' && (
+                                      <span style={{ fontSize: '0.7rem', color: '#10b981', marginLeft: '0.5rem' }}>
+                                        (compressé)
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                                <button type="button" className="check-icon-btn" onClick={() => removeSelectedFile(index)}>
+                                  <X size={14} style={{ color: '#ef4444' }} />
                                 </button>
-                                <button type="button" className="check-icon-btn" onClick={() => removeExistingFile(file)} title="Supprimer">
-                                  <Trash2 size={16} style={{ color: '#ef4444' }} />
-                                </button>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}
-
-                    <div>
-                      <div className="check-upload-area">
-                        <input
-                          type="file"
-                          multiple
-                          onChange={handleFileSelect}
-                          style={{ display: 'none' }}
-                          id="file-upload-form"
-                          accept=".pdf,.jpg,.jpeg,.png"
-                          disabled={compressing}
-                        />
-                        <label htmlFor="file-upload-form" className="check-upload-label" style={{ cursor: compressing ? 'wait' : 'pointer' }}>
-                          {compressing ? (
-                            <>
-                              <Loader2 size={18} style={{ animation: 'spin 0.8s linear infinite' }} />
-                              Compression en cours...
-                            </>
-                          ) : (
-                            <>
-                              <Upload size={18} />
-                              Sélectionner des fichiers
-                            </>
-                          )}
-                        </label>
-                        <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.5rem' }}>
-                          PDF, JPG, PNG (max 10MB par fichier, images compressées automatiquement)
-                        </p>
-                      </div>
-                      
-                      {/* Image previews */}
-                      {imagePreviews.length > 0 && (
-                        <div style={{ marginTop: '1rem' }}>
-                          <label className="check-label" style={{ fontSize: '0.8125rem' }}>
-                            Aperçus images ({imagePreviews.length})
-                          </label>
-                          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '0.5rem' }}>
-                            {imagePreviews.map((preview, idx) => (
-                              <div key={idx} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '4px', background: '#f8fafc' }}>
-                                <img 
-                                  src={preview.url} 
-                                  alt={preview.name} 
-                                  style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '4px' }}
-                                />
-                                <div style={{ fontSize: '0.7rem', textAlign: 'center', marginTop: '4px', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                  {preview.name.slice(0, 15)}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {selectedFiles.length > 0 && (
-                        <div style={{ marginTop: '1rem' }}>
-                          <label className="check-label" style={{ fontSize: '0.8125rem' }}>
-                            Fichiers sélectionnés ({selectedFiles.length})
-                          </label>
-                          <div className="check-file-list">
-                            {selectedFiles.map((file, index) => {
-                              const isCompressed = file.type?.startsWith('image/') && file.size < 1024 * 1024;
-                              return (
-                                <div key={index} className="check-file-item">
-                                  <div className="check-file-info">
-                                    {file.type?.startsWith('image/') ? 
-                                      <ImageIcon size={18} style={{ color: '#3b82f6' }} /> : 
-                                      <File size={18} style={{ color: '#64748b' }} />
-                                    }
-                                    <span style={{ fontSize: '0.8125rem' }}>
-                                      {file.name}
-                                    </span>
-                                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
-                                      ({getFileSizeDisplay(file)})
-                                    </span>
-                                    {isCompressed && (
-                                      <span style={{ 
-                                        fontSize: '0.65rem', 
-                                        backgroundColor: '#d1fae5', 
-                                        color: '#065f46',
-                                        padding: '2px 6px',
-                                        borderRadius: '12px',
-                                        marginLeft: '8px'
-                                      }}>
-                                        Compressé
-                                      </span>
-                                    )}
-                                  </div>
-                                  <button type="button" className="check-icon-btn" onClick={() => removeSelectedFile(index)}>
-                                    <X size={14} style={{ color: '#ef4444' }} />
-                                  </button>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </div>
-                
-                <div className="check-dialog-footer">
-                  <Button type="button" variant="outline" onClick={() => { setShowModal(false); resetForm(); }}>
-                    Annuler
-                  </Button>
-                  <Button type="submit" disabled={uploading || compressing}>
-                    {(uploading || compressing) && <Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite', marginRight: '0.5rem' }} />}
-                    {editingId ? 'Mettre à jour' : 'Créer la remise'}
-                  </Button>
-                </div>
-              </form>
-              
-              <button className="check-dialog-close" onClick={() => { setShowModal(false); resetForm(); }}>
-                <X size={18} />
-                <span className="sr-only">Fermer</span>
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* DELETE CONFIRMATION DIALOG */}
-        {showDeleteDialog && (
-          <>
-            <div className="check-overlay" onClick={() => !deleting && setShowDeleteDialog(null)} />
-            <div className="check-dialog check-dialog-danger">
-              <div className="check-dialog-header">
-                <h2 className="check-dialog-title check-dialog-title-danger">
-                  <AlertTriangle size={24} />
-                  Confirmer la suppression
-                </h2>
-                <p className="check-dialog-description">
-                  Êtes-vous sûr de vouloir supprimer cette remise ? Cette action est irréversible.
-                </p>
               </div>
-              
-              <div className="check-delete-warning">
-                <div className="check-delete-warning-title">
-                  <AlertTriangle size={18} />
-                  Remise à supprimer :
-                </div>
-                <div className="check-delete-warning-text">
-                  <strong>{showDeleteDialog.reference_remise || 'Sans référence'}</strong>
-                  {showDeleteDialog.client_remettant && <div>👤 {showDeleteDialog.client_remettant}</div>}
-                  {showDeleteDialog.montant_total_dh && <div>💰 {formatCurrency(showDeleteDialog.montant_total_dh)}</div>}
-                  {showDeleteDialog.date_et_heure && <div>📅 {formatDate(showDeleteDialog.date_et_heure)}</div>}
-                </div>
-              </div>
-              
-              {showDeleteDialog.files && showDeleteDialog.files.length > 0 && (
-                <div className="check-error-message">
-                  <AlertTriangle size={16} />
-                  Attention : Cette remise a {showDeleteDialog.files.length} fichier(s) attaché(s). 
-                  La suppression de la remise supprimera également tous les fichiers associés.
-                </div>
-              )}
               
               <div className="check-dialog-footer">
-                <Button 
-                  variant="outline" 
-                  onClick={() => setShowDeleteDialog(null)}
-                  disabled={deleting}
-                >
+                <Button type="button" variant="outline" onClick={() => { setShowModal(false); resetForm(); }}>
                   Annuler
                 </Button>
-                <Button 
-                  variant="danger" 
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className={deleting ? 'deleting' : ''}
-                >
-                  {deleting ? (
-                    <>
-                      <div className="check-loading-spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} />
-                      Suppression...
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 size={16} />
-                      Supprimer définitivement
-                    </>
-                  )}
+                <Button type="submit" disabled={uploading || compressing}>
+                  {(uploading || compressing) && <Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite', marginRight: '0.5rem' }} />}
+                  {editingId ? 'Mettre à jour' : 'Créer la remise'}
                 </Button>
               </div>
-              <button 
-                className="check-dialog-close" 
-                onClick={() => !deleting && setShowDeleteDialog(null)}
+            </form>
+            
+            <button className="check-dialog-close" onClick={() => { setShowModal(false); resetForm(); }}>
+              <X size={18} />
+              <span className="sr-only">Fermer</span>
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* DELETE CONFIRMATION DIALOG */}
+      {showDeleteDialog && (
+        <>
+          <div className="check-overlay" onClick={() => !deleting && setShowDeleteDialog(null)} />
+          <div className="check-dialog check-dialog-danger">
+            <div className="check-dialog-header">
+              <h2 className="check-dialog-title check-dialog-title-danger">
+                <AlertTriangle size={24} />
+                Confirmer la suppression
+              </h2>
+              <p className="check-dialog-description">
+                Êtes-vous sûr de vouloir supprimer cette remise ? Cette action est irréversible.
+              </p>
+            </div>
+            
+            <div className="check-delete-warning">
+              <div className="check-delete-warning-title">
+                <AlertTriangle size={18} />
+                Remise à supprimer :
+              </div>
+              <div className="check-delete-warning-text">
+                <strong>{showDeleteDialog.reference_remise || 'Sans référence'}</strong>
+                {showDeleteDialog.client_remettant && <div>👤 {showDeleteDialog.client_remettant}</div>}
+                {showDeleteDialog.montant_total_dh && <div>💰 {formatCurrency(showDeleteDialog.montant_total_dh)}</div>}
+                {showDeleteDialog.date_et_heure && <div>📅 {formatDate(showDeleteDialog.date_et_heure)}</div>}
+              </div>
+            </div>
+            
+            {showDeleteDialog.files && showDeleteDialog.files.length > 0 && (
+              <div className="check-error-message">
+                <AlertTriangle size={16} />
+                Attention : Cette remise a {showDeleteDialog.files.length} fichier(s) attaché(s). 
+                La suppression de la remise supprimera également tous les fichiers associés.
+              </div>
+            )}
+            
+            <div className="check-dialog-footer">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowDeleteDialog(null)}
                 disabled={deleting}
               >
-                <X size={18} />
-                <span className="sr-only">Fermer</span>
-              </button>
+                Annuler
+              </Button>
+              <Button 
+                variant="danger" 
+                onClick={handleDelete}
+                disabled={deleting}
+                className={deleting ? 'deleting' : ''}
+              >
+                {deleting ? (
+                  <>
+                    <div className="check-loading-spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} />
+                    Suppression...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={16} />
+                    Supprimer définitivement
+                  </>
+                )}
+              </Button>
             </div>
-          </>
-        )}
+            <button 
+              className="check-dialog-close" 
+              onClick={() => !deleting && setShowDeleteDialog(null)}
+              disabled={deleting}
+            >
+              <X size={18} />
+              <span className="sr-only">Fermer</span>
+            </button>
+          </div>
+        </>
+      )}
 
-        {/* Print Modal with Bank Selection */}
-        {showPrintModal && printCheck && (
-          <>
-            <div className="check-overlay" onClick={() => { setShowPrintModal(false); setPrintCheck(null); }} />
-            <div className="check-dialog" style={{ maxWidth: '32rem' }}>
-              <div className="check-dialog-header">
-                <h2 className="check-dialog-title">
-                  <Printer size={20} />
-                  Imprimer le bordereau
-                </h2>
-                <p className="check-dialog-description">
-                  Sélectionnez la banque pour générer le PDF avec son logo
-                </p>
+      {/* Print Modal with Bank Selection */}
+      {showPrintModal && printCheck && (
+        <>
+          <div className="check-overlay" onClick={() => { setShowPrintModal(false); setPrintCheck(null); }} />
+          <div className="check-dialog" style={{ maxWidth: '32rem' }}>
+            <div className="check-dialog-header">
+              <h2 className="check-dialog-title">
+                <Printer size={20} />
+                Imprimer le bordereau
+              </h2>
+              <p className="check-dialog-description">
+                Sélectionnez la banque pour générer le PDF avec son logo
+              </p>
+            </div>
+            
+            <div className="check-dialog-body">
+              <div className="check-form-group">
+                <label className="check-label check-label-required">Banque</label>
+                <select
+                  value={selectedBank.name}
+                  onChange={(e) => {
+                    const bank = bankOptions.find(b => b.name === e.target.value);
+                    if (bank) setSelectedBank(bank);
+                  }}
+                  className="check-input"
+                  style={{ width: '100%' }}
+                  required
+                >
+                  {bankOptions.map((bank) => (
+                    <option key={bank.name} value={bank.name}>{bank.name}</option>
+                  ))}
+                </select>
               </div>
               
-              <div className="check-dialog-body">
+              {/* Preview bank logo and name */}
+              <div style={{ textAlign: 'center', padding: '10px', border: '1px solid #e2e8f0', borderRadius: '0.75rem', background: '#f8fafc' }}>
+                <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '8px' }}>Aperçu :</p>
+                {getBankLogo(selectedBank.name) && (
+                  <img 
+                    src={getBankLogo(selectedBank.name)} 
+                    alt={selectedBank.name} 
+                    style={{ height: '50px', width: 'auto', objectFit: 'contain', marginBottom: '8px' }}
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                  />
+                )}
+                <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#1a3a5c' }}>{selectedBank.name}</div>
+              </div>
+              
+              <div className="check-info-message">
+                <Info size={16} />
+                <div style={{ flex: 1 }}>
+                  <strong>Récapitulatif :</strong><br />
+                  Référence: {printCheck.reference_remise || 'N/A'}<br />
+                  Client: {printCheck.client_remettant || 'N/A'}<br />
+                  Montant: {formatCurrency(printCheck.montant_total_dh)}
+                </div>
+              </div>
+            </div>
+            
+            <div className="check-dialog-footer">
+              <Button variant="outline" onClick={() => { setShowPrintModal(false); setPrintCheck(null); }}>
+                Annuler
+              </Button>
+              <Button onClick={confirmPrint} disabled={printing}>
+                {printing && <Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite', marginRight: '0.5rem' }} />}
+                Générer PDF
+              </Button>
+            </div>
+            
+            <button className="check-dialog-close" onClick={() => { setShowPrintModal(false); setPrintCheck(null); }}>
+              <X size={18} />
+              <span className="sr-only">Fermer</span>
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Files Modal */}
+      {showFilesModal && selectedCheck && (
+        <>
+          <div className="check-overlay" onClick={() => { setShowFilesModal(false); setSelectedFiles([]); }} />
+          <div className="check-dialog" style={{ maxWidth: '32rem' }}>
+            <div className="check-dialog-header">
+              <h2 className="check-dialog-title">
+                <FileText size={20} />
+                Fichiers - {selectedCheck.reference_remise || selectedCheck.client_remettant}
+              </h2>
+              <p className="check-dialog-description">
+                Gérez les fichiers attachés à cette remise
+              </p>
+            </div>
+            
+            <div className="check-dialog-body">
+              <div className="check-upload-area">
+                <input 
+                  type="file" 
+                  multiple 
+                  onChange={handleFileSelect} 
+                  style={{ display: 'none' }} 
+                  id="file-upload-modal" 
+                  accept=".pdf,.jpg,.jpeg,.png,.webp" 
+                  disabled={compressing}
+                />
+                <label htmlFor="file-upload-modal" className="check-upload-label">
+                  <Upload size={18} />
+                  {compressing ? 'Compression en cours...' : 'Sélectionner des fichiers'}
+                </label>
+                <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.5rem' }}>
+                  PDF, JPG, PNG, WebP (max 10MB - Images compressées automatiquement)
+                </p>
+                
+                {selectedFiles.length > 0 && (
+                  <div style={{ marginTop: '1rem', textAlign: 'left' }}>
+                    <p style={{ fontSize: '0.8125rem', marginBottom: '0.5rem' }}>
+                      {selectedFiles.length} fichier(s) sélectionné(s) et compressé(s)
+                    </p>
+                    <Button variant="success" onClick={handleFileUpload} disabled={uploading || compressing} style={{ fontSize: '0.75rem' }}>
+                      {uploading ? <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} /> : <FileUp size={14} />}
+                      <span style={{ marginLeft: '0.5rem' }}>Uploader</span>
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {selectedCheck.files && selectedCheck.files.length > 0 ? (
+                <div style={{ marginTop: '1rem' }}>
+                  <label className="check-label">Fichiers existants ({selectedCheck.files.length})</label>
+                  <div className="check-file-list">
+                    {selectedCheck.files.map((file, index) => (
+                      <div key={index} className="check-file-item">
+                        <div className="check-file-info">
+                          {file.match(/\.(jpg|jpeg|png|webp)$/i) ? 
+                            <ImageIcon size={18} style={{ color: '#3b82f6' }} /> : 
+                            <File size={18} style={{ color: '#64748b' }} />
+                          }
+                          <span style={{ fontSize: '0.8125rem', wordBreak: 'break-all' }}>{file}</span>
+                        </div>
+                        <div className="check-file-actions">
+                          <button className="check-icon-btn" onClick={() => handlePreviewFile(file)} title="Aperçu">
+                            <Eye size={16} />
+                          </button>
+                          <button className="check-icon-btn" onClick={() => handleDeleteFile(file)} title="Supprimer">
+                            <Trash2 size={16} style={{ color: '#ef4444' }} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="check-empty" style={{ padding: '2rem 0' }}>
+                  Aucun fichier attaché
+                </div>
+              )}
+            </div>
+            
+            <div className="check-dialog-footer">
+              <Button variant="outline" onClick={() => { setShowFilesModal(false); setSelectedFiles([]); }}>
+                Fermer
+              </Button>
+            </div>
+            
+            <button className="check-dialog-close" onClick={() => { setShowFilesModal(false); setSelectedFiles([]); }}>
+              <X size={18} />
+              <span className="sr-only">Fermer</span>
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* File Preview Modal */}
+      {showFilePreview && (
+        <>
+          <div className="check-overlay" onClick={() => setShowFilePreview(false)} />
+          <div className="check-dialog" style={{ maxWidth: '90%', maxHeight: '90vh' }}>
+            <div className="check-dialog-header">
+              <h2 className="check-dialog-title" style={{ fontSize: '1rem' }}>
+                <Eye size={18} />
+                {previewFileName}
+              </h2>
+            </div>
+            
+            <div className="check-dialog-body" style={{ textAlign: 'center' }}>
+              {previewFileName.match(/\.(jpg|jpeg|png|webp)$/i) ? (
+                <img 
+                  src={previewFileUrl} 
+                  alt={previewFileName} 
+                  style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }} 
+                />
+              ) : (
+                <iframe 
+                  src={previewFileUrl} 
+                  title={previewFileName} 
+                  style={{ width: '100%', height: '70vh', border: 'none' }} 
+                />
+              )}
+            </div>
+            
+            <div className="check-dialog-footer">
+              <Button variant="outline" onClick={() => setShowFilePreview(false)}>
+                Fermer
+              </Button>
+            </div>
+            
+            <button className="check-dialog-close" onClick={() => setShowFilePreview(false)}>
+              <X size={18} />
+              <span className="sr-only">Fermer</span>
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Filter Modal */}
+      {showFilterModal && (
+        <>
+          <div className="check-overlay" onClick={() => setShowFilterModal(false)} />
+          <div className="check-dialog" style={{ maxWidth: '40rem' }}>
+            <div className="check-dialog-header">
+              <h2 className="check-dialog-title">
+                <Filter size={20} />
+                Filtres avancés
+              </h2>
+              <p className="check-dialog-description">
+                Affinez votre recherche avec des critères supplémentaires
+              </p>
+            </div>
+            
+            <div className="check-dialog-body">
+              <div className="check-form-grid">
                 <div className="check-form-group">
-                  <label className="check-label check-label-required">Banque</label>
-                  <select
-                    value={selectedBank.name}
-                    onChange={(e) => {
-                      const bank = bankOptions.find(b => b.name === e.target.value);
-                      if (bank) setSelectedBank(bank);
-                    }}
+                  <label className="check-label">Agence Remise</label>
+                  <select 
+                    value={filters.code_agence_remise} 
+                    onChange={(e) => handleFilterChange('code_agence_remise', e.target.value)} 
                     className="check-input"
                     style={{ width: '100%' }}
-                    required
                   >
-                    {bankOptions.map((bank) => (
-                      <option key={bank.name} value={bank.name}>{bank.name}</option>
+                    <option value="">Toutes</option>
+                    {filterOptions?.codes_agence?.map(ag => (
+                      <option key={ag} value={ag}>{ag}</option>
                     ))}
                   </select>
                 </div>
-                
-                {/* Preview bank logo and name */}
-                <div style={{ textAlign: 'center', padding: '10px', border: '1px solid #e2e8f0', borderRadius: '0.75rem', background: '#f8fafc' }}>
-                  <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '8px' }}>Aperçu :</p>
-                  {getBankLogo(selectedBank.name) && (
-                    <img 
-                      src={getBankLogo(selectedBank.name)} 
-                      alt={selectedBank.name} 
-                      style={{ height: '50px', width: 'auto', objectFit: 'contain', marginBottom: '8px' }}
-                      onError={(e) => { e.target.style.display = 'none'; }}
-                    />
-                  )}
-                  <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#1a3a5c' }}>{selectedBank.name}</div>
-                </div>
-                
-                <div className="check-info-message">
-                  <Info size={16} />
-                  <div style={{ flex: 1 }}>
-                    <strong>Récapitulatif :</strong><br />
-                    Référence: {printCheck.reference_remise || 'N/A'}<br />
-                    Client: {printCheck.client_remettant || 'N/A'}<br />
-                    Montant: {formatCurrency(printCheck.montant_total_dh)}
-                  </div>
-                </div>
-              </div>
-              
-              <div className="check-dialog-footer">
-                <Button variant="outline" onClick={() => { setShowPrintModal(false); setPrintCheck(null); }}>
-                  Annuler
-                </Button>
-                <Button onClick={confirmPrint} disabled={printing}>
-                  {printing && <Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite', marginRight: '0.5rem' }} />}
-                  Générer PDF
-                </Button>
-              </div>
-              
-              <button className="check-dialog-close" onClick={() => { setShowPrintModal(false); setPrintCheck(null); }}>
-                <X size={18} />
-                <span className="sr-only">Fermer</span>
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* Files Modal */}
-        {showFilesModal && selectedCheck && (
-          <>
-            <div className="check-overlay" onClick={() => { setShowFilesModal(false); setSelectedFiles([]); setImagePreviews([]); }} />
-            <div className="check-dialog" style={{ maxWidth: '32rem' }}>
-              <div className="check-dialog-header">
-                <h2 className="check-dialog-title">
-                  <FileText size={20} />
-                  Fichiers - {selectedCheck.reference_remise || selectedCheck.client_remettant}
-                </h2>
-                <p className="check-dialog-description">
-                  Gérez les fichiers attachés à cette remise
-                </p>
-              </div>
-              
-              <div className="check-dialog-body">
-                <div className="check-upload-area">
+                <div className="check-form-group">
+                  <label className="check-label">Client</label>
                   <input 
-                    type="file" 
-                    multiple 
-                    onChange={handleFileSelect} 
-                    style={{ display: 'none' }} 
-                    id="file-upload-modal" 
-                    accept=".pdf,.jpg,.jpeg,.png" 
-                    disabled={compressing}
+                    type="text" 
+                    value={filters.client_remettant} 
+                    onChange={(e) => handleFilterChange('client_remettant', e.target.value)} 
+                    className="check-input" 
+                    placeholder="Rechercher..." 
                   />
-                  <label htmlFor="file-upload-modal" className="check-upload-label" style={{ cursor: compressing ? 'wait' : 'pointer' }}>
-                    {compressing ? (
-                      <>
-                        <Loader2 size={18} style={{ animation: 'spin 0.8s linear infinite' }} />
-                        Compression en cours...
-                      </>
-                    ) : (
-                      <>
-                        <Upload size={18} />
-                        Sélectionner des fichiers
-                      </>
-                    )}
-                  </label>
-                  <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.5rem' }}>
-                    PDF, JPG, PNG (max 10MB, images compressées)
-                  </p>
-                  
-                  {selectedFiles.length > 0 && (
-                    <div style={{ marginTop: '1rem', textAlign: 'left' }}>
-                      <p style={{ fontSize: '0.8125rem', marginBottom: '0.5rem' }}>
-                        {selectedFiles.length} fichier(s) sélectionné(s)
-                      </p>
-                      <Button variant="success" onClick={handleFileUpload} disabled={uploading || compressing} style={{ fontSize: '0.75rem' }}>
-                        {(uploading || compressing) && <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} />}
-                        <span style={{ marginLeft: '0.5rem' }}>Uploader</span>
-                      </Button>
-                    </div>
-                  )}
                 </div>
-
-                {selectedCheck.files && selectedCheck.files.length > 0 ? (
-                  <div style={{ marginTop: '1rem' }}>
-                    <label className="check-label">Fichiers existants ({selectedCheck.files.length})</label>
-                    <div className="check-file-list">
-                      {selectedCheck.files.map((file, index) => (
-                        <div key={index} className="check-file-item">
-                          <div className="check-file-info">
-                            {file.match(/\.(jpg|jpeg|png)$/i) ? 
-                              <ImageIcon size={18} style={{ color: '#3b82f6' }} /> : 
-                              <File size={18} style={{ color: '#64748b' }} />
-                            }
-                            <span style={{ fontSize: '0.8125rem', wordBreak: 'break-all' }}>{file}</span>
-                          </div>
-                          <div className="check-file-actions">
-                            <button className="check-icon-btn" onClick={() => handlePreviewFile(file)} title="Aperçu">
-                              <Eye size={16} />
-                            </button>
-                            <button className="check-icon-btn" onClick={() => handleDeleteFile(file)} title="Supprimer">
-                              <Trash2 size={16} style={{ color: '#ef4444' }} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="check-empty" style={{ padding: '2rem 0' }}>
-                    Aucun fichier attaché
-                  </div>
-                )}
-              </div>
-              
-              <div className="check-dialog-footer">
-                <Button variant="outline" onClick={() => { setShowFilesModal(false); setSelectedFiles([]); setImagePreviews([]); }}>
-                  Fermer
-                </Button>
-              </div>
-              
-              <button className="check-dialog-close" onClick={() => { setShowFilesModal(false); setSelectedFiles([]); setImagePreviews([]); }}>
-                <X size={18} />
-                <span className="sr-only">Fermer</span>
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* File Preview Modal */}
-        {showFilePreview && (
-          <>
-            <div className="check-overlay" onClick={() => setShowFilePreview(false)} />
-            <div className="check-dialog" style={{ maxWidth: '90%', maxHeight: '90vh' }}>
-              <div className="check-dialog-header">
-                <h2 className="check-dialog-title" style={{ fontSize: '1rem' }}>
-                  <Eye size={18} />
-                  {previewFileName}
-                </h2>
-              </div>
-              
-              <div className="check-dialog-body" style={{ textAlign: 'center' }}>
-                {previewFileName.match(/\.(jpg|jpeg|png)$/i) ? (
-                  <img 
-                    src={previewFileUrl} 
-                    alt={previewFileName} 
-                    style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }} 
+                <div className="check-form-group">
+                  <label className="check-label">Ville</label>
+                  <select 
+                    value={filters.ville} 
+                    onChange={(e) => handleFilterChange('ville', e.target.value)} 
+                    className="check-input"
+                    style={{ width: '100%' }}
+                  >
+                    <option value="">Toutes</option>
+                    {filterOptions?.villes?.map(v => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="check-form-group">
+                  <label className="check-label">Type Remise</label>
+                  <input 
+                    type="text" 
+                    value={filters.type_remise} 
+                    onChange={(e) => handleFilterChange('type_remise', e.target.value)} 
+                    className="check-input" 
+                    placeholder="Rechercher..." 
                   />
-                ) : (
-                  <iframe 
-                    src={previewFileUrl} 
-                    title={previewFileName} 
-                    style={{ width: '100%', height: '70vh', border: 'none' }} 
+                </div>
+                <div className="check-form-group">
+                  <label className="check-label">Date début</label>
+                  <input 
+                    type="date" 
+                    value={filters.date_debut} 
+                    onChange={(e) => handleFilterChange('date_debut', e.target.value)} 
+                    className="check-input" 
                   />
-                )}
-              </div>
-              
-              <div className="check-dialog-footer">
-                <Button variant="outline" onClick={() => setShowFilePreview(false)}>
-                  Fermer
-                </Button>
-              </div>
-              
-              <button className="check-dialog-close" onClick={() => setShowFilePreview(false)}>
-                <X size={18} />
-                <span className="sr-only">Fermer</span>
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* Filter Modal */}
-        {showFilterModal && (
-          <>
-            <div className="check-overlay" onClick={() => setShowFilterModal(false)} />
-            <div className="check-dialog" style={{ maxWidth: '40rem' }}>
-              <div className="check-dialog-header">
-                <h2 className="check-dialog-title">
-                  <Filter size={20} />
-                  Filtres avancés
-                </h2>
-                <p className="check-dialog-description">
-                  Affinez votre recherche avec des critères supplémentaires
-                </p>
-              </div>
-              
-              <div className="check-dialog-body">
-                <div className="check-form-grid">
-                  <div className="check-form-group">
-                    <label className="check-label">Agence Remise</label>
-                    <select 
-                      value={filters.code_agence_remise} 
-                      onChange={(e) => handleFilterChange('code_agence_remise', e.target.value)} 
-                      className="check-input"
-                      style={{ width: '100%' }}
-                    >
-                      <option value="">Toutes</option>
-                      {filterOptions?.codes_agence?.map(ag => (
-                        <option key={ag} value={ag}>{ag}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="check-form-group">
-                    <label className="check-label">Client</label>
-                    <input 
-                      type="text" 
-                      value={filters.client_remettant} 
-                      onChange={(e) => handleFilterChange('client_remettant', e.target.value)} 
-                      className="check-input" 
-                      placeholder="Rechercher..." 
-                    />
-                  </div>
-                  <div className="check-form-group">
-                    <label className="check-label">Ville</label>
-                    <select 
-                      value={filters.ville} 
-                      onChange={(e) => handleFilterChange('ville', e.target.value)} 
-                      className="check-input"
-                      style={{ width: '100%' }}
-                    >
-                      <option value="">Toutes</option>
-                      {filterOptions?.villes?.map(v => (
-                        <option key={v} value={v}>{v}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="check-form-group">
-                    <label className="check-label">Type Remise</label>
-                    <input 
-                      type="text" 
-                      value={filters.type_remise} 
-                      onChange={(e) => handleFilterChange('type_remise', e.target.value)} 
-                      className="check-input" 
-                      placeholder="Rechercher..." 
-                    />
-                  </div>
-                  <div className="check-form-group">
-                    <label className="check-label">Date début</label>
-                    <input 
-                      type="date" 
-                      value={filters.date_debut} 
-                      onChange={(e) => handleFilterChange('date_debut', e.target.value)} 
-                      className="check-input" 
-                    />
-                  </div>
-                  <div className="check-form-group">
-                    <label className="check-label">Date fin</label>
-                    <input 
-                      type="date" 
-                      value={filters.date_fin} 
-                      onChange={(e) => handleFilterChange('date_fin', e.target.value)} 
-                      className="check-input" 
-                    />
-                  </div>
-                  <div className="check-form-group">
-                    <label className="check-label">Escompte</label>
-                    <select 
-                      value={filters.has_escompte} 
-                      onChange={(e) => handleFilterChange('has_escompte', e.target.value)} 
-                      className="check-input"
-                      style={{ width: '100%' }}
-                    >
-                      <option value="">Tous</option>
-                      <option value="true">Avec escompte</option>
-                      <option value="false">Sans escompte</option>
-                    </select>
-                  </div>
-                  <div className="check-form-group">
-                    <label className="check-label">Montant min (MAD)</label>
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      value={filters.montant_min} 
-                      onChange={(e) => handleFilterChange('montant_min', e.target.value)} 
-                      className="check-input" 
-                    />
-                  </div>
-                  <div className="check-form-group">
-                    <label className="check-label">Montant max (MAD)</label>
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      value={filters.montant_max} 
-                      onChange={(e) => handleFilterChange('montant_max', e.target.value)} 
-                      className="check-input" 
-                    />
-                  </div>
+                </div>
+                <div className="check-form-group">
+                  <label className="check-label">Date fin</label>
+                  <input 
+                    type="date" 
+                    value={filters.date_fin} 
+                    onChange={(e) => handleFilterChange('date_fin', e.target.value)} 
+                    className="check-input" 
+                  />
+                </div>
+                <div className="check-form-group">
+                  <label className="check-label">Escompte</label>
+                  <select 
+                    value={filters.has_escompte} 
+                    onChange={(e) => handleFilterChange('has_escompte', e.target.value)} 
+                    className="check-input"
+                    style={{ width: '100%' }}
+                  >
+                    <option value="">Tous</option>
+                    <option value="true">Avec escompte</option>
+                    <option value="false">Sans escompte</option>
+                  </select>
+                </div>
+                <div className="check-form-group">
+                  <label className="check-label">Montant min (MAD)</label>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    value={filters.montant_min} 
+                    onChange={(e) => handleFilterChange('montant_min', e.target.value)} 
+                    className="check-input" 
+                  />
+                </div>
+                <div className="check-form-group">
+                  <label className="check-label">Montant max (MAD)</label>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    value={filters.montant_max} 
+                    onChange={(e) => handleFilterChange('montant_max', e.target.value)} 
+                    className="check-input" 
+                  />
                 </div>
               </div>
-              
-              <div className="check-dialog-footer">
-                <Button variant="outline" onClick={clearFilters}>
-                  Effacer tout
-                </Button>
-                <Button onClick={() => setShowFilterModal(false)}>
-                  Appliquer les filtres
-                </Button>
-              </div>
-              
-              <button className="check-dialog-close" onClick={() => setShowFilterModal(false)}>
-                <X size={18} />
-                <span className="sr-only">Fermer</span>
-              </button>
             </div>
-          </>
-        )}
-      </div>
-    );
-  };
+            
+            <div className="check-dialog-footer">
+              <Button variant="outline" onClick={clearFilters}>
+                Effacer tout
+              </Button>
+              <Button onClick={() => setShowFilterModal(false)}>
+                Appliquer les filtres
+              </Button>
+            </div>
+            
+            <button className="check-dialog-close" onClick={() => setShowFilterModal(false)}>
+              <X size={18} />
+              <span className="sr-only">Fermer</span>
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
-  // Button component for reuse
-  const Button = ({ children, variant = 'default', size = 'default', className = '', disabled, onClick, type = 'button', style }) => {
-    const variantClass = variant === 'outline' ? 'check-btn-outline' :
-                         variant === 'ghost' ? 'check-btn-ghost' :
-                         variant === 'danger' ? 'check-btn-danger' :
-                         variant === 'success' ? 'check-btn-success' :
-                         'check-btn-primary';
-    
-    const sizeClass = size === 'icon' ? 'check-btn-icon' : 'check-btn-default';
-    
-    return (
-      <button 
-        type={type}
-        className={`check-btn ${variantClass} ${sizeClass} ${className}`}
-        disabled={disabled}
-        onClick={onClick}
-        style={style}
-      >
-        {children}
-      </button>
-    );
-  };
+// Button component for reuse
+const Button = ({ children, variant = 'default', size = 'default', className = '', disabled, onClick, type = 'button', style }) => {
+  const variantClass = variant === 'outline' ? 'check-btn-outline' :
+                       variant === 'ghost' ? 'check-btn-ghost' :
+                       variant === 'danger' ? 'check-btn-danger' :
+                       variant === 'success' ? 'check-btn-success' :
+                       'check-btn-primary';
+  
+  const sizeClass = size === 'icon' ? 'check-btn-icon' : 'check-btn-default';
+  
+  return (
+    <button 
+      type={type}
+      className={`check-btn ${variantClass} ${sizeClass} ${className}`}
+      disabled={disabled}
+      onClick={onClick}
+      style={style}
+    >
+      {children}
+    </button>
+  );
+};
 
-  export default Check;
+export default Check;
