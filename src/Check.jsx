@@ -1601,7 +1601,7 @@ const bankOptions = [
 const getBankLogo = (bankName) => {
   const bank = bankOptions.find(b => b.name === bankName);
   if (bank) {
-    return `/public/${bank.logo}`;
+    return `/${bank.logo}`;
   }
   return null;
 };
