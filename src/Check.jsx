@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo,useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
   Plus, Search, Filter, Download, Edit, Trash2, X, 
@@ -13,6 +13,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { ExportMenu } from './ExportMenu';
 import logo from './assets/logo.png';
+import imageCompression from 'browser-image-compression';
 import {
   fetchChecks,
   fetchCheckById,
@@ -28,13 +29,69 @@ import {
   clearSelectedCheck,
   setPage
 } from './Store/store';
-// Add this near the top of your file, before the SearchableSelect component
+
+// ==================== COMPRESSION HELPERS ====================
+const compressImage = async (file) => {
+  const options = {
+    maxSizeMB: 0.5, // Max 500KB after compression
+    maxWidthOrHeight: 1200, // Max dimension
+    useWebWorker: true,
+    initialQuality: 0.7,
+    fileType: 'image/jpeg', // Force JPEG for better compression
+  };
+  
+  try {
+    const compressedFile = await imageCompression(file, options);
+    // Preserve the original filename extension for JPEG
+    let finalFile = compressedFile;
+    if (file.type === 'image/png' && compressedFile.type === 'image/jpeg') {
+      // Create a new File with .jpg extension
+      finalFile = new File([compressedFile], file.name.replace(/\.png$/i, '.jpg'), {
+        type: 'image/jpeg',
+        lastModified: Date.now(),
+      });
+    }
+    console.log(`Compressed: ${file.name} (${(file.size / 1024).toFixed(0)}KB -> ${(finalFile.size / 1024).toFixed(0)}KB)`);
+    return finalFile;
+  } catch (error) {
+    console.error('Error compressing image:', error);
+    return file;
+  }
+};
+
+const compressPDF = async (file) => {
+  const MAX_PDF_SIZE_MB = 5;
+  if (file.size > MAX_PDF_SIZE_MB * 1024 * 1024) {
+    console.warn(`PDF file ${file.name} is ${(file.size / (1024 * 1024)).toFixed(2)}MB, may be large`);
+  }
+  return file;
+};
+
+const compressFile = async (file) => {
+  const fileType = file.type;
+  
+  if (fileType.startsWith('image/')) {
+    return await compressImage(file);
+  } else if (fileType === 'application/pdf') {
+    return await compressPDF(file);
+  }
+  
+  return file;
+};
+
+const getFileSizeDisplay = (file) => {
+  const sizeMB = file.size / (1024 * 1024);
+  if (sizeMB < 1) return `${(sizeMB * 1024).toFixed(0)} KB`;
+  return `${sizeMB.toFixed(2)} MB`;
+};
+
 const formatCurrencyHelper = (amount) => {
   if (amount === undefined || amount === null) return '0 MAD';
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
   if (isNaN(num)) return '0 MAD';
   return new Intl.NumberFormat('fr-MA', { style: 'currency', currency: 'MAD' }).format(num);
 };
+
 // ==================== SEARCHABLE SELECT COMPONENT ====================
 const SearchableSelect = ({ 
   options, 
@@ -122,13 +179,12 @@ const SearchableSelect = ({
     }
   };
   
-const defaultRenderOption = (option) => {
+  const defaultRenderOption = (option) => {
     const optionName = typeof option === 'object' ? (option.nom || option.name) : option;
     const hasVenteInfo = typeof option === 'object' && (option.vente_id || option.vente_reference);
     const paymentStatus = option.payment_status;
     const saleStatus = option.vente_status;
     
-    // Determine status badge color
     const getStatusBadge = () => {
         if (saleStatus !== 'confirmed') {
             return { bg: '#fef3c7', color: '#92400e', text: 'Vente en attente' };
@@ -199,7 +255,7 @@ const defaultRenderOption = (option) => {
             )}
         </div>
     );
-};
+  };
   
   return (
     <div className="searchable-select" ref={containerRef} onKeyDown={handleKeyDown}>
@@ -247,7 +303,7 @@ const defaultRenderOption = (option) => {
                   >
                     {renderOption ? renderOption(option) : defaultRenderOption(option)}
                     {isSelected && (
-                      <Check size={16} className="searchable-select-option-check" />
+                      <CheckCircle size={16} className="searchable-select-option-check" />
                     )}
                   </div>
                 );
@@ -1301,147 +1357,148 @@ const styles = `
     white-space: nowrap;
     border-width: 0;
   }
-    /* Searchable Select Styles */
-.searchable-select {
-  position: relative;
-  width: 100%;
-}
-
-.searchable-select-trigger {
-  width: 100%;
-  min-height: 2.5rem;
-  padding: 0.5rem 2rem 0.5rem 0.75rem;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.5rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  transition: all 0.2s ease;
-  font-size: 0.875rem;
-  color: #1e293b;
-}
-
-.searchable-select-trigger:hover {
-  border-color: #cbd5e1;
-  background: #f8fafc;
-}
-
-.searchable-select-trigger.open {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.searchable-select-trigger-placeholder {
-  color: #94a3b8;
-}
-
-.searchable-select-trigger-value {
-  color: #1e293b;
-  font-weight: 500;
-}
-
-.searchable-select-icon {
-  color: #94a3b8;
-  transition: transform 0.2s ease;
-}
-
-.searchable-select-icon.open {
-  transform: rotate(180deg);
-}
-
-.searchable-select-dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-  max-height: 280px;
-  overflow: hidden;
-  animation: dropdownFadeIn 0.2s ease;
-}
-
-@keyframes dropdownFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
+  
+  /* Searchable Select Styles */
+  .searchable-select {
+    position: relative;
+    width: 100%;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+  
+  .searchable-select-trigger {
+    width: 100%;
+    min-height: 2.5rem;
+    padding: 0.5rem 2rem 0.5rem 0.75rem;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.2s ease;
+    font-size: 0.875rem;
+    color: #1e293b;
   }
-}
-
-.searchable-select-search {
-  position: sticky;
-  top: 0;
-  padding: 0.75rem;
-  border-bottom: 1px solid #e2e8f0;
-  background: white;
-}
-
-.searchable-select-search-input {
-  width: 100%;
-  height: 2.25rem;
-  padding: 0.5rem 0.75rem 0.5rem 2rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.5rem;
-  font-size: 0.813rem;
-  background: #f8fafc;
-  transition: all 0.2s ease;
-}
-
-.searchable-select-search-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  background: white;
-}
-
-.searchable-select-options {
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.searchable-select-option {
-  padding: 0.625rem 0.75rem;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  font-size: 0.875rem;
-  color: #334155;
-  border-bottom: 1px solid #f1f5f9;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.searchable-select-option:hover {
-  background: #f1f5f9;
-}
-
-.searchable-select-option.selected {
-  background: #eff6ff;
-  color: #2563eb;
-}
-
-.searchable-select-option.highlighted {
-  background: #e2e8f0;
-}
-
-.searchable-select-option-check {
-  color: #3b82f6;
-}
-
-.searchable-select-no-results {
-  padding: 1rem;
-  text-align: center;
-  color: #94a3b8;
-  font-size: 0.813rem;
-}
+  
+  .searchable-select-trigger:hover {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+  }
+  
+  .searchable-select-trigger.open {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+  
+  .searchable-select-trigger-placeholder {
+    color: #94a3b8;
+  }
+  
+  .searchable-select-trigger-value {
+    color: #1e293b;
+    font-weight: 500;
+  }
+  
+  .searchable-select-icon {
+    color: #94a3b8;
+    transition: transform 0.2s ease;
+  }
+  
+  .searchable-select-icon.open {
+    transform: rotate(180deg);
+  }
+  
+  .searchable-select-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    max-height: 280px;
+    overflow: hidden;
+    animation: dropdownFadeIn 0.2s ease;
+  }
+  
+  @keyframes dropdownFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .searchable-select-search {
+    position: sticky;
+    top: 0;
+    padding: 0.75rem;
+    border-bottom: 1px solid #e2e8f0;
+    background: white;
+  }
+  
+  .searchable-select-search-input {
+    width: 100%;
+    height: 2.25rem;
+    padding: 0.5rem 0.75rem 0.5rem 2rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    font-size: 0.813rem;
+    background: #f8fafc;
+    transition: all 0.2s ease;
+  }
+  
+  .searchable-select-search-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    background: white;
+  }
+  
+  .searchable-select-options {
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  
+  .searchable-select-option {
+    padding: 0.625rem 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-size: 0.875rem;
+    color: #334155;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  
+  .searchable-select-option:hover {
+    background: #f1f5f9;
+  }
+  
+  .searchable-select-option.selected {
+    background: #eff6ff;
+    color: #2563eb;
+  }
+  
+  .searchable-select-option.highlighted {
+    background: #e2e8f0;
+  }
+  
+  .searchable-select-option-check {
+    color: #3b82f6;
+  }
+  
+  .searchable-select-no-results {
+    padding: 1rem;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.813rem;
+  }
 `;
 
 // Bank list with logo file names
@@ -1628,6 +1685,23 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
   );
 };
 
+// Helper function to convert image URL to base64
+const imageToBase64 = async (url) => {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error('Error converting image to base64:', error);
+    return null;
+  }
+};
+
 // ==================== MAIN COMPONENT ====================
 const Check = () => {
   const dispatch = useDispatch();
@@ -1657,8 +1731,10 @@ const Check = () => {
   const [previewFileName, setPreviewFileName] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [compressing, setCompressing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [imagePreviews, setImagePreviews] = useState([]);
   const [filesToDelete, setFilesToDelete] = useState([]);
   const [selectedBank, setSelectedBank] = useState(bankOptions[2]);
   const [printCheck, setPrintCheck] = useState(null);
@@ -1689,38 +1765,45 @@ const Check = () => {
     montant_max: ''
   });
   
-  // Replace the initial formData useState with this:
-const [formData, setFormData] = useState(() => {
-  // Try to get company info from localStorage synchronously
-  let ribValue = '';
-  try {
-    const saved = localStorage.getItem('company_info');
-    if (saved) {
-      const localInfo = JSON.parse(saved);
-      ribValue = localInfo.rib || '';
+  const [formData, setFormData] = useState(() => {
+    let ribValue = '';
+    try {
+      const saved = localStorage.getItem('company_info');
+      if (saved) {
+        const localInfo = JSON.parse(saved);
+        ribValue = localInfo.rib || '';
+      }
+    } catch (e) {
+      console.error('Error reading company info from localStorage:', e);
     }
-  } catch (e) {
-    console.error('Error reading company info from localStorage:', e);
-  }
-  
-  return {
-    reference_remise: '',
-    date_et_heure: new Date().toISOString().slice(0, 16),
-    ville: '',
-    code_agence_remise: '',
-    nom_agence_remise: '',
-    code_agence_compte: '',
-    nom_agence_compte: '',
-    rib_remettant: ribValue,
-    client_remettant: '',
-    nombre_de_valeurs: 1,
-    montant_total_dh: '',
-    type_remise: '',
-    taux_escompte: 0,
-    utilisateur: user?.name || ''
-  };
-});
+    
+    return {
+      reference_remise: '',
+      date_et_heure: new Date().toISOString().slice(0, 16),
+      ville: '',
+      code_agence_remise: '',
+      nom_agence_remise: '',
+      code_agence_compte: '',
+      nom_agence_compte: '',
+      rib_remettant: ribValue,
+      client_remettant: '',
+      nombre_de_valeurs: 1,
+      montant_total_dh: '',
+      type_remise: '',
+      taux_escompte: 0,
+      utilisateur: user?.name || ''
+    };
+  });
   const [existingFiles, setExistingFiles] = useState([]);
+
+  // Clean up image previews when modal closes
+  useEffect(() => {
+    return () => {
+      imagePreviews.forEach(preview => {
+        URL.revokeObjectURL(preview.url);
+      });
+    };
+  }, [imagePreviews]);
 
   // Toast management
   const showToast = (message, type = 'success') => {
@@ -1748,96 +1831,96 @@ const [formData, setFormData] = useState(() => {
     };
   }, [dispatch]);
 
-const fetchClientsWithChequePayments = async () => {
+  const fetchClientsWithChequePayments = async () => {
     setLoadingClients(true);
     try {
-        const token = localStorage.getItem('token');
-        const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
-        
-        // Use the endpoint that includes sale details
-        const response = await fetch(`${API_URL}/payments/cheque-payments`, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            
-            // Filter clients where sale status is CONFIRMED and payment status is UNPAID or PARTIAL
-            // Also filter out clients that already have a check remise? (optional)
-            const formattedClients = (data.cheque_payments || [])
-                .filter(payment => {
-                    // CRITICAL: Only include if sale is confirmed AND payment status is unpaid or partial
-                    const isValidSaleStatus = payment.vente_status === 'confirmed';
-                    const isValidPaymentStatus = payment.payment_status === 'unpaid' || payment.payment_status === 'partial';
-                    
-                    // Also check if there's actually a cheque payment
-                    const hasChequePayment = payment.payment_method === 'check' || 
-                                            payment.payment_method === 'cheque' ||
-                                            (payment.cheque_amount && payment.cheque_amount > 0);
-                    
-                    console.log(`Client: ${payment.client_nom}, Sale Status: ${payment.vente_status}, Payment Status: ${payment.payment_status}, Has Cheque: ${hasChequePayment}`);
-                    
-                    return isValidSaleStatus && isValidPaymentStatus && hasChequePayment;
-                })
-                .map(payment => ({
-                    id: payment.client_id,
-                    nom: payment.client_nom,
-                    email: payment.client_email,
-                    telephone: payment.client_telephone,
-                    ice_client: payment.client_ice_client || '',
-                    adresse: payment.client_adresse || '',
-                    vente_id: payment.vente_id,
-                    vente_reference: payment.vente_reference,
-                    vente_date: payment.vente_date,
-                    vente_total: payment.vente_total,
-                    vente_status: payment.vente_status,
-                    payment_status: payment.payment_status,
-                    payment_method: payment.payment_method,
-                    cheque_amount: payment.cheque_amount,
-                    cheque_reference: payment.cheque_reference,
-                    payment_date: payment.payment_date,
-                }));
-            
-            console.log(`Found ${formattedClients.length} clients with cheque payments on confirmed sales with unpaid/partial status`);
-            setClientsWithChequePayments(formattedClients);
-        } else {
-            console.warn('Failed to fetch cheque payments');
-            setClientsWithChequePayments([]);
+      const token = localStorage.getItem('token');
+      const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
+      
+      const response = await fetch(`${API_URL}/payments/cheque-payments`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
-    } catch (error) {
-        console.error('Error fetching cheque payments:', error);
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        const formattedClients = (data.cheque_payments || [])
+          .filter(payment => {
+            const isValidSaleStatus = payment.vente_status === 'confirmed';
+            const isValidPaymentStatus = payment.payment_status === 'unpaid' || payment.payment_status === 'partial';
+            const hasChequePayment = payment.payment_method === 'check' || 
+                                    payment.payment_method === 'cheque' ||
+                                    (payment.cheque_amount && payment.cheque_amount > 0);
+            
+            return isValidSaleStatus && isValidPaymentStatus && hasChequePayment;
+          })
+          .map(payment => ({
+            id: payment.client_id,
+            nom: payment.client_nom,
+            email: payment.client_email,
+            telephone: payment.client_telephone,
+            ice_client: payment.client_ice_client || '',
+            adresse: payment.client_adresse || '',
+            vente_id: payment.vente_id,
+            vente_reference: payment.vente_reference,
+            vente_date: payment.vente_date,
+            vente_total: payment.vente_total,
+            vente_status: payment.vente_status,
+            payment_status: payment.payment_status,
+            payment_method: payment.payment_method,
+            cheque_amount: payment.cheque_amount,
+            cheque_reference: payment.cheque_reference,
+            payment_date: payment.payment_date,
+          }));
+        
+        setClientsWithChequePayments(formattedClients);
+      } else {
         setClientsWithChequePayments([]);
-    } finally {
-        setLoadingClients(false);
-    }
-};
-  // Fetch company info for RIB
-  // Find the fetchCompanyInfo function and update it:
-const fetchCompanyInfo = async () => {
-  setLoadingCompanyInfo(true);
-  try {
-    const token = localStorage.getItem('token');
-    const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
-    
-    const response = await fetch(`${API_URL}/settings/company`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
       }
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      setCompanyInfo(data.company_info);
-      // Update formData if RIB is empty
-      setFormData(prev => ({
-        ...prev,
-        rib_remettant: prev.rib_remettant || data.company_info?.rib || ''
-      }));
-    } else {
+    } catch (error) {
+      console.error('Error fetching cheque payments:', error);
+      setClientsWithChequePayments([]);
+    } finally {
+      setLoadingClients(false);
+    }
+  };
+  
+  const fetchCompanyInfo = async () => {
+    setLoadingCompanyInfo(true);
+    try {
+      const token = localStorage.getItem('token');
+      const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
+      
+      const response = await fetch(`${API_URL}/settings/company`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setCompanyInfo(data.company_info);
+        setFormData(prev => ({
+          ...prev,
+          rib_remettant: prev.rib_remettant || data.company_info?.rib || ''
+        }));
+      } else {
+        const saved = localStorage.getItem('company_info');
+        if (saved) {
+          const localInfo = JSON.parse(saved);
+          setCompanyInfo(localInfo);
+          setFormData(prev => ({
+            ...prev,
+            rib_remettant: prev.rib_remettant || localInfo.rib || ''
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching company info:', error);
       const saved = localStorage.getItem('company_info');
       if (saved) {
         const localInfo = JSON.parse(saved);
@@ -1847,35 +1930,21 @@ const fetchCompanyInfo = async () => {
           rib_remettant: prev.rib_remettant || localInfo.rib || ''
         }));
       }
+    } finally {
+      setLoadingCompanyInfo(false);
     }
-  } catch (error) {
-    console.error('Error fetching company info:', error);
-    const saved = localStorage.getItem('company_info');
-    if (saved) {
-      const localInfo = JSON.parse(saved);
-      setCompanyInfo(localInfo);
-      setFormData(prev => ({
-        ...prev,
-        rib_remettant: prev.rib_remettant || localInfo.rib || ''
-      }));
+  };
+  
+  useEffect(() => {
+    if (!editingId && companyInfo?.rib && !formData.rib_remettant) {
+      setFormData(prev => ({ ...prev, rib_remettant: companyInfo.rib }));
     }
-  } finally {
-    setLoadingCompanyInfo(false);
-  }
-};
-// Add this useEffect after the fetchCompanyInfo call or near other useEffects
-useEffect(() => {
-  // Only update if not editing and RIB is empty
-  if (!editingId && companyInfo?.rib && !formData.rib_remettant) {
-    setFormData(prev => ({ ...prev, rib_remettant: companyInfo.rib }));
-  }
-}, [companyInfo, editingId, formData.rib_remettant]);
-  // Reset to first page when filters change
+  }, [companyInfo, editingId, formData.rib_remettant]);
+  
   useEffect(() => {
     setCurrentPage(1);
   }, [search, agencyFilter, typeFilter, statusFilter, filters]);
 
-  // Load checks when filters or pagination change
   useEffect(() => {
     const activeFilters = {};
     Object.keys(filters).forEach(key => {
@@ -1891,7 +1960,6 @@ useEffect(() => {
     dispatch(fetchCheckSummary(activeFilters));
   }, [dispatch, filters, search, agencyFilter, typeFilter, currentPage]);
 
-  // Filter checks by status and paginate
   const filteredByStatus = useMemo(() => {
     if (statusFilter === 'all') return checks;
     if (statusFilter === 'approaching') {
@@ -1909,7 +1977,6 @@ useEffect(() => {
     return checks;
   }, [checks, statusFilter]);
 
-  // Pagination calculations
   const totalPages = Math.ceil(filteredByStatus.length / itemsPerPage);
   const paginatedChecks = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -1962,21 +2029,72 @@ useEffect(() => {
     setFormData(prev => ({
       ...prev,
       client_remettant: clientName,
-      // Optionally auto-fill other fields from the client data
       ville: clientData?.ville || prev.ville,
     }));
   };
 
-  const handleFileSelect = (e) => {
+  const handleFileSelect = async (e) => {
     const files = Array.from(e.target.files);
-    const validFiles = files.filter(file => {
-      const isValidType = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'].includes(file.type);
-      const isValidSize = file.size <= 10 * 1024 * 1024;
-      if (!isValidType) showToast(`Format non supporté: ${file.name}`, 'error');
-      if (!isValidSize) showToast(`Fichier trop volumineux: ${file.name}`, 'error');
-      return isValidType && isValidSize;
-    });
-    setSelectedFiles(prev => [...prev, ...validFiles]);
+    const validFiles = [];
+    
+    // Clear previous previews
+    setImagePreviews([]);
+    setCompressing(true);
+    
+    try {
+      for (const file of files) {
+        const isValidType = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'].includes(file.type);
+        const isValidSize = file.size <= 10 * 1024 * 1024;
+        
+        if (!isValidType) {
+          showToast(`Format non supporté: ${file.name}`, 'error');
+          continue;
+        }
+        
+        if (!isValidSize) {
+          showToast(`Fichier trop volumineux: ${file.name} (max 10MB)`, 'error');
+          continue;
+        }
+        
+        // Create preview for images
+        if (file.type.startsWith('image/')) {
+          const previewUrl = URL.createObjectURL(file);
+          setImagePreviews(prev => [...prev, { name: file.name, url: previewUrl }]);
+        }
+        
+        let processedFile = file;
+        const originalSizeMB = file.size / (1024 * 1024);
+        
+        if (file.type.startsWith('image/')) {
+          try {
+            processedFile = await compressImage(file);
+            const compressedSizeMB = processedFile.size / (1024 * 1024);
+            if (compressedSizeMB < originalSizeMB) {
+              console.log(`Compressed ${file.name}: ${originalSizeMB.toFixed(2)}MB -> ${compressedSizeMB.toFixed(2)}MB`);
+              showToast(`${file.name} compressé de ${originalSizeMB.toFixed(1)}MB à ${compressedSizeMB.toFixed(1)}MB`, 'info');
+            }
+          } catch (err) {
+            console.warn(`Could not compress ${file.name}:`, err);
+            processedFile = file;
+          }
+        } else if (file.type === 'application/pdf' && originalSizeMB > 3) {
+          showToast(`⚠️ ${file.name} est un PDF de ${originalSizeMB.toFixed(2)}MB, l'upload peut être lent`, 'info');
+        }
+        
+        validFiles.push(processedFile);
+      }
+      
+      setSelectedFiles(prev => [...prev, ...validFiles]);
+      
+      if (validFiles.length > 0) {
+        showToast(`${validFiles.length} fichier(s) prêt(s) à l'upload`, 'success');
+      }
+    } catch (error) {
+      console.error('Error processing files:', error);
+      showToast('Erreur lors du traitement des fichiers', 'error');
+    } finally {
+      setCompressing(false);
+    }
   };
 
   const removeSelectedFile = (index) => {
@@ -1998,6 +2116,23 @@ useEffect(() => {
   const generatePDF = async (check, bank) => {
     setPrinting(true);
     
+    // Function to convert image to base64
+    const getBase64Image = async (url) => {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } catch (error) {
+        console.error('Error converting image to base64:', error);
+        return null;
+      }
+    };
+    
     const printDiv = document.createElement('div');
     printDiv.style.position = 'absolute';
     printDiv.style.left = '-9999px';
@@ -2009,14 +2144,50 @@ useEffect(() => {
     
     const bankLogo = getBankLogo(bank.name);
     
-    let bankHeaderHtml = '';
+    // Pre-fetch bank logo as base64 if it exists
+    let bankLogoSrc = '';
     if (bankLogo) {
+      const base64Logo = await getBase64Image(bankLogo);
+      bankLogoSrc = base64Logo || bankLogo;
+    }
+    
+    let bankHeaderHtml = '';
+    if (bankLogoSrc) {
       bankHeaderHtml = `
         <div style="text-align: center; margin-bottom: 15px;">
-          <img src="${bankLogo}" alt="${bank.name} logo" style="height: 60px; width: auto; object-fit: contain; margin-bottom: 8px;" onerror="this.style.display='none'" />
+          <img src="${bankLogoSrc}" alt="${bank.name} logo" style="height: 60px; width: auto; object-fit: contain; margin-bottom: 8px;" />
         </div>
       `;
-    } 
+    }
+    
+    // Pre-fetch all check images as base64
+    const imageBase64Map = new Map();
+    if (check.files && check.files.length > 0) {
+      const imageFiles = check.files.filter(file => file.match(/\.(jpg|jpeg|png)$/i));
+      for (const imageFile of imageFiles) {
+        const fileUrl = `${import.meta.env.VITE_API_URL || 'https://amg-telecom-backd-production.up.railway.app'}/api/files/${imageFile}`;
+        const base64Image = await getBase64Image(fileUrl);
+        if (base64Image) {
+          imageBase64Map.set(imageFile, base64Image);
+        }
+      }
+    }
+    
+    // Pre-fetch main logo as base64
+    let mainLogoSrc = '';
+    try {
+      const mainLogoResponse = await fetch(logo);
+      const mainLogoBlob = await mainLogoResponse.blob();
+      mainLogoSrc = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(mainLogoBlob);
+      });
+    } catch (error) {
+      console.error('Error converting main logo:', error);
+      mainLogoSrc = logo;
+    }
     
     let filesHtml = '';
     
@@ -2040,18 +2211,19 @@ useEffect(() => {
         `;
         
         for (const imageFile of imageFiles) {
-          const fileUrl = `${import.meta.env.VITE_API_URL || 'https://amg-telecom-backd-production.up.railway.app'}/api/files/${imageFile}`;
-          filesHtml += `
-            <div style="margin-bottom: 10px; border: 1px solid #e5e7eb; border-radius: 4px; overflow: hidden; max-width: 200px;">
-              <img 
-                src="${fileUrl}" 
-                style="width: 100%; max-height: 150px; object-fit: cover;" 
-                alt="${imageFile}"
-                onerror="this.style.display='none'"
-              />
-              <div style="font-size: 9px; padding: 4px; text-align: center; background: #f9fafb; word-break: break-all;">${imageFile}</div>
-            </div>
-          `;
+          const base64Image = imageBase64Map.get(imageFile);
+          if (base64Image) {
+            filesHtml += `
+              <div style="margin-bottom: 10px; border: 1px solid #e5e7eb; border-radius: 4px; overflow: hidden; max-width: 200px;">
+                <img 
+                  src="${base64Image}" 
+                  style="width: 100%; max-height: 150px; object-fit: cover;" 
+                  alt="${imageFile}"
+                />
+                <div style="font-size: 9px; padding: 4px; text-align: center; background: #f9fafb; word-break: break-all;">${imageFile}</div>
+              </div>
+            `;
+          }
         }
         
         filesHtml += `
@@ -2134,7 +2306,7 @@ useEffect(() => {
       <div style="padding: 20px; max-width: 800px; margin: 0 auto; font-family: Arial, sans-serif; font-size: 11px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #1a3a5c; padding-bottom: 10px;">
           <div style="display: flex; align-items: center; gap: 10px;">
-            <img src="${logo}" alt="GROUPE Logo" style="height: 120px; width: 120px;" />
+            <img src="${mainLogoSrc}" alt="GROUPE Logo" style="height: 120px; width: 120px;" />
           </div>
           <div style="text-align: right;">
             ${bankHeaderHtml}
@@ -2344,33 +2516,33 @@ useEffect(() => {
   };
 
   const handleEdit = async (id) => {
-  try {
-    const result = await dispatch(fetchCheckById(id)).unwrap();
-    setFormData({
-      reference_remise: result.reference_remise || '',
-      date_et_heure: result.date_et_heure ? result.date_et_heure.slice(0, 16) : new Date().toISOString().slice(0, 16),
-      ville: result.ville || '',
-      code_agence_remise: result.code_agence_remise || '',
-      nom_agence_remise: result.nom_agence_remise || '',
-      code_agence_compte: result.code_agence_compte || '',
-      nom_agence_compte: result.nom_agence_compte || '',
-      rib_remettant: result.rib_remettant || companyInfo?.rib || '',  // Fallback to companyInfo RIB if empty
-      client_remettant: result.client_remettant || '',
-      nombre_de_valeurs: result.nombre_de_valeurs || 1,
-      montant_total_dh: result.montant_total_dh || '',
-      type_remise: result.type_remise || '',
-      taux_escompte: result.taux_escompte || 0,
-      utilisateur: result.utilisateur || user?.name || ''
-    });
-    setExistingFiles(result.files || []);
-    setSelectedFiles([]);
-    setFilesToDelete([]);
-    setEditingId(id);
-    setShowModal(true);
-  } catch (err) {
-    showToast('Erreur lors du chargement de la remise', 'error');
-  }
-};
+    try {
+      const result = await dispatch(fetchCheckById(id)).unwrap();
+      setFormData({
+        reference_remise: result.reference_remise || '',
+        date_et_heure: result.date_et_heure ? result.date_et_heure.slice(0, 16) : new Date().toISOString().slice(0, 16),
+        ville: result.ville || '',
+        code_agence_remise: result.code_agence_remise || '',
+        nom_agence_remise: result.nom_agence_remise || '',
+        code_agence_compte: result.code_agence_compte || '',
+        nom_agence_compte: result.nom_agence_compte || '',
+        rib_remettant: result.rib_remettant || companyInfo?.rib || '',
+        client_remettant: result.client_remettant || '',
+        nombre_de_valeurs: result.nombre_de_valeurs || 1,
+        montant_total_dh: result.montant_total_dh || '',
+        type_remise: result.type_remise || '',
+        taux_escompte: result.taux_escompte || 0,
+        utilisateur: result.utilisateur || user?.name || ''
+      });
+      setExistingFiles(result.files || []);
+      setSelectedFiles([]);
+      setFilesToDelete([]);
+      setEditingId(id);
+      setShowModal(true);
+    } catch (err) {
+      showToast('Erreur lors du chargement de la remise', 'error');
+    }
+  };
 
   const confirmDelete = (check) => {
     setShowDeleteDialog(check);
@@ -2384,7 +2556,6 @@ useEffect(() => {
       await dispatch(deleteCheck(showDeleteDialog.id)).unwrap();
       showToast(`Remise "${showDeleteDialog.reference_remise || showDeleteDialog.client_remettant}" supprimée avec succès`, 'success');
       setShowDeleteDialog(null);
-      // Adjust current page if needed
       const newTotalPages = Math.ceil((filteredByStatus.length - 1) / itemsPerPage);
       if (currentPage > newTotalPages && newTotalPages > 0) {
         setCurrentPage(newTotalPages);
@@ -2401,31 +2572,33 @@ useEffect(() => {
   };
 
   const resetForm = () => {
-  setFormData({
-    reference_remise: '',
-    date_et_heure: new Date().toISOString().slice(0, 16),
-    ville: '',
-    code_agence_remise: '',
-    nom_agence_remise: '',
-    code_agence_compte: '',
-    nom_agence_compte: '',
-    rib_remettant: companyInfo?.rib || '',  // Use companyInfo here
-    client_remettant: '',
-    nombre_de_valeurs: 1,
-    montant_total_dh: '',
-    type_remise: '',
-    taux_escompte: 0,
-    utilisateur: user?.name || ''
-  });
-  setEditingId(null);
-  setSelectedFiles([]);
-  setExistingFiles([]);
-  setFilesToDelete([]);
-};
+    setFormData({
+      reference_remise: '',
+      date_et_heure: new Date().toISOString().slice(0, 16),
+      ville: '',
+      code_agence_remise: '',
+      nom_agence_remise: '',
+      code_agence_compte: '',
+      nom_agence_compte: '',
+      rib_remettant: companyInfo?.rib || '',
+      client_remettant: '',
+      nombre_de_valeurs: 1,
+      montant_total_dh: '',
+      type_remise: '',
+      taux_escompte: 0,
+      utilisateur: user?.name || ''
+    });
+    setEditingId(null);
+    setSelectedFiles([]);
+    setImagePreviews([]);
+    setExistingFiles([]);
+    setFilesToDelete([]);
+  };
 
   const openFilesModal = async (check) => {
     await dispatch(fetchCheckById(check.id));
     setSelectedFiles([]);
+    setImagePreviews([]);
     setShowFilesModal(true);
   };
 
@@ -2437,6 +2610,7 @@ useEffect(() => {
       await dispatch(uploadCheckFiles({ id: selectedCheck.id, files: selectedFiles })).unwrap();
       showToast('Fichiers uploadés avec succès', 'success');
       setSelectedFiles([]);
+      setImagePreviews([]);
       await dispatch(fetchCheckById(selectedCheck.id));
       dispatch(fetchChecks({ page: currentPage }));
     } catch (err) {
@@ -2494,7 +2668,6 @@ useEffect(() => {
     return "✓ Normal";
   };
 
-  // Prepare export columns for ExportMenu
   const exportColumns = [
     { header: 'Référence', accessor: c => c.reference_remise || '-' },
     { header: 'Date et heure', accessor: c => formatDate(c.date_et_heure) },
@@ -2899,34 +3072,34 @@ useEffect(() => {
                     />
                   </div>
                   
-              {/* Client Remettant - Searchable Select */}
-<div className="check-form-group">
-  <label className="check-label check-label-required">Client Remettant</label>
-  <SearchableSelect
-    options={clientsWithChequePayments}
-    value={formData.client_remettant}
-    onChange={(clientName, clientData) => {
-      setFormData(prev => ({
-        ...prev,
-        client_remettant: clientName,
-        ville: clientData?.ville || prev.ville,
-      }));
-    }}
-    placeholder="Rechercher un client..."
-    disabled={editingId !== null}  // Add this line to disable in edit mode
-  />
-  {clientsWithChequePayments.length > 0 && (
-    <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.25rem' }}>
-      {clientsWithChequePayments.length} client(s) avec paiement par chèque
-    </div>
-  )}
-  {editingId && (
-    <div style={{ fontSize: '0.75rem', color: '#f59e0b', marginTop: '0.25rem' }}>
-      <Info size={12} style={{ display: 'inline', marginRight: '0.25rem' }} />
-      Le client remettant ne peut pas être modifié en mode édition
-    </div>
-  )}
-</div>
+                  {/* Client Remettant - Searchable Select */}
+                  <div className="check-form-group">
+                    <label className="check-label check-label-required">Client Remettant</label>
+                    <SearchableSelect
+                      options={clientsWithChequePayments}
+                      value={formData.client_remettant}
+                      onChange={(clientName, clientData) => {
+                        setFormData(prev => ({
+                          ...prev,
+                          client_remettant: clientName,
+                          ville: clientData?.ville || prev.ville,
+                        }));
+                      }}
+                      placeholder="Rechercher un client..."
+                      disabled={editingId !== null}
+                    />
+                    {clientsWithChequePayments.length > 0 && (
+                      <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.25rem' }}>
+                        {clientsWithChequePayments.length} client(s) avec paiement par chèque
+                      </div>
+                    )}
+                    {editingId && (
+                      <div style={{ fontSize: '0.75rem', color: '#f59e0b', marginTop: '0.25rem' }}>
+                        <Info size={12} style={{ display: 'inline', marginRight: '0.25rem' }} />
+                        Le client remettant ne peut pas être modifié en mode édition
+                      </div>
+                    )}
+                  </div>
                   
                   <div className="check-form-group">
                     <label className="check-label">Ville</label>
@@ -3029,568 +3202,635 @@ useEffect(() => {
                       name="type_remise" 
                       value={formData.type_remise} 
                       onChange={handleInputChange} 
-                      className="check-input" 
-                      placeholder="Ex: Normal, Urgent" 
-                    />
-                  </div>
-                  <div className="check-form-group">
-                    <label className="check-label">Taux Escompte (%)</label>
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      name="taux_escompte" 
-                      value={formData.taux_escompte} 
-                      onChange={handleInputChange} 
-                      className="check-input" 
-                      min="0" 
-                      max="100" 
-                    />
-                  </div>
-                </div>
-
-                {/* Files Section */}
-                <div className="check-section">
-                  <div className="check-section-title">
-                    <FileText size={18} />
-                    Fichiers attachés
-                  </div>
-                  
-                  {editingId && existingFiles.length > 0 && (
-                    <div style={{ marginBottom: '1rem' }}>
-                      <label className="check-label" style={{ fontSize: '0.8125rem', color: '#64748b' }}>
-                        Fichiers existants
-                      </label>
-                      <div className="check-file-list">
-                        {existingFiles.map((file, index) => (
-                          <div key={index} className="check-file-item">
-                            <div className="check-file-info">
-                              {file.match(/\.(jpg|jpeg|png)$/i) ? 
-                                <ImageIcon size={18} style={{ color: '#3b82f6' }} /> : 
-                                <File size={18} style={{ color: '#64748b' }} />
-                              }
-                              <span style={{ fontSize: '0.8125rem', wordBreak: 'break-all' }}>{file}</span>
-                            </div>
-                            <div className="check-file-actions">
-                              <button type="button" className="check-icon-btn" onClick={() => handlePreviewFile(file)} title="Aperçu">
-                                <Eye size={16} />
-                              </button>
-                              <button type="button" className="check-icon-btn" onClick={() => removeExistingFile(file)} title="Supprimer">
-                                <Trash2 size={16} style={{ color: '#ef4444' }} />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div>
-                    <div className="check-upload-area">
-                      <input
-                        type="file"
-                        multiple
-                        onChange={handleFileSelect}
-                        style={{ display: 'none' }}
-                        id="file-upload-form"
-                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="check-input" 
+                        placeholder="Ex: Normal, Urgent" 
                       />
-                      <label htmlFor="file-upload-form" className="check-upload-label">
-                        <Upload size={18} />
-                        Sélectionner des fichiers
-                      </label>
-                      <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.5rem' }}>
-                        PDF, JPG, PNG (max 10MB par fichier)
-                      </p>
+                    </div>
+                    <div className="check-form-group">
+                      <label className="check-label">Taux Escompte (%)</label>
+                      <input 
+                        type="number" 
+                        step="0.01" 
+                        name="taux_escompte" 
+                        value={formData.taux_escompte} 
+                        onChange={handleInputChange} 
+                        className="check-input" 
+                        min="0" 
+                        max="100" 
+                      />
+                    </div>
+                  </div>
+
+                  {/* Files Section */}
+                  <div className="check-section">
+                    <div className="check-section-title">
+                      <FileText size={18} />
+                      Fichiers attachés
                     </div>
                     
-                    {selectedFiles.length > 0 && (
-                      <div style={{ marginTop: '1rem' }}>
-                        <label className="check-label" style={{ fontSize: '0.8125rem' }}>
-                          Fichiers sélectionnés ({selectedFiles.length})
+                    {editingId && existingFiles.length > 0 && (
+                      <div style={{ marginBottom: '1rem' }}>
+                        <label className="check-label" style={{ fontSize: '0.8125rem', color: '#64748b' }}>
+                          Fichiers existants
                         </label>
                         <div className="check-file-list">
-                          {selectedFiles.map((file, index) => (
+                          {existingFiles.map((file, index) => (
                             <div key={index} className="check-file-item">
-                              <span style={{ fontSize: '0.8125rem' }}>
-                                {file.name} ({(file.size / 1024).toFixed(1)} KB)
-                              </span>
-                              <button type="button" className="check-icon-btn" onClick={() => removeSelectedFile(index)}>
-                                <X size={14} style={{ color: '#ef4444' }} />
-                              </button>
+                              <div className="check-file-info">
+                                {file.match(/\.(jpg|jpeg|png)$/i) ? 
+                                  <ImageIcon size={18} style={{ color: '#3b82f6' }} /> : 
+                                  <File size={18} style={{ color: '#64748b' }} />
+                                }
+                                <span style={{ fontSize: '0.8125rem', wordBreak: 'break-all' }}>{file}</span>
+                              </div>
+                              <div className="check-file-actions">
+                                <button type="button" className="check-icon-btn" onClick={() => handlePreviewFile(file)} title="Aperçu">
+                                  <Eye size={16} />
+                                </button>
+                                <button type="button" className="check-icon-btn" onClick={() => removeExistingFile(file)} title="Supprimer">
+                                  <Trash2 size={16} style={{ color: '#ef4444' }} />
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>
                       </div>
                     )}
+
+                    <div>
+                      <div className="check-upload-area">
+                        <input
+                          type="file"
+                          multiple
+                          onChange={handleFileSelect}
+                          style={{ display: 'none' }}
+                          id="file-upload-form"
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          disabled={compressing}
+                        />
+                        <label htmlFor="file-upload-form" className="check-upload-label" style={{ cursor: compressing ? 'wait' : 'pointer' }}>
+                          {compressing ? (
+                            <>
+                              <Loader2 size={18} style={{ animation: 'spin 0.8s linear infinite' }} />
+                              Compression en cours...
+                            </>
+                          ) : (
+                            <>
+                              <Upload size={18} />
+                              Sélectionner des fichiers
+                            </>
+                          )}
+                        </label>
+                        <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.5rem' }}>
+                          PDF, JPG, PNG (max 10MB par fichier, images compressées automatiquement)
+                        </p>
+                      </div>
+                      
+                      {/* Image previews */}
+                      {imagePreviews.length > 0 && (
+                        <div style={{ marginTop: '1rem' }}>
+                          <label className="check-label" style={{ fontSize: '0.8125rem' }}>
+                            Aperçus images ({imagePreviews.length})
+                          </label>
+                          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                            {imagePreviews.map((preview, idx) => (
+                              <div key={idx} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '4px', background: '#f8fafc' }}>
+                                <img 
+                                  src={preview.url} 
+                                  alt={preview.name} 
+                                  style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '4px' }}
+                                />
+                                <div style={{ fontSize: '0.7rem', textAlign: 'center', marginTop: '4px', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {preview.name.slice(0, 15)}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {selectedFiles.length > 0 && (
+                        <div style={{ marginTop: '1rem' }}>
+                          <label className="check-label" style={{ fontSize: '0.8125rem' }}>
+                            Fichiers sélectionnés ({selectedFiles.length})
+                          </label>
+                          <div className="check-file-list">
+                            {selectedFiles.map((file, index) => {
+                              const isCompressed = file.type?.startsWith('image/') && file.size < 1024 * 1024;
+                              return (
+                                <div key={index} className="check-file-item">
+                                  <div className="check-file-info">
+                                    {file.type?.startsWith('image/') ? 
+                                      <ImageIcon size={18} style={{ color: '#3b82f6' }} /> : 
+                                      <File size={18} style={{ color: '#64748b' }} />
+                                    }
+                                    <span style={{ fontSize: '0.8125rem' }}>
+                                      {file.name}
+                                    </span>
+                                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                                      ({getFileSizeDisplay(file)})
+                                    </span>
+                                    {isCompressed && (
+                                      <span style={{ 
+                                        fontSize: '0.65rem', 
+                                        backgroundColor: '#d1fae5', 
+                                        color: '#065f46',
+                                        padding: '2px 6px',
+                                        borderRadius: '12px',
+                                        marginLeft: '8px'
+                                      }}>
+                                        Compressé
+                                      </span>
+                                    )}
+                                  </div>
+                                  <button type="button" className="check-icon-btn" onClick={() => removeSelectedFile(index)}>
+                                    <X size={14} style={{ color: '#ef4444' }} />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="check-dialog-footer">
+                  <Button type="button" variant="outline" onClick={() => { setShowModal(false); resetForm(); }}>
+                    Annuler
+                  </Button>
+                  <Button type="submit" disabled={uploading || compressing}>
+                    {(uploading || compressing) && <Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite', marginRight: '0.5rem' }} />}
+                    {editingId ? 'Mettre à jour' : 'Créer la remise'}
+                  </Button>
+                </div>
+              </form>
+              
+              <button className="check-dialog-close" onClick={() => { setShowModal(false); resetForm(); }}>
+                <X size={18} />
+                <span className="sr-only">Fermer</span>
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* DELETE CONFIRMATION DIALOG */}
+        {showDeleteDialog && (
+          <>
+            <div className="check-overlay" onClick={() => !deleting && setShowDeleteDialog(null)} />
+            <div className="check-dialog check-dialog-danger">
+              <div className="check-dialog-header">
+                <h2 className="check-dialog-title check-dialog-title-danger">
+                  <AlertTriangle size={24} />
+                  Confirmer la suppression
+                </h2>
+                <p className="check-dialog-description">
+                  Êtes-vous sûr de vouloir supprimer cette remise ? Cette action est irréversible.
+                </p>
+              </div>
+              
+              <div className="check-delete-warning">
+                <div className="check-delete-warning-title">
+                  <AlertTriangle size={18} />
+                  Remise à supprimer :
+                </div>
+                <div className="check-delete-warning-text">
+                  <strong>{showDeleteDialog.reference_remise || 'Sans référence'}</strong>
+                  {showDeleteDialog.client_remettant && <div>👤 {showDeleteDialog.client_remettant}</div>}
+                  {showDeleteDialog.montant_total_dh && <div>💰 {formatCurrency(showDeleteDialog.montant_total_dh)}</div>}
+                  {showDeleteDialog.date_et_heure && <div>📅 {formatDate(showDeleteDialog.date_et_heure)}</div>}
+                </div>
+              </div>
+              
+              {showDeleteDialog.files && showDeleteDialog.files.length > 0 && (
+                <div className="check-error-message">
+                  <AlertTriangle size={16} />
+                  Attention : Cette remise a {showDeleteDialog.files.length} fichier(s) attaché(s). 
+                  La suppression de la remise supprimera également tous les fichiers associés.
+                </div>
+              )}
+              
+              <div className="check-dialog-footer">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setShowDeleteDialog(null)}
+                  disabled={deleting}
+                >
+                  Annuler
+                </Button>
+                <Button 
+                  variant="danger" 
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className={deleting ? 'deleting' : ''}
+                >
+                  {deleting ? (
+                    <>
+                      <div className="check-loading-spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} />
+                      Suppression...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 size={16} />
+                      Supprimer définitivement
+                    </>
+                  )}
+                </Button>
+              </div>
+              <button 
+                className="check-dialog-close" 
+                onClick={() => !deleting && setShowDeleteDialog(null)}
+                disabled={deleting}
+              >
+                <X size={18} />
+                <span className="sr-only">Fermer</span>
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Print Modal with Bank Selection */}
+        {showPrintModal && printCheck && (
+          <>
+            <div className="check-overlay" onClick={() => { setShowPrintModal(false); setPrintCheck(null); }} />
+            <div className="check-dialog" style={{ maxWidth: '32rem' }}>
+              <div className="check-dialog-header">
+                <h2 className="check-dialog-title">
+                  <Printer size={20} />
+                  Imprimer le bordereau
+                </h2>
+                <p className="check-dialog-description">
+                  Sélectionnez la banque pour générer le PDF avec son logo
+                </p>
+              </div>
+              
+              <div className="check-dialog-body">
+                <div className="check-form-group">
+                  <label className="check-label check-label-required">Banque</label>
+                  <select
+                    value={selectedBank.name}
+                    onChange={(e) => {
+                      const bank = bankOptions.find(b => b.name === e.target.value);
+                      if (bank) setSelectedBank(bank);
+                    }}
+                    className="check-input"
+                    style={{ width: '100%' }}
+                    required
+                  >
+                    {bankOptions.map((bank) => (
+                      <option key={bank.name} value={bank.name}>{bank.name}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                {/* Preview bank logo and name */}
+                <div style={{ textAlign: 'center', padding: '10px', border: '1px solid #e2e8f0', borderRadius: '0.75rem', background: '#f8fafc' }}>
+                  <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '8px' }}>Aperçu :</p>
+                  {getBankLogo(selectedBank.name) && (
+                    <img 
+                      src={getBankLogo(selectedBank.name)} 
+                      alt={selectedBank.name} 
+                      style={{ height: '50px', width: 'auto', objectFit: 'contain', marginBottom: '8px' }}
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                  )}
+                  <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#1a3a5c' }}>{selectedBank.name}</div>
+                </div>
+                
+                <div className="check-info-message">
+                  <Info size={16} />
+                  <div style={{ flex: 1 }}>
+                    <strong>Récapitulatif :</strong><br />
+                    Référence: {printCheck.reference_remise || 'N/A'}<br />
+                    Client: {printCheck.client_remettant || 'N/A'}<br />
+                    Montant: {formatCurrency(printCheck.montant_total_dh)}
                   </div>
                 </div>
               </div>
               
               <div className="check-dialog-footer">
-                <Button type="button" variant="outline" onClick={() => { setShowModal(false); resetForm(); }}>
+                <Button variant="outline" onClick={() => { setShowPrintModal(false); setPrintCheck(null); }}>
                   Annuler
                 </Button>
-                <Button type="submit" disabled={uploading}>
-                  {uploading && <Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite', marginRight: '0.5rem' }} />}
-                  {editingId ? 'Mettre à jour' : 'Créer la remise'}
+                <Button onClick={confirmPrint} disabled={printing}>
+                  {printing && <Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite', marginRight: '0.5rem' }} />}
+                  Générer PDF
                 </Button>
               </div>
-            </form>
-            
-            <button className="check-dialog-close" onClick={() => { setShowModal(false); resetForm(); }}>
-              <X size={18} />
-              <span className="sr-only">Fermer</span>
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* DELETE CONFIRMATION DIALOG */}
-      {showDeleteDialog && (
-        <>
-          <div className="check-overlay" onClick={() => !deleting && setShowDeleteDialog(null)} />
-          <div className="check-dialog check-dialog-danger">
-            <div className="check-dialog-header">
-              <h2 className="check-dialog-title check-dialog-title-danger">
-                <AlertTriangle size={24} />
-                Confirmer la suppression
-              </h2>
-              <p className="check-dialog-description">
-                Êtes-vous sûr de vouloir supprimer cette remise ? Cette action est irréversible.
-              </p>
-            </div>
-            
-            <div className="check-delete-warning">
-              <div className="check-delete-warning-title">
-                <AlertTriangle size={18} />
-                Remise à supprimer :
-              </div>
-              <div className="check-delete-warning-text">
-                <strong>{showDeleteDialog.reference_remise || 'Sans référence'}</strong>
-                {showDeleteDialog.client_remettant && <div>👤 {showDeleteDialog.client_remettant}</div>}
-                {showDeleteDialog.montant_total_dh && <div>💰 {formatCurrency(showDeleteDialog.montant_total_dh)}</div>}
-                {showDeleteDialog.date_et_heure && <div>📅 {formatDate(showDeleteDialog.date_et_heure)}</div>}
-              </div>
-            </div>
-            
-            {showDeleteDialog.files && showDeleteDialog.files.length > 0 && (
-              <div className="check-error-message">
-                <AlertTriangle size={16} />
-                Attention : Cette remise a {showDeleteDialog.files.length} fichier(s) attaché(s). 
-                La suppression de la remise supprimera également tous les fichiers associés.
-              </div>
-            )}
-            
-            <div className="check-dialog-footer">
-              <Button 
-                variant="outline" 
-                onClick={() => setShowDeleteDialog(null)}
-                disabled={deleting}
-              >
-                Annuler
-              </Button>
-              <Button 
-                variant="danger" 
-                onClick={handleDelete}
-                disabled={deleting}
-                className={deleting ? 'deleting' : ''}
-              >
-                {deleting ? (
-                  <>
-                    <div className="check-loading-spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} />
-                    Suppression...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 size={16} />
-                    Supprimer définitivement
-                  </>
-                )}
-              </Button>
-            </div>
-            <button 
-              className="check-dialog-close" 
-              onClick={() => !deleting && setShowDeleteDialog(null)}
-              disabled={deleting}
-            >
-              <X size={18} />
-              <span className="sr-only">Fermer</span>
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* Print Modal with Bank Selection */}
-      {showPrintModal && printCheck && (
-        <>
-          <div className="check-overlay" onClick={() => { setShowPrintModal(false); setPrintCheck(null); }} />
-          <div className="check-dialog" style={{ maxWidth: '32rem' }}>
-            <div className="check-dialog-header">
-              <h2 className="check-dialog-title">
-                <Printer size={20} />
-                Imprimer le bordereau
-              </h2>
-              <p className="check-dialog-description">
-                Sélectionnez la banque pour générer le PDF avec son logo
-              </p>
-            </div>
-            
-            <div className="check-dialog-body">
-              <div className="check-form-group">
-                <label className="check-label check-label-required">Banque</label>
-                <select
-                  value={selectedBank.name}
-                  onChange={(e) => {
-                    const bank = bankOptions.find(b => b.name === e.target.value);
-                    if (bank) setSelectedBank(bank);
-                  }}
-                  className="check-input"
-                  style={{ width: '100%' }}
-                  required
-                >
-                  {bankOptions.map((bank) => (
-                    <option key={bank.name} value={bank.name}>{bank.name}</option>
-                  ))}
-                </select>
-              </div>
               
-              {/* Preview bank logo and name */}
-              <div style={{ textAlign: 'center', padding: '10px', border: '1px solid #e2e8f0', borderRadius: '0.75rem', background: '#f8fafc' }}>
-                <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '8px' }}>Aperçu :</p>
-                {getBankLogo(selectedBank.name) && (
-                  <img 
-                    src={getBankLogo(selectedBank.name)} 
-                    alt={selectedBank.name} 
-                    style={{ height: '50px', width: 'auto', objectFit: 'contain', marginBottom: '8px' }}
-                    onError={(e) => { e.target.style.display = 'none'; }}
-                  />
-                )}
-                <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#1a3a5c' }}>{selectedBank.name}</div>
-              </div>
-              
-              <div className="check-info-message">
-                <Info size={16} />
-                <div style={{ flex: 1 }}>
-                  <strong>Récapitulatif :</strong><br />
-                  Référence: {printCheck.reference_remise || 'N/A'}<br />
-                  Client: {printCheck.client_remettant || 'N/A'}<br />
-                  Montant: {formatCurrency(printCheck.montant_total_dh)}
-                </div>
-              </div>
+              <button className="check-dialog-close" onClick={() => { setShowPrintModal(false); setPrintCheck(null); }}>
+                <X size={18} />
+                <span className="sr-only">Fermer</span>
+              </button>
             </div>
-            
-            <div className="check-dialog-footer">
-              <Button variant="outline" onClick={() => { setShowPrintModal(false); setPrintCheck(null); }}>
-                Annuler
-              </Button>
-              <Button onClick={confirmPrint} disabled={printing}>
-                {printing && <Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite', marginRight: '0.5rem' }} />}
-                Générer PDF
-              </Button>
-            </div>
-            
-            <button className="check-dialog-close" onClick={() => { setShowPrintModal(false); setPrintCheck(null); }}>
-              <X size={18} />
-              <span className="sr-only">Fermer</span>
-            </button>
-          </div>
-        </>
-      )}
+          </>
+        )}
 
-      {/* Files Modal */}
-      {showFilesModal && selectedCheck && (
-        <>
-          <div className="check-overlay" onClick={() => { setShowFilesModal(false); setSelectedFiles([]); }} />
-          <div className="check-dialog" style={{ maxWidth: '32rem' }}>
-            <div className="check-dialog-header">
-              <h2 className="check-dialog-title">
-                <FileText size={20} />
-                Fichiers - {selectedCheck.reference_remise || selectedCheck.client_remettant}
-              </h2>
-              <p className="check-dialog-description">
-                Gérez les fichiers attachés à cette remise
-              </p>
-            </div>
-            
-            <div className="check-dialog-body">
-              <div className="check-upload-area">
-                <input 
-                  type="file" 
-                  multiple 
-                  onChange={handleFileSelect} 
-                  style={{ display: 'none' }} 
-                  id="file-upload-modal" 
-                  accept=".pdf,.jpg,.jpeg,.png" 
-                />
-                <label htmlFor="file-upload-modal" className="check-upload-label">
-                  <Upload size={18} />
-                  Sélectionner des fichiers
-                </label>
-                <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.5rem' }}>
-                  PDF, JPG, PNG (max 10MB)
+        {/* Files Modal */}
+        {showFilesModal && selectedCheck && (
+          <>
+            <div className="check-overlay" onClick={() => { setShowFilesModal(false); setSelectedFiles([]); setImagePreviews([]); }} />
+            <div className="check-dialog" style={{ maxWidth: '32rem' }}>
+              <div className="check-dialog-header">
+                <h2 className="check-dialog-title">
+                  <FileText size={20} />
+                  Fichiers - {selectedCheck.reference_remise || selectedCheck.client_remettant}
+                </h2>
+                <p className="check-dialog-description">
+                  Gérez les fichiers attachés à cette remise
                 </p>
-                
-                {selectedFiles.length > 0 && (
-                  <div style={{ marginTop: '1rem', textAlign: 'left' }}>
-                    <p style={{ fontSize: '0.8125rem', marginBottom: '0.5rem' }}>
-                      {selectedFiles.length} fichier(s) sélectionné(s)
-                    </p>
-                    <Button variant="success" onClick={handleFileUpload} disabled={uploading} style={{ fontSize: '0.75rem' }}>
-                      {uploading ? <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} /> : <FileUp size={14} />}
-                      <span style={{ marginLeft: '0.5rem' }}>Uploader</span>
-                    </Button>
+              </div>
+              
+              <div className="check-dialog-body">
+                <div className="check-upload-area">
+                  <input 
+                    type="file" 
+                    multiple 
+                    onChange={handleFileSelect} 
+                    style={{ display: 'none' }} 
+                    id="file-upload-modal" 
+                    accept=".pdf,.jpg,.jpeg,.png" 
+                    disabled={compressing}
+                  />
+                  <label htmlFor="file-upload-modal" className="check-upload-label" style={{ cursor: compressing ? 'wait' : 'pointer' }}>
+                    {compressing ? (
+                      <>
+                        <Loader2 size={18} style={{ animation: 'spin 0.8s linear infinite' }} />
+                        Compression en cours...
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={18} />
+                        Sélectionner des fichiers
+                      </>
+                    )}
+                  </label>
+                  <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.5rem' }}>
+                    PDF, JPG, PNG (max 10MB, images compressées)
+                  </p>
+                  
+                  {selectedFiles.length > 0 && (
+                    <div style={{ marginTop: '1rem', textAlign: 'left' }}>
+                      <p style={{ fontSize: '0.8125rem', marginBottom: '0.5rem' }}>
+                        {selectedFiles.length} fichier(s) sélectionné(s)
+                      </p>
+                      <Button variant="success" onClick={handleFileUpload} disabled={uploading || compressing} style={{ fontSize: '0.75rem' }}>
+                        {(uploading || compressing) && <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} />}
+                        <span style={{ marginLeft: '0.5rem' }}>Uploader</span>
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {selectedCheck.files && selectedCheck.files.length > 0 ? (
+                  <div style={{ marginTop: '1rem' }}>
+                    <label className="check-label">Fichiers existants ({selectedCheck.files.length})</label>
+                    <div className="check-file-list">
+                      {selectedCheck.files.map((file, index) => (
+                        <div key={index} className="check-file-item">
+                          <div className="check-file-info">
+                            {file.match(/\.(jpg|jpeg|png)$/i) ? 
+                              <ImageIcon size={18} style={{ color: '#3b82f6' }} /> : 
+                              <File size={18} style={{ color: '#64748b' }} />
+                            }
+                            <span style={{ fontSize: '0.8125rem', wordBreak: 'break-all' }}>{file}</span>
+                          </div>
+                          <div className="check-file-actions">
+                            <button className="check-icon-btn" onClick={() => handlePreviewFile(file)} title="Aperçu">
+                              <Eye size={16} />
+                            </button>
+                            <button className="check-icon-btn" onClick={() => handleDeleteFile(file)} title="Supprimer">
+                              <Trash2 size={16} style={{ color: '#ef4444' }} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="check-empty" style={{ padding: '2rem 0' }}>
+                    Aucun fichier attaché
                   </div>
                 )}
               </div>
+              
+              <div className="check-dialog-footer">
+                <Button variant="outline" onClick={() => { setShowFilesModal(false); setSelectedFiles([]); setImagePreviews([]); }}>
+                  Fermer
+                </Button>
+              </div>
+              
+              <button className="check-dialog-close" onClick={() => { setShowFilesModal(false); setSelectedFiles([]); setImagePreviews([]); }}>
+                <X size={18} />
+                <span className="sr-only">Fermer</span>
+              </button>
+            </div>
+          </>
+        )}
 
-              {selectedCheck.files && selectedCheck.files.length > 0 ? (
-                <div style={{ marginTop: '1rem' }}>
-                  <label className="check-label">Fichiers existants ({selectedCheck.files.length})</label>
-                  <div className="check-file-list">
-                    {selectedCheck.files.map((file, index) => (
-                      <div key={index} className="check-file-item">
-                        <div className="check-file-info">
-                          {file.match(/\.(jpg|jpeg|png)$/i) ? 
-                            <ImageIcon size={18} style={{ color: '#3b82f6' }} /> : 
-                            <File size={18} style={{ color: '#64748b' }} />
-                          }
-                          <span style={{ fontSize: '0.8125rem', wordBreak: 'break-all' }}>{file}</span>
-                        </div>
-                        <div className="check-file-actions">
-                          <button className="check-icon-btn" onClick={() => handlePreviewFile(file)} title="Aperçu">
-                            <Eye size={16} />
-                          </button>
-                          <button className="check-icon-btn" onClick={() => handleDeleteFile(file)} title="Supprimer">
-                            <Trash2 size={16} style={{ color: '#ef4444' }} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+        {/* File Preview Modal */}
+        {showFilePreview && (
+          <>
+            <div className="check-overlay" onClick={() => setShowFilePreview(false)} />
+            <div className="check-dialog" style={{ maxWidth: '90%', maxHeight: '90vh' }}>
+              <div className="check-dialog-header">
+                <h2 className="check-dialog-title" style={{ fontSize: '1rem' }}>
+                  <Eye size={18} />
+                  {previewFileName}
+                </h2>
+              </div>
+              
+              <div className="check-dialog-body" style={{ textAlign: 'center' }}>
+                {previewFileName.match(/\.(jpg|jpeg|png)$/i) ? (
+                  <img 
+                    src={previewFileUrl} 
+                    alt={previewFileName} 
+                    style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }} 
+                  />
+                ) : (
+                  <iframe 
+                    src={previewFileUrl} 
+                    title={previewFileName} 
+                    style={{ width: '100%', height: '70vh', border: 'none' }} 
+                  />
+                )}
+              </div>
+              
+              <div className="check-dialog-footer">
+                <Button variant="outline" onClick={() => setShowFilePreview(false)}>
+                  Fermer
+                </Button>
+              </div>
+              
+              <button className="check-dialog-close" onClick={() => setShowFilePreview(false)}>
+                <X size={18} />
+                <span className="sr-only">Fermer</span>
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Filter Modal */}
+        {showFilterModal && (
+          <>
+            <div className="check-overlay" onClick={() => setShowFilterModal(false)} />
+            <div className="check-dialog" style={{ maxWidth: '40rem' }}>
+              <div className="check-dialog-header">
+                <h2 className="check-dialog-title">
+                  <Filter size={20} />
+                  Filtres avancés
+                </h2>
+                <p className="check-dialog-description">
+                  Affinez votre recherche avec des critères supplémentaires
+                </p>
+              </div>
+              
+              <div className="check-dialog-body">
+                <div className="check-form-grid">
+                  <div className="check-form-group">
+                    <label className="check-label">Agence Remise</label>
+                    <select 
+                      value={filters.code_agence_remise} 
+                      onChange={(e) => handleFilterChange('code_agence_remise', e.target.value)} 
+                      className="check-input"
+                      style={{ width: '100%' }}
+                    >
+                      <option value="">Toutes</option>
+                      {filterOptions?.codes_agence?.map(ag => (
+                        <option key={ag} value={ag}>{ag}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="check-form-group">
+                    <label className="check-label">Client</label>
+                    <input 
+                      type="text" 
+                      value={filters.client_remettant} 
+                      onChange={(e) => handleFilterChange('client_remettant', e.target.value)} 
+                      className="check-input" 
+                      placeholder="Rechercher..." 
+                    />
+                  </div>
+                  <div className="check-form-group">
+                    <label className="check-label">Ville</label>
+                    <select 
+                      value={filters.ville} 
+                      onChange={(e) => handleFilterChange('ville', e.target.value)} 
+                      className="check-input"
+                      style={{ width: '100%' }}
+                    >
+                      <option value="">Toutes</option>
+                      {filterOptions?.villes?.map(v => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="check-form-group">
+                    <label className="check-label">Type Remise</label>
+                    <input 
+                      type="text" 
+                      value={filters.type_remise} 
+                      onChange={(e) => handleFilterChange('type_remise', e.target.value)} 
+                      className="check-input" 
+                      placeholder="Rechercher..." 
+                    />
+                  </div>
+                  <div className="check-form-group">
+                    <label className="check-label">Date début</label>
+                    <input 
+                      type="date" 
+                      value={filters.date_debut} 
+                      onChange={(e) => handleFilterChange('date_debut', e.target.value)} 
+                      className="check-input" 
+                    />
+                  </div>
+                  <div className="check-form-group">
+                    <label className="check-label">Date fin</label>
+                    <input 
+                      type="date" 
+                      value={filters.date_fin} 
+                      onChange={(e) => handleFilterChange('date_fin', e.target.value)} 
+                      className="check-input" 
+                    />
+                  </div>
+                  <div className="check-form-group">
+                    <label className="check-label">Escompte</label>
+                    <select 
+                      value={filters.has_escompte} 
+                      onChange={(e) => handleFilterChange('has_escompte', e.target.value)} 
+                      className="check-input"
+                      style={{ width: '100%' }}
+                    >
+                      <option value="">Tous</option>
+                      <option value="true">Avec escompte</option>
+                      <option value="false">Sans escompte</option>
+                    </select>
+                  </div>
+                  <div className="check-form-group">
+                    <label className="check-label">Montant min (MAD)</label>
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      value={filters.montant_min} 
+                      onChange={(e) => handleFilterChange('montant_min', e.target.value)} 
+                      className="check-input" 
+                    />
+                  </div>
+                  <div className="check-form-group">
+                    <label className="check-label">Montant max (MAD)</label>
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      value={filters.montant_max} 
+                      onChange={(e) => handleFilterChange('montant_max', e.target.value)} 
+                      className="check-input" 
+                    />
                   </div>
                 </div>
-              ) : (
-                <div className="check-empty" style={{ padding: '2rem 0' }}>
-                  Aucun fichier attaché
-                </div>
-              )}
-            </div>
-            
-            <div className="check-dialog-footer">
-              <Button variant="outline" onClick={() => { setShowFilesModal(false); setSelectedFiles([]); }}>
-                Fermer
-              </Button>
-            </div>
-            
-            <button className="check-dialog-close" onClick={() => { setShowFilesModal(false); setSelectedFiles([]); }}>
-              <X size={18} />
-              <span className="sr-only">Fermer</span>
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* File Preview Modal */}
-      {showFilePreview && (
-        <>
-          <div className="check-overlay" onClick={() => setShowFilePreview(false)} />
-          <div className="check-dialog" style={{ maxWidth: '90%', maxHeight: '90vh' }}>
-            <div className="check-dialog-header">
-              <h2 className="check-dialog-title" style={{ fontSize: '1rem' }}>
-                <Eye size={18} />
-                {previewFileName}
-              </h2>
-            </div>
-            
-            <div className="check-dialog-body" style={{ textAlign: 'center' }}>
-              {previewFileName.match(/\.(jpg|jpeg|png)$/i) ? (
-                <img 
-                  src={previewFileUrl} 
-                  alt={previewFileName} 
-                  style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }} 
-                />
-              ) : (
-                <iframe 
-                  src={previewFileUrl} 
-                  title={previewFileName} 
-                  style={{ width: '100%', height: '70vh', border: 'none' }} 
-                />
-              )}
-            </div>
-            
-            <div className="check-dialog-footer">
-              <Button variant="outline" onClick={() => setShowFilePreview(false)}>
-                Fermer
-              </Button>
-            </div>
-            
-            <button className="check-dialog-close" onClick={() => setShowFilePreview(false)}>
-              <X size={18} />
-              <span className="sr-only">Fermer</span>
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* Filter Modal */}
-      {showFilterModal && (
-        <>
-          <div className="check-overlay" onClick={() => setShowFilterModal(false)} />
-          <div className="check-dialog" style={{ maxWidth: '40rem' }}>
-            <div className="check-dialog-header">
-              <h2 className="check-dialog-title">
-                <Filter size={20} />
-                Filtres avancés
-              </h2>
-              <p className="check-dialog-description">
-                Affinez votre recherche avec des critères supplémentaires
-              </p>
-            </div>
-            
-            <div className="check-dialog-body">
-              <div className="check-form-grid">
-                <div className="check-form-group">
-                  <label className="check-label">Agence Remise</label>
-                  <select 
-                    value={filters.code_agence_remise} 
-                    onChange={(e) => handleFilterChange('code_agence_remise', e.target.value)} 
-                    className="check-input"
-                    style={{ width: '100%' }}
-                  >
-                    <option value="">Toutes</option>
-                    {filterOptions?.codes_agence?.map(ag => (
-                      <option key={ag} value={ag}>{ag}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="check-form-group">
-                  <label className="check-label">Client</label>
-                  <input 
-                    type="text" 
-                    value={filters.client_remettant} 
-                    onChange={(e) => handleFilterChange('client_remettant', e.target.value)} 
-                    className="check-input" 
-                    placeholder="Rechercher..." 
-                  />
-                </div>
-                <div className="check-form-group">
-                  <label className="check-label">Ville</label>
-                  <select 
-                    value={filters.ville} 
-                    onChange={(e) => handleFilterChange('ville', e.target.value)} 
-                    className="check-input"
-                    style={{ width: '100%' }}
-                  >
-                    <option value="">Toutes</option>
-                    {filterOptions?.villes?.map(v => (
-                      <option key={v} value={v}>{v}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="check-form-group">
-                  <label className="check-label">Type Remise</label>
-                  <input 
-                    type="text" 
-                    value={filters.type_remise} 
-                    onChange={(e) => handleFilterChange('type_remise', e.target.value)} 
-                    className="check-input" 
-                    placeholder="Rechercher..." 
-                  />
-                </div>
-                <div className="check-form-group">
-                  <label className="check-label">Date début</label>
-                  <input 
-                    type="date" 
-                    value={filters.date_debut} 
-                    onChange={(e) => handleFilterChange('date_debut', e.target.value)} 
-                    className="check-input" 
-                  />
-                </div>
-                <div className="check-form-group">
-                  <label className="check-label">Date fin</label>
-                  <input 
-                    type="date" 
-                    value={filters.date_fin} 
-                    onChange={(e) => handleFilterChange('date_fin', e.target.value)} 
-                    className="check-input" 
-                  />
-                </div>
-                <div className="check-form-group">
-                  <label className="check-label">Escompte</label>
-                  <select 
-                    value={filters.has_escompte} 
-                    onChange={(e) => handleFilterChange('has_escompte', e.target.value)} 
-                    className="check-input"
-                    style={{ width: '100%' }}
-                  >
-                    <option value="">Tous</option>
-                    <option value="true">Avec escompte</option>
-                    <option value="false">Sans escompte</option>
-                  </select>
-                </div>
-                <div className="check-form-group">
-                  <label className="check-label">Montant min (MAD)</label>
-                  <input 
-                    type="number" 
-                    step="0.01" 
-                    value={filters.montant_min} 
-                    onChange={(e) => handleFilterChange('montant_min', e.target.value)} 
-                    className="check-input" 
-                  />
-                </div>
-                <div className="check-form-group">
-                  <label className="check-label">Montant max (MAD)</label>
-                  <input 
-                    type="number" 
-                    step="0.01" 
-                    value={filters.montant_max} 
-                    onChange={(e) => handleFilterChange('montant_max', e.target.value)} 
-                    className="check-input" 
-                  />
-                </div>
               </div>
+              
+              <div className="check-dialog-footer">
+                <Button variant="outline" onClick={clearFilters}>
+                  Effacer tout
+                </Button>
+                <Button onClick={() => setShowFilterModal(false)}>
+                  Appliquer les filtres
+                </Button>
+              </div>
+              
+              <button className="check-dialog-close" onClick={() => setShowFilterModal(false)}>
+                <X size={18} />
+                <span className="sr-only">Fermer</span>
+              </button>
             </div>
-            
-            <div className="check-dialog-footer">
-              <Button variant="outline" onClick={clearFilters}>
-                Effacer tout
-              </Button>
-              <Button onClick={() => setShowFilterModal(false)}>
-                Appliquer les filtres
-              </Button>
-            </div>
-            
-            <button className="check-dialog-close" onClick={() => setShowFilterModal(false)}>
-              <X size={18} />
-              <span className="sr-only">Fermer</span>
-            </button>
-          </div>
-        </>
-      )}
-    </div>
-  );
-};
+          </>
+        )}
+      </div>
+    );
+  };
 
-// Button component for reuse
-const Button = ({ children, variant = 'default', size = 'default', className = '', disabled, onClick, type = 'button', style }) => {
-  const variantClass = variant === 'outline' ? 'check-btn-outline' :
-                       variant === 'ghost' ? 'check-btn-ghost' :
-                       variant === 'danger' ? 'check-btn-danger' :
-                       variant === 'success' ? 'check-btn-success' :
-                       'check-btn-primary';
-  
-  const sizeClass = size === 'icon' ? 'check-btn-icon' : 'check-btn-default';
-  
-  return (
-    <button 
-      type={type}
-      className={`check-btn ${variantClass} ${sizeClass} ${className}`}
-      disabled={disabled}
-      onClick={onClick}
-      style={style}
-    >
-      {children}
-    </button>
-  );
-};
+  // Button component for reuse
+  const Button = ({ children, variant = 'default', size = 'default', className = '', disabled, onClick, type = 'button', style }) => {
+    const variantClass = variant === 'outline' ? 'check-btn-outline' :
+                         variant === 'ghost' ? 'check-btn-ghost' :
+                         variant === 'danger' ? 'check-btn-danger' :
+                         variant === 'success' ? 'check-btn-success' :
+                         'check-btn-primary';
+    
+    const sizeClass = size === 'icon' ? 'check-btn-icon' : 'check-btn-default';
+    
+    return (
+      <button 
+        type={type}
+        className={`check-btn ${variantClass} ${sizeClass} ${className}`}
+        disabled={disabled}
+        onClick={onClick}
+        style={style}
+      >
+        {children}
+      </button>
+    );
+  };
 
-export default Check;
+  export default Check;
