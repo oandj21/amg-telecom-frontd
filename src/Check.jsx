@@ -1880,7 +1880,38 @@ const Check = () => {
       dispatch(clearCheckError());
     };
   }, [dispatch]);
+// Add this state with your other state declarations (around line 1940)
+const [bankLogosBase64, setBankLogosBase64] = useState({});
 
+// Add this useEffect to load logos as base64 (add with your other useEffects around line 2080)
+useEffect(() => {
+  const loadBankLogos = async () => {
+    const logos = {};
+    for (const bank of bankOptions) {
+      try {
+        // Try to fetch the logo from the root
+        const response = await fetch(`/${bank.logo}`);
+        if (response.ok) {
+          const blob = await response.blob();
+          const base64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(blob);
+          });
+          logos[bank.name] = base64;
+          console.log(`✅ Loaded logo for ${bank.name}`);
+        } else {
+          console.warn(`❌ Could not load logo for ${bank.name}`);
+        }
+      } catch (error) {
+        console.error(`Error loading logo for ${bank.name}:`, error);
+      }
+    }
+    setBankLogosBase64(logos);
+  };
+  
+  loadBankLogos();
+}, []);
   const fetchClientsWithChequePayments = async () => {
     setLoadingClients(true);
     try {
@@ -2160,284 +2191,308 @@ const Check = () => {
     setShowFilePreview(true);
   };
 
-  const generatePDF = async (check, bank) => {
-    setPrinting(true);
-    
-    const printDiv = document.createElement('div');
-    printDiv.style.position = 'absolute';
-    printDiv.style.left = '-9999px';
-    printDiv.style.top = '0';
-    printDiv.style.width = '800px';
-    printDiv.style.backgroundColor = 'white';
-    printDiv.style.fontFamily = 'Arial, sans-serif';
-    printDiv.style.padding = '15px';
-    
-    const bankLogo = getBankLogo(bank.name);
-    
-    let bankHeaderHtml = '';
-    if (bankLogo) {
-      bankHeaderHtml = `
-        <div style="text-align: center; margin-bottom: 15px;">
-          <img src="${bankLogo}" alt="${bank.name} logo" style="height: 60px; width: auto; object-fit: contain; margin-bottom: 8px;" onerror="this.style.display='none'" />
-        </div>
-      `;
-    } 
-    
-    let filesHtml = '';
-    
-    if (check.files && check.files.length > 0) {
-      const imageFiles = check.files.filter(file => file.match(/\.(jpg|jpeg|png|webp)$/i));
-      const pdfFiles = check.files.filter(file => file.match(/\.pdf$/i));
-      const otherFiles = check.files.filter(file => !file.match(/\.(jpg|jpeg|png|webp|pdf)$/i));
-      
-      filesHtml = `
-        <div style="margin: 20px 0;">
-          <div style="font-size: 12px; font-weight: bold; margin-bottom: 12px; color: #1a3a5c; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
-            📎 Documents attachés (${check.files.length} fichier(s))
-          </div>
-      `;
-      
-      if (imageFiles.length > 0) {
-        filesHtml += `
-          <div style="margin-bottom: 15px;">
-            <div style="font-size: 11px; font-weight: bold; margin-bottom: 8px; color: #666;">Images (${imageFiles.length})</div>
-            <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-        `;
-        
-        for (const imageFile of imageFiles) {
-          const fileUrl = `${import.meta.env.VITE_API_URL || 'https://amg-telecom-backd-production.up.railway.app'}/api/files/${imageFile}`;
-          filesHtml += `
-            <div style="margin-bottom: 10px; border: 1px solid #e5e7eb; border-radius: 4px; overflow: hidden; max-width: 200px;">
-              <img 
-                src="${fileUrl}" 
-                style="width: 100%; max-height: 150px; object-fit: cover;" 
-                alt="${imageFile}"
-                onerror="this.style.display='none'"
-              />
-              <div style="font-size: 9px; padding: 4px; text-align: center; background: #f9fafb; word-break: break-all;">${imageFile}</div>
-            </div>
-          `;
-        }
-        
-        filesHtml += `
-            </div>
-          </div>
-        `;
-      }
-      
-      if (pdfFiles.length > 0) {
-        filesHtml += `
-          <div style="margin-bottom: 15px;">
-            <div style="font-size: 11px; font-weight: bold; margin-bottom: 8px; color: #666;">Documents PDF (${pdfFiles.length})</div>
-            <div style="border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px;">
-        `;
-        
-        for (const pdfFile of pdfFiles) {
-          filesHtml += `
-            <div style="padding: 6px 0; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 16px;">📄</span>
-              <div style="flex: 1;">
-                <div style="font-size: 10px; font-weight: 500; word-break: break-all;">${pdfFile}</div>
-              </div>
-            </div>
-          `;
-        }
-        
-        filesHtml += `
-            </div>
-          </div>
-        `;
-      }
-      
-      if (otherFiles.length > 0) {
-        filesHtml += `
-          <div style="margin-bottom: 15px;">
-            <div style="font-size: 11px; font-weight: bold; margin-bottom: 8px; color: #666;">Autres fichiers (${otherFiles.length})</div>
-            <div style="border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px;">
-        `;
-        
-        for (const otherFile of otherFiles) {
-          filesHtml += `
-            <div style="padding: 6px 0; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 16px;">📎</span>
-              <div style="flex: 1;">
-                <div style="font-size: 10px; word-break: break-all;">${otherFile}</div>
-              </div>
-            </div>
-          `;
-        }
-        
-        filesHtml += `
-            </div>
-          </div>
-        `;
-      }
-      
-      filesHtml += `</div>`;
+ const generatePDF = async (check, bank) => {
+  setPrinting(true);
+  
+  const printDiv = document.createElement('div');
+  printDiv.style.position = 'absolute';
+  printDiv.style.left = '-9999px';
+  printDiv.style.top = '0';
+  printDiv.style.width = '800px';
+  printDiv.style.backgroundColor = 'white';
+  printDiv.style.fontFamily = 'Arial, sans-serif';
+  printDiv.style.padding = '15px';
+  
+  // Get the base64 logo from our cache
+  const bankLogoBase64 = bankLogosBase64[bank.name];
+  
+  // Also convert the main company logo to base64
+  let mainLogoBase64 = null;
+  try {
+    const mainLogoResponse = await fetch(logo);
+    if (mainLogoResponse.ok) {
+      const mainLogoBlob = await mainLogoResponse.blob();
+      mainLogoBase64 = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(mainLogoBlob);
+      });
     }
-    
-    const formatDateForPrint = (dateString) => {
-      if (!dateString) return '-';
-      const date = new Date(dateString);
-      return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    };
-    
-    const formatTimeForPrint = (dateString) => {
-      if (!dateString) return '-';
-      const date = new Date(dateString);
-      return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    };
-    
-    const formatCurrency = (amount) => {
-      if (amount === undefined || amount === null) return '0 MAD';
-      const num = typeof amount === 'string' ? parseFloat(amount) : amount;
-      if (isNaN(num)) return '0 MAD';
-      return new Intl.NumberFormat('fr-MA', { style: 'currency', currency: 'MAD' }).format(num);
-    };
-    
-    printDiv.innerHTML = `
-      <div style="padding: 20px; max-width: 800px; margin: 0 auto; font-family: Arial, sans-serif; font-size: 11px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #1a3a5c; padding-bottom: 10px;">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <img src="${logo}" alt="GROUPE Logo" style="height: 120px; width: 120px;" />
-          </div>
-          <div style="text-align: right;">
-            ${bankHeaderHtml}
-          </div>
-        </div>
-
-        <div style="text-align: right; margin-bottom: 12px;">
-          <div style="font-size: 10px; color: #666;">BORDEREAU N°</div>
-          <div style="font-size: 12px; font-weight: bold;">${check.reference_remise || 'N/A'}</div>
-        </div>
-
-        <div style="text-align: center; margin-bottom: 15px;">
-          <div style="font-size: 16px; font-weight: bold; color: #1a3a5c;">BORDEREAU DE REMISE DE VALEUR</div>
-          <div style="font-size: 11px; color: #666;">CHÈQUE(S)</div>
-        </div>
-
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; border: 1px solid #e5e7eb; padding: 10px; background: #fafafa;">
-          <div>
-            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">A (Ville)</div>
-            <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.ville || 'Casablanca'}</div>
-          </div>
-          <div>
-            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Le (Date et heure)</div>
-            <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${formatDateForPrint(check.date_et_heure)} ${formatTimeForPrint(check.date_et_heure)}</div>
-          </div>
-          <div>
-            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Code agence remise</div>
-            <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.code_agence_remise || '78076'}</div>
-          </div>
-          <div>
-            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Code agence compte</div>
-            <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.code_agence_compte || '78076'}</div>
-          </div>
-          <div>
-            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">RIB Remettant</div>
-            <div style="font-size: 10px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd; word-break: break-all;">${check.rib_remettant || 'N/A'}</div>
-          </div>
-          <div>
-            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Nb valeurs</div>
-            <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.nombre_de_valeurs || 1}</div>
-          </div>
-          <div>
-            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Type remise</div>
-            <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.type_remise || 'ENCAISSEMENT'}</div>
-          </div>
-          <div>
-            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Taux Escompte</div>
-            <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.taux_escompte || 0} %</div>
-          </div>
-          <div>
-            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Montant total</div>
-            <div style="font-size: 11px; font-weight: bold; color: #16a34a; padding: 3px 0; border-bottom: 1px solid #ddd;">${formatCurrency(check.montant_total_dh)}</div>
-          </div>
-          <div style="grid-column: span 2;">
-            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Nom agence remise</div>
-            <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.nom_agence_remise || 'N/A'}</div>
-          </div>
-          <div>
-            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Client Remettant</div>
-            <div style="font-size: 11px; font-weight: bold; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.client_remettant || 'N/A'}</div>
-          </div>
-          <div style="grid-column: span 2;">
-            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Nom agence compte</div>
-            <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.nom_agence_compte || 'N/A'}</div>
-          </div>
-          <div>
-            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Utilisateur</div>
-            <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.utilisateur || 'N/A'}</div>
-          </div>
-        </div>
-
-        ${filesHtml}
-
-        <div style="display: flex; justify-content: space-between; margin-top: 20px; padding-top: 12px; border-top: 1px dashed #ccc;">
-          <div style="text-align: center; width: 45%;">
-            <div style="font-size: 10px; color: #666; margin-bottom: 20px;">SIGNATURE CLIENT</div>
-            <div style="border-top: 1px solid #000; width: 80%; margin: 0 auto;"></div>
-          </div>
-          <div style="text-align: center; width: 45%;">
-            <div style="font-size: 10px; color: #666; margin-bottom: 20px;">SIGNATURE AGENCE</div>
-            <div style="border-top: 1px solid #000; width: 80%; margin: 0 auto;"></div>
-          </div>
-        </div>
-
-        <div style="margin-top: 15px; text-align: center; font-size: 8px; color: #999; border-top: 1px solid #eee; padding-top: 10px;">
-          Document généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}
-        </div>
+  } catch (error) {
+    console.error('Error loading main logo:', error);
+  }
+  
+  let bankHeaderHtml = '';
+  if (bankLogoBase64) {
+    bankHeaderHtml = `
+      <div style="text-align: center; margin-bottom: 15px;">
+        <img src="${bankLogoBase64}" alt="${bank.name} logo" style="height: 60px; width: auto; object-fit: contain; margin-bottom: 8px;" />
       </div>
     `;
+  } else {
+    // Fallback - show bank name if logo not available
+    bankHeaderHtml = `
+      <div style="text-align: center; margin-bottom: 15px;">
+        <div style="font-size: 14px; font-weight: bold; color: #1a3a5c;">${bank.name}</div>
+      </div>
+    `;
+  }
+  
+  let filesHtml = '';
+  
+  if (check.files && check.files.length > 0) {
+    const imageFiles = check.files.filter(file => file.match(/\.(jpg|jpeg|png|webp)$/i));
+    const pdfFiles = check.files.filter(file => file.match(/\.pdf$/i));
+    const otherFiles = check.files.filter(file => !file.match(/\.(jpg|jpeg|png|webp|pdf)$/i));
     
-    document.body.appendChild(printDiv);
+    filesHtml = `
+      <div style="margin: 20px 0;">
+        <div style="font-size: 12px; font-weight: bold; margin-bottom: 12px; color: #1a3a5c; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
+          📎 Documents attachés (${check.files.length} fichier(s))
+        </div>
+    `;
     
-    try {
-      const canvas = await html2canvas(printDiv, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        logging: false,
-        useCORS: true,
-        allowTaint: false
-      });
+    if (imageFiles.length > 0) {
+      filesHtml += `
+        <div style="margin-bottom: 15px;">
+          <div style="font-size: 11px; font-weight: bold; margin-bottom: 8px; color: #666;">Images (${imageFiles.length})</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+      `;
       
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-      
-      const imgWidth = 210;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
-      let position = 0;
-      const pageHeight = 297;
-
-      if (imgHeight < pageHeight) {
-        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-      } else {
-        let heightLeft = imgHeight;
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-        while (heightLeft > 0) {
-          position = heightLeft - imgHeight;
-          pdf.addPage();
-          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-          heightLeft -= pageHeight;
-        }
+      for (const imageFile of imageFiles) {
+        const fileUrl = `${import.meta.env.VITE_API_URL || 'https://amg-telecom-backd-production.up.railway.app'}/api/files/${imageFile}`;
+        filesHtml += `
+          <div style="margin-bottom: 10px; border: 1px solid #e5e7eb; border-radius: 4px; overflow: hidden; max-width: 200px;">
+            <img 
+              src="${fileUrl}" 
+              style="width: 100%; max-height: 150px; object-fit: cover;" 
+              alt="${imageFile}"
+              onerror="this.style.display='none'"
+            />
+            <div style="font-size: 9px; padding: 4px; text-align: center; background: #f9fafb; word-break: break-all;">${imageFile}</div>
+          </div>
+        `;
       }
       
-      pdf.save(`bordereau_${check.reference_remise || 'remise'}.pdf`);
-      showToast('PDF généré avec succès', 'success');
-    } catch (error) {
-      console.error('PDF generation error:', error);
-      showToast('Erreur lors de la génération du PDF', 'error');
-    } finally {
-      document.body.removeChild(printDiv);
-      setPrinting(false);
+      filesHtml += `
+          </div>
+        </div>
+      `;
     }
+    
+    if (pdfFiles.length > 0) {
+      filesHtml += `
+        <div style="margin-bottom: 15px;">
+          <div style="font-size: 11px; font-weight: bold; margin-bottom: 8px; color: #666;">Documents PDF (${pdfFiles.length})</div>
+          <div style="border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px;">
+      `;
+      
+      for (const pdfFile of pdfFiles) {
+        filesHtml += `
+          <div style="padding: 6px 0; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 16px;">📄</span>
+            <div style="flex: 1;">
+              <div style="font-size: 10px; font-weight: 500; word-break: break-all;">${pdfFile}</div>
+            </div>
+          </div>
+        `;
+      }
+      
+      filesHtml += `
+          </div>
+        </div>
+      `;
+    }
+    
+    if (otherFiles.length > 0) {
+      filesHtml += `
+        <div style="margin-bottom: 15px;">
+          <div style="font-size: 11px; font-weight: bold; margin-bottom: 8px; color: #666;">Autres fichiers (${otherFiles.length})</div>
+          <div style="border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px;">
+      `;
+      
+      for (const otherFile of otherFiles) {
+        filesHtml += `
+          <div style="padding: 6px 0; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 16px;">📎</span>
+            <div style="flex: 1;">
+              <div style="font-size: 10px; word-break: break-all;">${otherFile}</div>
+            </div>
+          </div>
+        `;
+      }
+      
+      filesHtml += `
+          </div>
+        </div>
+      `;
+    }
+    
+    filesHtml += `</div>`;
+  }
+  
+  const formatDateForPrint = (dateString) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
+  
+  const formatTimeForPrint = (dateString) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  };
+  
+  const formatCurrency = (amount) => {
+    if (amount === undefined || amount === null) return '0 MAD';
+    const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+    if (isNaN(num)) return '0 MAD';
+    return new Intl.NumberFormat('fr-MA', { style: 'currency', currency: 'MAD' }).format(num);
+  };
+  
+  printDiv.innerHTML = `
+    <div style="padding: 20px; max-width: 800px; margin: 0 auto; font-family: Arial, sans-serif; font-size: 11px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #1a3a5c; padding-bottom: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          ${mainLogoBase64 ? `<img src="${mainLogoBase64}" alt="GROUPE Logo" style="height: 120px; width: 120px;" />` : '<div style="height: 120px; width: 120px;"></div>'}
+        </div>
+        <div style="text-align: right;">
+          ${bankHeaderHtml}
+        </div>
+      </div>
+
+      <div style="text-align: right; margin-bottom: 12px;">
+        <div style="font-size: 10px; color: #666;">BORDEREAU N°</div>
+        <div style="font-size: 12px; font-weight: bold;">${check.reference_remise || 'N/A'}</div>
+      </div>
+
+      <div style="text-align: center; margin-bottom: 15px;">
+        <div style="font-size: 16px; font-weight: bold; color: #1a3a5c;">BORDEREAU DE REMISE DE VALEUR</div>
+        <div style="font-size: 11px; color: #666;">CHÈQUE(S)</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; border: 1px solid #e5e7eb; padding: 10px; background: #fafafa;">
+        <div>
+          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">A (Ville)</div>
+          <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.ville || 'Casablanca'}</div>
+        </div>
+        <div>
+          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Le (Date et heure)</div>
+          <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${formatDateForPrint(check.date_et_heure)} ${formatTimeForPrint(check.date_et_heure)}</div>
+        </div>
+        <div>
+          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Code agence remise</div>
+          <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.code_agence_remise || '78076'}</div>
+        </div>
+        <div>
+          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Code agence compte</div>
+          <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.code_agence_compte || '78076'}</div>
+        </div>
+        <div>
+          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">RIB Remettant</div>
+          <div style="font-size: 10px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd; word-break: break-all;">${check.rib_remettant || 'N/A'}</div>
+        </div>
+        <div>
+          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Nb valeurs</div>
+          <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.nombre_de_valeurs || 1}</div>
+        </div>
+        <div>
+          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Type remise</div>
+          <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.type_remise || 'ENCAISSEMENT'}</div>
+        </div>
+        <div>
+          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Taux Escompte</div>
+          <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.taux_escompte || 0} %</div>
+        </div>
+        <div>
+          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Montant total</div>
+          <div style="font-size: 11px; font-weight: bold; color: #16a34a; padding: 3px 0; border-bottom: 1px solid #ddd;">${formatCurrency(check.montant_total_dh)}</div>
+        </div>
+        <div style="grid-column: span 2;">
+          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Nom agence remise</div>
+          <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.nom_agence_remise || 'N/A'}</div>
+        </div>
+        <div>
+          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Client Remettant</div>
+          <div style="font-size: 11px; font-weight: bold; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.client_remettant || 'N/A'}</div>
+        </div>
+        <div style="grid-column: span 2;">
+          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Nom agence compte</div>
+          <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.nom_agence_compte || 'N/A'}</div>
+        </div>
+        <div>
+          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Utilisateur</div>
+          <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.utilisateur || 'N/A'}</div>
+        </div>
+      </div>
+
+      ${filesHtml}
+
+      <div style="display: flex; justify-content: space-between; margin-top: 20px; padding-top: 12px; border-top: 1px dashed #ccc;">
+        <div style="text-align: center; width: 45%;">
+          <div style="font-size: 10px; color: #666; margin-bottom: 20px;">SIGNATURE CLIENT</div>
+          <div style="border-top: 1px solid #000; width: 80%; margin: 0 auto;"></div>
+        </div>
+        <div style="text-align: center; width: 45%;">
+          <div style="font-size: 10px; color: #666; margin-bottom: 20px;">SIGNATURE AGENCE</div>
+          <div style="border-top: 1px solid #000; width: 80%; margin: 0 auto;"></div>
+        </div>
+      </div>
+
+      <div style="margin-top: 15px; text-align: center; font-size: 8px; color: #999; border-top: 1px solid #eee; padding-top: 10px;">
+        Document généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(printDiv);
+  
+  try {
+    const canvas = await html2canvas(printDiv, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      logging: false,
+      useCORS: true,
+      allowTaint: false
+    });
+    
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+    
+    const imgWidth = 210;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    
+    let position = 0;
+    const pageHeight = 297;
+
+    if (imgHeight < pageHeight) {
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+    } else {
+      let heightLeft = imgHeight;
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+    }
+    
+    pdf.save(`bordereau_${check.reference_remise || 'remise'}.pdf`);
+    showToast('PDF généré avec succès', 'success');
+  } catch (error) {
+    console.error('PDF generation error:', error);
+    showToast('Erreur lors de la génération du PDF', 'error');
+  } finally {
+    document.body.removeChild(printDiv);
+    setPrinting(false);
+  }
+};
   
   const handlePrint = async (check) => {
     setPrintCheck(check);
