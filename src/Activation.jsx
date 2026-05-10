@@ -2845,7 +2845,6 @@ const exportSaleDetailsToExcel = async (sale) => {
                                 type="number" 
                                 className="activation-input price-input" 
                                 placeholder="0.00"
-                                value={act.price}
                                 onChange={(e) => updateActivationField(act.id, 'price', parseFloat(e.target.value) || 0)}
                                 step="0.01"
                                 min="0"
