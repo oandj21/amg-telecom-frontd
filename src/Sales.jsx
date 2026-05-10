@@ -1,3 +1,4 @@
+// Sales.tsx
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
@@ -1431,6 +1432,68 @@ const styles = `
     font-size: 0.7rem;
     cursor: pointer;
   }
+
+  /* Product Owner Section Styles */
+  .product-owner-group {
+    display: flex;
+    gap: 1rem;
+    background: #f8fafc;
+    padding: 1rem;
+    border-radius: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  
+  .product-owner-option {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid #e2e8f0;
+    background: white;
+  }
+  
+  .product-owner-option.selected {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    color: #2563eb;
+  }
+  
+  .product-owner-option.amg.selected {
+    border-color: #3b82f6;
+    background: #eff6ff;
+  }
+  
+  .product-owner-option.client.selected {
+    border-color: #10b981;
+    background: #ecfdf5;
+    color: #059669;
+  }
+  
+  .client-info-box {
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    border-radius: 0.75rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  
+  .client-info-icon {
+    color: #d97706;
+    flex-shrink: 0;
+  }
+  
+  .client-info-text {
+    font-size: 0.875rem;
+    color: #92400e;
+  }
 `;
 
 // ==================== SEARCHABLE SELECT COMPONENT ====================
@@ -2220,6 +2283,9 @@ const Sales = () => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [toasts, setToasts] = useState([]);
   
+  // ---- New: Product Owner State ----
+  const [productOwner, setProductOwner] = useState('amg'); // 'amg' or 'client'
+  
   // ---- Delete Confirm State ----
   const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, saleId: null, saleInfo: '' });
   const [deletingSale, setDeletingSale] = useState(false);
@@ -2263,6 +2329,16 @@ const Sales = () => {
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
+
+  // ---- Reset product state when owner changes ----
+  useEffect(() => {
+    // Clear items when switching to client mode
+    if (productOwner === 'client') {
+      setItems([]);
+      setProductId('');
+      setQty(1);
+    }
+  }, [productOwner]);
 
   // ---- Toast Management ----
   const showToast = (message, type = 'success') => {
@@ -2359,6 +2435,7 @@ const Sales = () => {
     setSelectedGpsDevices([]);
     setIsEditingMode(false);
     setEditingSale(null);
+    setProductOwner('amg'); // Reset to AMG
   };
 
   const loadSaleForEditing = (sale) => {
@@ -2382,6 +2459,8 @@ const Sales = () => {
     if (sale.gpsDevices && sale.gpsDevices.length > 0) {
       setSelectedGpsDevices(sale.gpsDevices);
     }
+    // For editing, we check if the sale has products - if yes, it's likely AMG, but we'll set based on existing items
+    setProductOwner(saleItems.length > 0 ? 'amg' : 'client');
     setOpen(true);
   };
 
@@ -2555,68 +2634,91 @@ const Sales = () => {
     }
   };
 
-  const submit = async () => {
-    if (items.length === 0) {
-      showToast('Ajoutez au moins un produit', 'error');
-      return;
-    }
-    if (isEditingMode) {
-      await handleUpdateSale();
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      let finalClientId = clientId;
-      if (clientMode === 'new') {
-        if (!newClient.nom || !newClient.telephone) {
-          showToast('Nom et téléphone du client requis', 'error');
-          setLoading(false);
-          return;
-        }
-        const clientData = {
-          nom: newClient.nom,
-          telephone: newClient.telephone,
-          email: newClient.email || null,
-          adresse: newClient.adresse || null,
-          ice_client: newClient.ice_client || null
-        };
-        const result = await dispatch(createClient(clientData)).unwrap();
-        finalClientId = result.id;
-        showToast(`Client "${newClient.nom}" créé avec succès`, 'success');
-      } else if (!clientId) {
-        showToast('Sélectionnez un client', 'error');
+  // Replace the submit function in your Sales component with this:
+
+const submit = async () => {
+  // For client product owner, we don't need items
+  if (productOwner === 'amg' && items.length === 0) {
+    showToast('Ajoutez au moins un produit', 'error');
+    return;
+  }
+  
+  if (isEditingMode) {
+    await handleUpdateSale();
+    return;
+  }
+  
+  setLoading(true);
+  setError(null);
+  try {
+    let finalClientId = clientId;
+    if (clientMode === 'new') {
+      if (!newClient.nom || !newClient.telephone) {
+        showToast('Nom et téléphone du client requis', 'error');
         setLoading(false);
         return;
       }
-      const productsData = items.map(item => ({
+      const clientData = {
+        nom: newClient.nom,
+        telephone: newClient.telephone,
+        email: newClient.email || null,
+        adresse: newClient.adresse || null,
+        ice_client: newClient.ice_client || null
+      };
+      const result = await dispatch(createClient(clientData)).unwrap();
+      finalClientId = result.id;
+      showToast(`Client "${newClient.nom}" créé avec succès`, 'success');
+    } else if (!clientId) {
+      showToast('Sélectionnez un client', 'error');
+      setLoading(false);
+      return;
+    }
+    
+    let productsData = [];
+    // For AMG: send the items
+    if (productOwner === 'amg') {
+      productsData = items.map(item => ({
         id: item.productId,
         quantite: item.quantity,
         prix: item.unitPrice
       }));
-      const gpsDevicesData = selectedGpsDevices.map(device => device.id);
-      const saleData = {
-        client_id: finalClientId,
-        produits: productsData,
-        gps_devices: gpsDevicesData,
-        status: saleStatus,
-        payment_status: paymentStatus,
-        payment_due_date: paymentDueDate || null,
-        payment_method: paymentMethod,
-        initial_payment: paymentStatus !== 'unpaid' ? (parseFloat(paymentAmount) || 0) : 0
-      };
-      await dispatch(createSale(saleData)).unwrap();
-      showToast(`Vente créée avec succès`, 'success');
-      reset();
-      setOpen(false);
-      dispatch(fetchSales());
-    } catch (err) {
-      setError(err.message || 'Erreur lors de la création de la vente');
-      showToast(err.message || 'Erreur lors de la création de la vente', 'error');
-    } finally {
-      setLoading(false);
     }
-  };
+    // For client product owner, send empty array
+    // (backend will handle this - no products attached)
+    
+    const saleData = {
+      client_id: finalClientId,
+      product_owner: productOwner, // IMPORTANT: Add this field
+      produits: productsData,
+      status: saleStatus,
+      payment_due_date: paymentDueDate || null,
+      payment_method: paymentMethod,
+      initial_payment: paymentStatus !== 'unpaid' ? (parseFloat(paymentAmount) || 0) : 0,
+    };
+    
+    // REMOVED: gps_devices, is_client_sale (these fields don't exist in backend)
+    
+    console.log('Sending sale data:', saleData); // Debug log
+    
+    await dispatch(createSale(saleData)).unwrap();
+    showToast(`Vente ${productOwner === 'client' ? 'client' : ''} créée avec succès`, 'success');
+    reset();
+    setOpen(false);
+    dispatch(fetchSales());
+  } catch (err) {
+    console.error('Sale creation error:', err);
+    // Show detailed validation errors if available
+    if (err.response?.data?.errors) {
+      const errorMessages = Object.values(err.response.data.errors).flat().join(', ');
+      showToast(`Erreur: ${errorMessages}`, 'error');
+    } else {
+      showToast(err.message || 'Erreur lors de la création de la vente', 'error');
+    }
+    setError(err.message || 'Erreur lors de la création de la vente');
+  } finally {
+    setLoading(false);
+  }
+};
 
   // ---- Invoice Generation ----
   const getLogoBase64 = async () => {
@@ -2972,18 +3074,21 @@ const Sales = () => {
     return matchesSearch && matchesStatus && matchesPayment;
   });
 
-  // Calculate cart totals
+  // Calculate cart totals (only used for AMG mode)
   const subtotal = useMemo(() => {
+    if (productOwner === 'client') return 0;
     return items.reduce((sum, item) => sum + (safeNumber(item.unitPrice) * safeNumber(item.quantity)), 0);
-  }, [items]);
+  }, [items, productOwner]);
 
   const tva = useMemo(() => {
+    if (productOwner === 'client') return 0;
     return subtotal * 0.2;
-  }, [subtotal]);
+  }, [subtotal, productOwner]);
 
   const total = useMemo(() => {
+    if (productOwner === 'client') return 0;
     return subtotal + tva;
-  }, [subtotal, tva]);
+  }, [subtotal, tva, productOwner]);
   
   const totalRevenue = useMemo(() => {
     return filteredSales.reduce((sum, s) => sum + safeNumber(s.amount_paid), 0);
@@ -3225,8 +3330,8 @@ const Sales = () => {
                               </>
                             )}
                           </div>
-                         </td>
-                       </tr>
+                          </td>
+                        </tr>
                     );
                   })}
                   {filteredSales.length === 0 && (
@@ -3242,68 +3347,68 @@ const Sales = () => {
             </div>
             
             {/* Pagination */}
-{totalPages > 1 && (
-  <div className="sales-pagination-container">
-    <button 
-      className="sales-pagination-btn"
-      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} 
-      disabled={currentPage === 1}
-    >
-      <ChevronLeft size={16} />
-      Précédent
-    </button>
-    
-    {(() => {
-      const pages = [];
-      const maxVisible = 5;
-      
-      if (totalPages <= maxVisible) {
-        for (let i = 1; i <= totalPages; i++) {
-          pages.push(i);
-        }
-      } else {
-        if (currentPage <= 3) {
-          for (let i = 1; i <= 4; i++) pages.push(i);
-          pages.push('...');
-          pages.push(totalPages);
-        } else if (currentPage >= totalPages - 2) {
-          pages.push(1);
-          pages.push('...');
-          for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
-        } else {
-          pages.push(1);
-          pages.push('...');
-          for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
-          pages.push('...');
-          pages.push(totalPages);
-        }
-      }
-      
-      return pages.map((page, index) => (
-        page === '...' ? (
-          <span key={`ellipsis-${index}`} className="sales-pagination-info">...</span>
-        ) : (
-          <button
-            key={page}
-            className={`sales-pagination-btn ${currentPage === page ? 'sales-pagination-active' : ''}`}
-            onClick={() => setCurrentPage(page)}
-          >
-            {page}
-          </button>
-        )
-      ));
-    })()}
-    
-    <button 
-      className="sales-pagination-btn"
-      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} 
-      disabled={currentPage === totalPages}
-    >
-      Suivant
-      <ChevronRight size={16} />
-    </button>
-  </div>
-)}
+            {totalPages > 1 && (
+              <div className="sales-pagination-container">
+                <button 
+                  className="sales-pagination-btn"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} 
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft size={16} />
+                  Précédent
+                </button>
+                
+                {(() => {
+                  const pages = [];
+                  const maxVisible = 5;
+                  
+                  if (totalPages <= maxVisible) {
+                    for (let i = 1; i <= totalPages; i++) {
+                      pages.push(i);
+                    }
+                  } else {
+                    if (currentPage <= 3) {
+                      for (let i = 1; i <= 4; i++) pages.push(i);
+                      pages.push('...');
+                      pages.push(totalPages);
+                    } else if (currentPage >= totalPages - 2) {
+                      pages.push(1);
+                      pages.push('...');
+                      for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+                    } else {
+                      pages.push(1);
+                      pages.push('...');
+                      for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+                      pages.push('...');
+                      pages.push(totalPages);
+                    }
+                  }
+                  
+                  return pages.map((page, index) => (
+                    page === '...' ? (
+                      <span key={`ellipsis-${index}`} className="sales-pagination-info">...</span>
+                    ) : (
+                      <button
+                        key={page}
+                        className={`sales-pagination-btn ${currentPage === page ? 'sales-pagination-active' : ''}`}
+                        onClick={() => setCurrentPage(page)}
+                      >
+                        {page}
+                      </button>
+                    )
+                  ));
+                })()}
+                
+                <button 
+                  className="sales-pagination-btn"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} 
+                  disabled={currentPage === totalPages}
+                >
+                  Suivant
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            )}
           </>
         )}
       </Card>
@@ -3405,6 +3510,41 @@ const Sales = () => {
             </div>
             
             <div className="modern-dialog-body">
+              {/* Product Owner Selection - Only show for new sales, not for editing */}
+              {!isEditingMode && (
+                <div className="modern-form-section">
+                  <div className="modern-form-header">
+                    <Package className="modern-form-header-icon" />
+                    <span className="modern-form-header-title">Type de vente</span>
+                  </div>
+                  <div className="product-owner-group">
+                    <div 
+                      className={`product-owner-option amg ${productOwner === 'amg' ? 'selected' : ''}`}
+                      onClick={() => setProductOwner('amg')}
+                    >
+                      <Package size={18} />
+                      <span>Vente AMG (Produits)</span>
+                    </div>
+                    <div 
+                      className={`product-owner-option client ${productOwner === 'client' ? 'selected' : ''}`}
+                      onClick={() => setProductOwner('client')}
+                    >
+                      <User size={18} />
+                      <span>Vente Client (Hors AMG)</span>
+                    </div>
+                  </div>
+                  {productOwner === 'client' && (
+                    <div className="client-info-box">
+                      <Info className="client-info-icon" size={18} />
+                      <div className="client-info-text">
+                        Mode vente client sélectionné : Aucun produit ne sera ajouté. Le total de la vente sera de 0 MAD.
+                        Vous pouvez toujours gérer les paiements ultérieurement.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              
               {/* Client Section */}
               <div className="modern-form-section">
                 <div className="modern-form-header">
@@ -3497,105 +3637,107 @@ const Sales = () => {
                 )}
               </div>
 
-              {/* Products Section */}
-              <div className="modern-form-section">
-                <div className="modern-form-header">
-                  <Package className="modern-form-header-icon" />
-                  <span className="modern-form-header-title">Produits & Services</span>
-                  <span className="modern-form-header-subtitle">{items.length} article(s)</span>
-                </div>
-                
-                <div className="add-item-row">
-                  <div className="add-item-field">
-                    <SearchableSelect
-                      options={products}
-                      value={productId}
-                      onChange={setProductId}
-                      placeholder="Rechercher un produit..."
-                      renderOption={(product) => (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                          <div>
-                            <div style={{ fontWeight: 600 }}>{product.nom}</div>
-                            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{product.marque}</div>
+              {/* Products Section - Only show for AMG mode */}
+              {productOwner === 'amg' && (
+                <div className="modern-form-section">
+                  <div className="modern-form-header">
+                    <Package className="modern-form-header-icon" />
+                    <span className="modern-form-header-title">Produits & Services</span>
+                    <span className="modern-form-header-subtitle">{items.length} article(s)</span>
+                  </div>
+                  
+                  <div className="add-item-row">
+                    <div className="add-item-field">
+                      <SearchableSelect
+                        options={products}
+                        value={productId}
+                        onChange={setProductId}
+                        placeholder="Rechercher un produit..."
+                        renderOption={(product) => (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                            <div>
+                              <div style={{ fontWeight: 600 }}>{product.nom}</div>
+                              <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{product.marque}</div>
+                            </div>
+                            <div style={{ fontWeight: 600, color: '#2563eb' }}>
+                              {safeToFixed(product.prix_vente || product.prix)} MAD
+                            </div>
                           </div>
-                          <div style={{ fontWeight: 600, color: '#2563eb' }}>
-                            {safeToFixed(product.prix_vente || product.prix)} MAD
-                          </div>
-                        </div>
-                      )}
-                    />
+                        )}
+                      />
+                    </div>
+                    <div className="add-item-quantity">
+                      <input 
+                        type="number" 
+                        min={1} 
+                        value={qty} 
+                        onChange={(e) => setQty(parseInt(e.target.value) || 1)} 
+                        className="modern-input" 
+                        placeholder="Qté"
+                      />
+                    </div>
+                    <div className="add-item-button">
+                      <button onClick={addItem} className="modern-btn modern-btn-primary modern-btn-sm" type="button">
+                        <Plus size={14} /> Ajouter
+                      </button>
+                    </div>
                   </div>
-                  <div className="add-item-quantity">
-                    <input 
-                      type="number" 
-                      min={1} 
-                      value={qty} 
-                      onChange={(e) => setQty(parseInt(e.target.value) || 1)} 
-                      className="modern-input" 
-                      placeholder="Qté"
-                    />
-                  </div>
-                  <div className="add-item-button">
-                    <button onClick={addItem} className="modern-btn modern-btn-primary modern-btn-sm" type="button">
-                      <Plus size={14} /> Ajouter
-                    </button>
-                  </div>
-                </div>
 
-                {items.length > 0 && (
-                  <div className="modern-items-container">
-                    <table className="modern-items-table">
-                      <thead>
-                        <tr>
-                          <th>Produit</th>
-                          <th style={{ width: '80px' }}>Qté</th>
-                          <th style={{ width: '100px' }}>Prix unit.</th>
-                          <th style={{ width: '100px' }} className="text-right">Total</th>
-                          <th style={{ width: '40px' }}></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {items.map((item) => (
-                          <tr key={item.productId}>
-                            <td>
-                              <div style={{ fontWeight: 500 }}>{item.name}</div>
-                              <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
-                                Catégorie: {item.categorie}
-                              </div>
-                             </td>
-                            <td>
-                              <input 
-                                type="number" 
-                                min={1} 
-                                value={item.quantity} 
-                                onChange={(e) => updateQuantity(item.productId, e.target.value)} 
-                                className="modern-item-input" 
-                              />
-                             </td>
-                            <td>
-                              <input 
-                                type="number" 
-                                value={item.unitPrice} 
-                                onChange={(e) => updatePrice(item.productId, e.target.value)} 
-                                step="0.01" 
-                                className="modern-item-input" 
-                              />
-                             </td>
-                            <td className="text-right font-semibold">
-                              {safeToFixed(item.unitPrice * item.quantity)} MAD
-                            </td>
-                            <td className="text-right">
-                              <button onClick={() => removeItem(item.productId)} className="modern-btn-danger modern-btn-sm" style={{ padding: '0.25rem 0.5rem', borderRadius: '0.375rem' }} type="button">
-                                <Trash2 size={12} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+                  {items.length > 0 && (
+                    <div className="modern-items-container">
+                      <table className="modern-items-table">
+                        <thead>
+                          <tr>
+                            <th>Produit</th>
+                            <th style={{ width: '80px' }}>Qté</th>
+                            <th style={{ width: '100px' }}>Prix unit.</th>
+                            <th style={{ width: '100px' }} className="text-right">Total</th>
+                            <th style={{ width: '40px' }}></th>
+                           </tr>
+                        </thead>
+                        <tbody>
+                          {items.map((item) => (
+                            <tr key={item.productId}>
+                              <td>
+                                <div style={{ fontWeight: 500 }}>{item.name}</div>
+                                <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                                  Catégorie: {item.categorie}
+                                </div>
+                              </td>
+                              <td>
+                                <input 
+                                  type="number" 
+                                  min={1} 
+                                  value={item.quantity} 
+                                  onChange={(e) => updateQuantity(item.productId, e.target.value)} 
+                                  className="modern-item-input" 
+                                />
+                              </td>
+                              <td>
+                                <input 
+                                  type="number" 
+                                  value={item.unitPrice} 
+                                  onChange={(e) => updatePrice(item.productId, e.target.value)} 
+                                  step="0.01" 
+                                  className="modern-item-input" 
+                                />
+                              </td>
+                              <td className="text-right font-semibold">
+                                {safeToFixed(item.unitPrice * item.quantity)} MAD
+                              </td>
+                              <td className="text-right">
+                                <button onClick={() => removeItem(item.productId)} className="modern-btn-danger modern-btn-sm" style={{ padding: '0.25rem 0.5rem', borderRadius: '0.375rem' }} type="button">
+                                  <Trash2 size={12} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Sale Status Section */}
               <div className="modern-form-grid">
@@ -3717,8 +3859,8 @@ const Sales = () => {
                 )}
               </div>
 
-              {/* Total Box */}
-              {!isEditingMode && (
+              {/* Total Box - Only show for AMG mode */}
+              {!isEditingMode && productOwner === 'amg' && (
                 <div className="modern-total-box">
                   <div className="modern-total-row">
                     <span>Sous-total HT</span>
@@ -3731,6 +3873,16 @@ const Sales = () => {
                   <div className="modern-total-final">
                     <span>Total TTC</span>
                     <span>{safeToFixed(total)} MAD</span>
+                  </div>
+                </div>
+              )}
+              
+              {/* For client mode, show a simpler total box */}
+              {!isEditingMode && productOwner === 'client' && (
+                <div className="modern-total-box">
+                  <div className="modern-total-final">
+                    <span>Total TTC</span>
+                    <span>0 MAD</span>
                   </div>
                 </div>
               )}

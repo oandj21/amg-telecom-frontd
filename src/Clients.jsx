@@ -1,14 +1,17 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Plus, Pencil, Trash2, Search, X, RefreshCw, AlertTriangle, CheckCircle, Info, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, X, RefreshCw, AlertTriangle, CheckCircle, Info, ChevronLeft, ChevronRight, FileSpreadsheet } from 'lucide-react';
 import { ExportMenu } from './ExportMenu';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 import {
   fetchClients,
   createClient,
   updateClient,
   deleteClient,
   searchClients,
-  clearClientError
+  clearClientError,
+  selectSales
 } from './Store/store';
 
 // ==================== STYLES ====================
@@ -901,11 +904,465 @@ const ConfirmDialog = ({ isOpen, title, message, onConfirm, onCancel, variant = 
   );
 };
 
+// ==================== HELPER FUNCTIONS FOR EXPORT ====================
+const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
+const PLAN_LABEL = { '1m': '1 mois', '3m': '3 mois', '6m': '6 mois', '12m': '12 mois' };
+
+const safeNumber = (value) => {
+  const num = Number(value);
+  return isNaN(num) ? 0 : num;
+};
+
+const safeToFixed = (value, decimals = 2) => {
+  return safeNumber(value).toFixed(decimals);
+};
+
+const formatDate = (dateString) => {
+  if (!dateString) return '-';
+  return new Date(dateString).toLocaleDateString('fr-FR', {
+    day: '2-digit', month: '2-digit', year: 'numeric'
+  });
+};
+
+const formatDateTime = (dateString) => {
+  if (!dateString) return '-';
+  return new Date(dateString).toLocaleString('fr-FR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+};
+
+const getCompanyInfo = () => {
+  const saved = localStorage.getItem('company_info');
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch (e) {
+      return {
+        name: 'AMG TELECOM Sarl',
+        address: '82 Angle Abdelmounem et Rue Soumaya ETG 2 N°4, CASABLANCA',
+        phone: '+212 661 685 758',
+        email: 'contact@amgtelecom.ma',
+        ice: '003272997000058',
+        rc: '577849',
+        patente: '34779711',
+        tax_number: '53711710',
+        cnss: '4767398',
+        rib: '011 780 0000762100016378 22',
+        tp_number: '34779711'
+      };
+    }
+  }
+  return {
+    name: 'AMG TELECOM Sarl',
+    address: '82 Angle Abdelmounem et Rue Soumaya ETG 2 N°4, CASABLANCA',
+    phone: '+212 661 685 758',
+    email: 'contact@amgtelecom.ma',
+    ice: '003272997000058',
+    rc: '577849',
+    patente: '34779711',
+    tax_number: '53711710',
+    cnss: '4767398',
+    rib: '011 780 0000762100016378 22',
+    tp_number: '34779711'
+  };
+};
+
+// Helper to get product price
+const getProductPrice = (activation) => {
+  if (activation.product && activation.product.prix) {
+    return safeNumber(activation.product.prix);
+  }
+  if (activation.product && activation.product.prix_vente) {
+    return safeNumber(activation.product.prix_vente);
+  }
+  if (activation.produit && activation.produit.prix) {
+    return safeNumber(activation.produit.prix);
+  }
+  return safeNumber(activation.price);
+};
+
+// Helper to get total paid (activation + renewals)
+const getTotalPaid = (activation) => {
+  let total = safeNumber(activation.price);
+  if (activation.renewal_history && Array.isArray(activation.renewal_history)) {
+    activation.renewal_history.forEach(entry => {
+      if (entry.action === 'renewal') {
+        total += safeNumber(entry.price);
+      }
+    });
+  }
+  return total;
+};
+
+// Helper to get all action history for an activation
+const getAllActionHistory = (activation) => {
+  const actions = [];
+  
+  if (activation.activated_at) {
+    actions.push({
+      id: `activation_${activation.id}`,
+      date: activation.activated_at,
+      action_type: 'Activation',
+      plan: activation.plan_abonnement,
+      amount: safeNumber(activation.price),
+      user_name: activation.created_by_user_name || 'System',
+      details: `Activation initiale avec plan ${PLAN_LABEL[activation.plan_abonnement] || activation.plan_abonnement}`
+    });
+  }
+  
+  if (activation.renewal_history && Array.isArray(activation.renewal_history)) {
+    activation.renewal_history.forEach((entry, idx) => {
+      if (entry.action === 'renewal') {
+        actions.push({
+          id: `renewal_${activation.id}_${idx}`,
+          date: entry.date,
+          action_type: 'Renouvellement',
+          plan: entry.new_plan,
+          amount: safeNumber(entry.price),
+          old_plan: entry.old_plan,
+          new_plan: entry.new_plan,
+          user_name: entry.user_name || 'System',
+          details: `${PLAN_LABEL[entry.old_plan] || entry.old_plan} → ${PLAN_LABEL[entry.new_plan] || entry.new_plan}`
+        });
+      } else if (entry.action === 'suspension') {
+        actions.push({
+          id: `suspension_${activation.id}_${idx}`,
+          date: entry.date,
+          action_type: 'Suspension',
+          amount: 0,
+          user_name: entry.user_name || 'System',
+          details: `Service suspendu${entry.reason ? `: ${entry.reason}` : ''}`
+        });
+      } else if (entry.action === 'reactivation') {
+        actions.push({
+          id: `reactivation_${activation.id}_${idx}`,
+          date: entry.date,
+          action_type: 'Réactivation',
+          amount: 0,
+          user_name: entry.user_name || 'System',
+          details: 'Service réactivé'
+        });
+      }
+    });
+  }
+  
+  actions.sort((a, b) => new Date(a.date) - new Date(b.date));
+  return actions;
+};
+
+const exportClientSalesToExcel = async (client, sales, fetchSaleActivations) => {
+  if (!sales || sales.length === 0) {
+    alert(`Aucune vente trouvée pour le client "${client.nom}"`);
+    return;
+  }
+
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet(`Client_${client.nom}_Ventes`);
+
+    // Logo and company header (unchanged)
+    let logoAdded = false;
+    try {
+      const logoUrl = '/logo.png';
+      const response = await fetch(logoUrl);
+      if (response.ok) {
+        const blob = await response.blob();
+        const reader = new FileReader();
+        const base64Logo = await new Promise((resolve) => {
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(blob);
+        });
+        const base64Data = base64Logo.split(',')[1];
+        const imageId = workbook.addImage({
+          base64: base64Data,
+          extension: 'png',
+        });
+        worksheet.addImage(imageId, {
+          tl: { col: 0, row: 0 },
+          ext: { width: 180, height: 130 }
+        });
+        logoAdded = true;
+      }
+    } catch (err) {
+      console.warn('Logo non trouvé', err);
+    }
+
+    let rowOffset = 0;
+    if (logoAdded) {
+      worksheet.addRow([]);
+      rowOffset = 2;
+    }
+
+    const companyInfo = getCompanyInfo();
+    const companyName = companyInfo.name;
+    const companyAddress = companyInfo.address;
+    const companyPhone = companyInfo.phone;
+    const companyEmail = companyInfo.email;
+    const companyIce = companyInfo.ice;
+    const companyRc = companyInfo.rc;
+    const companyPatente = companyInfo.patente;
+
+    const headerRowStart = 1 + rowOffset;
+
+    worksheet.mergeCells(`D${headerRowStart}:F${headerRowStart}`);
+    worksheet.getCell(`D${headerRowStart}`).value = companyName;
+    worksheet.getCell(`D${headerRowStart}`).font = { bold: true, size: 16 };
+    worksheet.getCell(`D${headerRowStart}`).alignment = { horizontal: 'center', vertical: 'middle' };
+
+    worksheet.mergeCells(`D${headerRowStart + 1}:F${headerRowStart + 1}`);
+    worksheet.getCell(`D${headerRowStart + 1}`).value = companyAddress;
+    worksheet.getCell(`D${headerRowStart + 1}`).font = { size: 10 };
+    worksheet.getCell(`D${headerRowStart + 1}`).alignment = { horizontal: 'center', vertical: 'middle' };
+
+    worksheet.mergeCells(`D${headerRowStart + 2}:F${headerRowStart + 2}`);
+    worksheet.getCell(`D${headerRowStart + 2}`).value = `TEL: ${companyPhone} | EMAIL: ${companyEmail}`;
+    worksheet.getCell(`D${headerRowStart + 2}`).font = { size: 10 };
+    worksheet.getCell(`D${headerRowStart + 2}`).alignment = { horizontal: 'center', vertical: 'middle' };
+
+    worksheet.mergeCells(`D${headerRowStart + 3}:F${headerRowStart + 3}`);
+    worksheet.getCell(`D${headerRowStart + 3}`).value = `ICE: ${companyIce} | RC: ${companyRc} | Patente: ${companyPatente}`;
+    worksheet.getCell(`D${headerRowStart + 3}`).font = { size: 9 };
+    worksheet.getCell(`D${headerRowStart + 3}`).alignment = { horizontal: 'center', vertical: 'middle' };
+
+    worksheet.addRow([]);
+
+    // Title
+    const titleRow = worksheet.addRow([`RAPPORT DES VENTES - CLIENT: ${client.nom.toUpperCase()}`]);
+    worksheet.mergeCells(`A${titleRow.number}:N${titleRow.number}`);
+    worksheet.getCell(`A${titleRow.number}`).font = { bold: true, size: 14 };
+    worksheet.getCell(`A${titleRow.number}`).alignment = { horizontal: 'center' };
+    worksheet.addRow([]);
+
+    // Client info
+    worksheet.addRow(['INFORMATIONS CLIENT']);
+    worksheet.mergeCells(`A${worksheet.lastRow.number}:N${worksheet.lastRow.number}`);
+    worksheet.getCell(`A${worksheet.lastRow.number}`).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF1E3A8A' }
+    };
+    worksheet.getCell(`A${worksheet.lastRow.number}`).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+    worksheet.addRow(['Nom:', client.nom]);
+    worksheet.addRow(['ICE:', client.ice_client || '-']);
+    worksheet.addRow(['Téléphone:', client.telephone || '-']);
+    worksheet.addRow(['Email:', client.email || '-']);
+    worksheet.addRow(['Adresse:', client.adresse || '-']);
+    worksheet.addRow([]);
+
+    // Summary stats
+    let totalSalesAmount = 0;
+    let totalPaidAmount = 0;
+    let amgSalesCount = 0;
+    let clientSalesCount = 0;
+
+    // Prepare sales with activations
+    const salesWithActivations = [];
+    for (const sale of sales) {
+      let activations = [];
+      const hasProducts = (sale.produits && sale.produits.length > 0) || (sale.items && sale.items.length > 0);
+      const isAmgSale = hasProducts;
+
+      if (isAmgSale) {
+        try {
+          activations = await fetchSaleActivations(sale.id);
+        } catch (e) {
+          console.warn(`Could not fetch activations for sale ${sale.id}`);
+        }
+      }
+
+      salesWithActivations.push({
+        ...sale,
+        isAmgSale,
+        activations
+      });
+
+      const saleTotal = safeNumber(sale.total);
+      const salePaid = safeNumber(sale.amount_paid);
+      totalSalesAmount += saleTotal;
+      totalPaidAmount += salePaid;
+      if (isAmgSale) amgSalesCount++;
+      else clientSalesCount++;
+    }
+
+    // Stats row
+    const statsRow = worksheet.addRow([
+      'Total ventes:', sales.length,
+      'Montant total TTC:', `${safeToFixed(totalSalesAmount)} MAD`,
+      'Total encaissé:', `${safeToFixed(totalPaidAmount)} MAD`
+    ]);
+    statsRow.eachCell((cell) => { cell.font = { bold: true }; });
+
+    const statsRow2 = worksheet.addRow([
+      'Ventes AMG (Produits):', amgSalesCount,
+      'Ventes Client (Hors AMG):', clientSalesCount,
+      '', ''
+    ]);
+    worksheet.addRow([]);
+
+    // ========== MAIN LOOP: keep only PRODUITS VENDUS and HISTORIQUE DES ACTIVATIONS ==========
+    for (const sale of salesWithActivations) {
+      // Only process AMG sales (non-AMG sales are completely omitted)
+      if (!sale.isAmgSale) continue;
+
+      // --- PRODUITS VENDUS section ---
+      const saleItems = sale.produits || sale.items || [];
+      let productsTotalTTC = 0; // will be used later for grand total
+
+      if (saleItems.length > 0) {
+        worksheet.addRow([]);
+        const productsHeaderRow = worksheet.addRow(['PRODUITS VENDUS']);
+        worksheet.mergeCells(`A${productsHeaderRow.number}:N${productsHeaderRow.number}`);
+        worksheet.getCell(`A${productsHeaderRow.number}`).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF3B82F6' }
+        };
+        worksheet.getCell(`A${productsHeaderRow.number}`).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+        const productHeaders = ['Produit', 'Quantité', 'Prix Unitaire (MAD)', 'TVA 20% (MAD)', 'Total TTC (MAD)'];
+        const productHeaderRow = worksheet.addRow(productHeaders);
+        productHeaderRow.eachCell((cell) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+          cell.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        });
+
+        for (const item of saleItems) {
+          const qty = safeNumber(item.quantity || item.pivot?.quantite || 1);
+          const unitPrice = safeNumber(item.unitPrice || item.pivot?.prix || item.prix_vente || item.prix);
+          const totalHT = qty * unitPrice;
+          const tva = totalHT * 0.2;
+          const totalTTC = totalHT + tva;
+          productsTotalTTC += totalTTC;
+
+          const row = worksheet.addRow([item.name || item.nom, qty, safeToFixed(unitPrice), safeToFixed(tva), safeToFixed(totalTTC)]);
+          row.eachCell((cell, colNumber) => {
+            if (colNumber >= 3) cell.alignment = { horizontal: 'right' };
+          });
+        }
+
+        worksheet.addRow([]);
+        const productsTotalRow = worksheet.addRow(['', '', '', 'Total TTC produits:', `${safeToFixed(productsTotalTTC)} MAD`]);
+        productsTotalRow.eachCell((cell, colNumber) => {
+          if (colNumber === 5) {
+            cell.font = { bold: true, color: { argb: 'FF2563EB' } };
+            cell.alignment = { horizontal: 'right' };
+          }
+        });
+      }
+
+      // --- HISTORIQUE DES ACTIVATIONS section ---
+      if (sale.activations && sale.activations.length > 0) {
+        worksheet.addRow([]);
+        const actionsHeaderRow = worksheet.addRow(['HISTORIQUE DES ACTIVATIONS']);
+        worksheet.mergeCells(`A${actionsHeaderRow.number}:N${actionsHeaderRow.number}`);
+        worksheet.getCell(`A${actionsHeaderRow.number}`).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF8B5CF6' }
+        };
+        worksheet.getCell(`A${actionsHeaderRow.number}`).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+        // Headers without IMEI and N° SIM
+        const actionHeaders = [
+          'Matricule', 'Action', 'Date', "Date d'expiration", 'Plan', 'Montant (MAD)', 'Statut Actuel'
+        ];
+        const actionHeaderRow = worksheet.addRow(actionHeaders);
+        actionHeaderRow.eachCell((cell) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+          cell.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        });
+
+        for (const activation of sale.activations) {
+          const actions = getAllActionHistory(activation);
+          const currentStatus = activation.status === 'suspended' ? 'Suspendu' :
+                               activation.status === 'expired' ? 'Expiré' :
+                               activation.status === 'pending' ? 'En attente' : 'Actif';
+          const expirationDate = formatDate(activation.expires_at);
+
+          for (const action of actions) {
+            const amount = action.amount > 0 ? action.amount : 0;
+            const rowData = [
+              activation.matricule || '-',
+              action.action_type,
+              formatDateTime(action.date),
+              expirationDate,
+              action.plan ? (PLAN_LABEL[action.plan] || action.plan) : (action.new_plan ? (PLAN_LABEL[action.new_plan] || action.new_plan) : '-'),
+              amount > 0 ? safeToFixed(amount) : '-',
+              currentStatus
+            ];
+            worksheet.addRow(rowData);
+          }
+        }
+
+        // Total activations revenue for this sale
+        let totalActivationsRevenue = 0;
+        for (const activation of sale.activations) {
+          totalActivationsRevenue += getTotalPaid(activation);
+        }
+        worksheet.addRow([]);
+        const activationTotalRow = worksheet.addRow(['', '', '', '', '', 'Total activations:', `${safeToFixed(totalActivationsRevenue)} MAD`]);
+        activationTotalRow.eachCell((cell, colNumber) => {
+          if (colNumber === 7) {
+            cell.font = { bold: true, color: { argb: 'FF16A34A' } };
+            cell.alignment = { horizontal: 'left' };
+          }
+        });
+
+        // Add a blank row for spacing
+        worksheet.addRow([]);
+
+        // ========== NEW: TOTAL GÉNÉRAL row ==========
+        const grandTotal = productsTotalTTC + totalActivationsRevenue;
+        const grandTotalRow = worksheet.addRow(['', '', '', '', '', 'Total général:', `${safeToFixed(grandTotal)} MAD`]);
+        grandTotalRow.eachCell((cell, colNumber) => {
+          if (colNumber === 7) {
+            cell.font = { bold: true, color: { argb: 'FFD97706' } }; // orange color for emphasis
+            cell.alignment = { horizontal: 'left' };
+          }
+        });
+
+      } else if (sale.isAmgSale) {
+        // AMG sale with no activations: still show a note
+        worksheet.addRow([]);
+        worksheet.addRow(['Aucune activation trouvée pour cette vente AMG']);
+      }
+
+      // Add a blank row to separate different sales
+      worksheet.addRow([]);
+    }
+
+    // Auto-size columns
+    worksheet.columns.forEach((column) => {
+      let maxLength = 0;
+      column.eachCell({ includeEmpty: true }, (cell) => {
+        const cellValue = cell.value ? cell.value.toString() : '';
+        let columnLength = cellValue.length;
+        if (columnLength > maxLength) maxLength = columnLength;
+      });
+      let width = Math.max(10, Math.min(maxLength + 2, 35));
+      column.width = width;
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const fileName = `Client_${client.nom}_Ventes_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    saveAs(new Blob([buffer]), fileName);
+
+  } catch (error) {
+    console.error('Excel export error:', error);
+    alert('Erreur lors de l\'export Excel');
+  }
+};
+
 // ==================== MAIN COMPONENT ====================
 const Clients = () => {
   const dispatch = useDispatch();
   const { list: clients, loading, error } = useSelector((state) => state.clients);
-  const { list: sales } = useSelector((state) => state.sales);
+  const sales = useSelector(selectSales);
+  const [exportingClientId, setExportingClientId] = useState(null);
   
   const [search, setSearch] = useState('');
   const [searchTimeout, setSearchTimeout] = useState(null);
@@ -1086,7 +1543,45 @@ const Clients = () => {
   const purchaseCount = (id) => sales?.filter(s => s.client_id === id || s.clientId === id).length || 0;
   const purchaseTotal = (id) => {
     const clientSales = sales?.filter(s => s.client_id === id || s.clientId === id) || [];
-    return clientSales.reduce((sum, sale) => sum + (parseFloat(sale.total) || 0), 0);
+    return clientSales.reduce((sum, sale) => sum + (safeNumber(sale.total) || 0), 0);
+  };
+
+  // Function to fetch activations for a specific sale (for export)
+  const fetchSaleActivations = async (saleId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/activations?sale_id=${saleId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return data.activations || data.data || [];
+      }
+      return [];
+    } catch (err) {
+      console.error('Error fetching activations:', err);
+      return [];
+    }
+  };
+
+  // Export handler for a specific client
+  const handleExportClientSales = async (client) => {
+    const clientSales = sales?.filter(s => s.client_id === client.id || s.clientId === client.id) || [];
+    if (clientSales.length === 0) {
+      showToast(`Aucune vente trouvée pour le client "${client.nom}"`, 'error');
+      return;
+    }
+    
+    setExportingClientId(client.id);
+    try {
+      await exportClientSalesToExcel(client, clientSales, fetchSaleActivations);
+      showToast(`Export des ventes pour "${client.nom}" terminé avec succès`, 'success');
+    } catch (err) {
+      console.error(err);
+      showToast(`Erreur lors de l'export pour "${client.nom}"`, 'error');
+    } finally {
+      setExportingClientId(null);
+    }
   };
 
   if (loading && clients.length === 0) {
@@ -1181,6 +1676,15 @@ const Clients = () => {
                   <td className="text-right font-semibold">{purchaseTotal(c.id).toFixed(2)} MAD</td>
                   <td>
                     <div className="clients-actions-cell">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => handleExportClientSales(c)} 
+                        title={`Exporter toutes les ventes de ${c.nom}`}
+                        disabled={exportingClientId === c.id}
+                      >
+                        <FileSpreadsheet size={16} className="text-green-600" />
+                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => openEdit(c)} title="Modifier">
                         <Pencil size={16} />
                       </Button>

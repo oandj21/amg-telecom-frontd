@@ -17,7 +17,8 @@ import {
   X,
   AlertCircle,
   Bell,
-  User
+  User,
+  Smartphone
 } from 'lucide-react';
 import { logout as logoutAction, fetchChecks, fetchActivations } from './Store/store';
 
@@ -211,6 +212,7 @@ const Sidebar = () => {
     { to: '/ventes', label: 'Ventes', icon: ShoppingCart },
     { to: '/remises', label: 'Remises', icon: Receipt, alert: approachingCount > 0 },
     { to: '/activation', label: 'Activation GPS', icon: Satellite, alert: expiringActivationsCount > 0 },
+    { to: '/client-activation', label: 'Client Activation', icon: Smartphone }, // New link added
     { to: '/utilisateurs', label: 'Utilisateurs', icon: UserCog, adminOnly: true },
     { to: '/parametres', label: 'Paramètres', icon: Settings, adminOnly: true },
     { to: '/profile', label: 'Mon Profil', icon: User }, 

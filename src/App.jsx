@@ -1,4 +1,4 @@
-// App.jsx (updated with Sidebar component)
+// App.jsx (updated with Sidebar component and Client Activation route)
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, Outlet, useLocation } from 'react-router-dom';
 import { Provider, useDispatch, useSelector } from 'react-redux';
@@ -23,6 +23,7 @@ import Users from './Users';
 import Check from './Check';
 import NotFound from './NotFound';
 import Profile from './Profile';
+import ClientActivation from './ClientActivation'; // Import the new component
 
 // Import Sidebar component
 import Sidebar from './Sidebar';
@@ -156,6 +157,7 @@ const App = () => (
             <Route path="/factures" element={<Invoices />} />
             <Route path="/remises" element={<Check />} />
             <Route path="/activation" element={<Activation />} />
+            <Route path="/client-activation" element={<ClientActivation />} /> {/* New route added */}
             <Route path="/utilisateurs" element={<Users />} />
             <Route path="/parametres" element={<SettingsPage />} />
             <Route path="/profile" element={<Profile />} />

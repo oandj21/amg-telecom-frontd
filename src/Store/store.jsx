@@ -495,7 +495,6 @@ export const fetchSaleById = createAsyncThunk("sales/fetchById", async (id, thun
     return handleError(error, thunkAPI);
   }
 });
-
 export const createSale = createAsyncThunk("sales/create", async (data, thunkAPI) => {
   try {
     const response = await api.post("/ventes", data);
@@ -549,8 +548,9 @@ export const updateSale = createAsyncThunk("sales/update", async ({ id, ...data 
     return handleError(error, thunkAPI);
   }
 });
+
 // ==============================================
-// 📍 GPS ACTIVATION ACTIONS
+// 📍 GPS ACTIVATION ACTIONS (UPDATED with new fields)
 // ==============================================
 
 export const fetchSalesForActivation = createAsyncThunk("activations/fetchSales", async (_, thunkAPI) => {
@@ -625,6 +625,55 @@ export const fetchActivationStats = createAsyncThunk("activations/fetchStats", a
     return handleError(error, thunkAPI);
   }
 });
+
+export const renewActivation = createAsyncThunk("activations/renew", async ({ id, plan_abonnement, price }, thunkAPI) => {
+  try {
+    const response = await api.post(`/activations/${id}/renew`, { plan_abonnement, price });
+    return response.data.activation || response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const suspendActivation = createAsyncThunk("activations/suspend", async ({ id, reason }, thunkAPI) => {
+  try {
+    const response = await api.post(`/activations/${id}/suspend`, { reason });
+    return response.data.activation || response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const reactivateActivation = createAsyncThunk("activations/reactivate", async (id, thunkAPI) => {
+  try {
+    const response = await api.post(`/activations/${id}/reactivate`);
+    return response.data.activation || response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const bulkActivateDevices = createAsyncThunk("activations/bulkActivate", async ({ saleId, activations }, thunkAPI) => {
+  try {
+    const response = await api.post(`/activations/sales/${saleId}/bulk-activate`, { activations });
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const exportActivations = createAsyncThunk("activations/export", async (filters = {}, thunkAPI) => {
+  try {
+    const params = new URLSearchParams(filters).toString();
+    const response = await api.get(`/activations/export${params ? `?${params}` : ""}`, {
+      responseType: "blob",
+    });
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
 // ==============================================
 // 💰 SALE PAYMENT ACTIONS
 // ==============================================
@@ -731,6 +780,7 @@ export const toggleUserStatus = createAsyncThunk("users/toggleStatus", async (id
     return handleError(error, thunkAPI);
   }
 });
+
 // ==============================================
 // 👤 PROFILE ACTIONS
 // ==============================================
@@ -761,6 +811,7 @@ export const changePassword = createAsyncThunk("profile/changePassword", async (
     return handleError(error, thunkAPI);
   }
 });
+
 // ==============================================
 // 📊 DASHBOARD STATS
 // ==============================================
@@ -792,10 +843,8 @@ const authSlice = createSlice({
     clearAuthError: (state) => {
       state.error = null;
     },
-    // Add this new reducer to update user data
     updateAuthUser: (state, action) => {
       state.user = { ...state.user, ...action.payload };
-      // Update localStorage
       localStorage.setItem("user", JSON.stringify(state.user));
     },
   },
@@ -854,8 +903,7 @@ const authSlice = createSlice({
           state.user = { ...state.user, ...action.payload.user };
           localStorage.setItem("user", JSON.stringify(state.user));
         }
-      })
-      .addCase(changePassword.fulfilled, (state, action) => {});
+      });
   },
 });
 
@@ -895,7 +943,6 @@ const checksSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // Fetch all checks
       .addCase(fetchChecks.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -918,7 +965,6 @@ const checksSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      // Fetch single check
       .addCase(fetchCheckById.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -931,22 +977,18 @@ const checksSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      // Create check
       .addCase(createCheck.fulfilled, (state, action) => {
         state.list.unshift(action.payload);
       })
-      // Update check
       .addCase(updateCheck.fulfilled, (state, action) => {
         const index = state.list.findIndex(c => c.id === action.payload.id);
         if (index !== -1) state.list[index] = action.payload;
         if (state.selected?.id === action.payload.id) state.selected = action.payload;
       })
-      // Delete check
       .addCase(deleteCheck.fulfilled, (state, action) => {
         state.list = state.list.filter(c => c.id !== action.payload);
         if (state.selected?.id === action.payload) state.selected = null;
       })
-      // Upload files
       .addCase(uploadCheckFiles.fulfilled, (state, action) => {
         const index = state.list.findIndex(c => c.id === action.payload.id);
         if (index !== -1 && action.payload.data.check) {
@@ -956,7 +998,6 @@ const checksSlice = createSlice({
           state.selected = action.payload.data.check;
         }
       })
-      // Delete file
       .addCase(deleteCheckFile.fulfilled, (state, action) => {
         const index = state.list.findIndex(c => c.id === action.payload.id);
         if (index !== -1 && action.payload.data?.check) {
@@ -966,11 +1007,9 @@ const checksSlice = createSlice({
           state.selected = action.payload.data.check;
         }
       })
-      // Fetch summary
       .addCase(fetchCheckSummary.fulfilled, (state, action) => {
         state.summary = action.payload;
       })
-      // Fetch filter options
       .addCase(fetchCheckFilterOptions.fulfilled, (state, action) => {
         state.filterOptions = action.payload;
       });
@@ -1285,6 +1324,7 @@ const salesSlice = createSlice({
   },
 });
 
+// Activations Slice (UPDATED with new fields support)
 const activationsSlice = createSlice({
   name: "activations",
   initialState: {
@@ -1309,12 +1349,16 @@ const activationsSlice = createSlice({
     clearSelectedSale: (state) => {
       state.selectedSale = null;
     },
+    setActivationPage: (state, action) => {
+      state.pagination.current_page = action.payload;
+    },
   },
   extraReducers: (builder) => {
     builder
       // Fetch sales for activation
       .addCase(fetchSalesForActivation.pending, (state) => {
         state.loading = true;
+        state.error = null;
       })
       .addCase(fetchSalesForActivation.fulfilled, (state, action) => {
         state.loading = false;
@@ -1327,6 +1371,7 @@ const activationsSlice = createSlice({
       // Fetch sale activation details
       .addCase(fetchSaleActivationDetails.pending, (state) => {
         state.loading = true;
+        state.error = null;
       })
       .addCase(fetchSaleActivationDetails.fulfilled, (state, action) => {
         state.loading = false;
@@ -1337,13 +1382,33 @@ const activationsSlice = createSlice({
         state.error = action.payload;
       })
       // Activate devices
-      .addCase(activateDevices.fulfilled, (state, action) => {
-        // Refresh the list
+      .addCase(activateDevices.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(activateDevices.fulfilled, (state) => {
+        state.loading = false;
         state.selectedSale = null;
+      })
+      .addCase(activateDevices.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Bulk activate devices
+      .addCase(bulkActivateDevices.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(bulkActivateDevices.fulfilled, (state) => {
+        state.loading = false;
+        state.selectedSale = null;
+      })
+      .addCase(bulkActivateDevices.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
       })
       // Fetch all activations
       .addCase(fetchActivations.pending, (state) => {
         state.loading = true;
+        state.error = null;
       })
       .addCase(fetchActivations.fulfilled, (state, action) => {
         state.loading = false;
@@ -1359,12 +1424,54 @@ const activationsSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
+      // Fetch single activation
+      .addCase(fetchActivationById.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(fetchActivationById.fulfilled, (state, action) => {
+        state.loading = false;
+        state.selected = action.payload;
+      })
+      .addCase(fetchActivationById.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Update activation
+      .addCase(updateActivation.fulfilled, (state, action) => {
+        const index = state.list.findIndex(a => a.id === action.payload.id);
+        if (index !== -1) state.list[index] = action.payload;
+        if (state.selected?.id === action.payload.id) state.selected = action.payload;
+      })
+      // Delete activation
+      .addCase(deleteActivation.fulfilled, (state, action) => {
+        state.list = state.list.filter(a => a.id !== action.payload);
+        if (state.selected?.id === action.payload) state.selected = null;
+      })
+      // Renew activation
+      .addCase(renewActivation.fulfilled, (state, action) => {
+        const index = state.list.findIndex(a => a.id === action.payload.id);
+        if (index !== -1) state.list[index] = action.payload;
+        if (state.selected?.id === action.payload.id) state.selected = action.payload;
+      })
+      // Suspend activation
+      .addCase(suspendActivation.fulfilled, (state, action) => {
+        const index = state.list.findIndex(a => a.id === action.payload.id);
+        if (index !== -1) state.list[index] = action.payload;
+        if (state.selected?.id === action.payload.id) state.selected = action.payload;
+      })
+      // Reactivate activation
+      .addCase(reactivateActivation.fulfilled, (state, action) => {
+        const index = state.list.findIndex(a => a.id === action.payload.id);
+        if (index !== -1) state.list[index] = action.payload;
+        if (state.selected?.id === action.payload.id) state.selected = action.payload;
+      })
       // Fetch stats
       .addCase(fetchActivationStats.fulfilled, (state, action) => {
         state.stats = action.payload;
       });
   },
 });
+
 // Users Slice
 const usersSlice = createSlice({
   name: "users",
@@ -1452,8 +1559,7 @@ export const store = configureStore({
     sales: salesSlice.reducer,
     users: usersSlice.reducer,
     dashboard: dashboardSlice.reducer,
-        activations: activationsSlice.reducer, // Add this
-
+    activations: activationsSlice.reducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -1465,7 +1571,7 @@ export const store = configureStore({
 // 📤 EXPORT ACTIONS
 // ==============================================
 
-export const { clearAuthError,updateAuthUser } = authSlice.actions;
+export const { clearAuthError, updateAuthUser } = authSlice.actions;
 export const { clearClientError, clearSelectedClient } = clientsSlice.actions;
 export const { clearProductError } = productsSlice.actions;
 export const { clearVehicleError } = vehiclesSlice.actions;
@@ -1473,6 +1579,7 @@ export const { clearDeviceError } = gpsDevicesSlice.actions;
 export const { clearSaleError, clearPaymentHistory } = salesSlice.actions;
 export const { clearUserError } = usersSlice.actions;
 export const { clearCheckError, clearSelectedCheck, setPage } = checksSlice.actions;
+export const { clearActivationError, clearSelectedSale, setActivationPage } = activationsSlice.actions;
 
 // ==============================================
 // 📥 SELECTORS
@@ -1524,14 +1631,15 @@ export const selectSalesLoading = (state) => state.sales.loading;
 export const selectPaymentHistory = (state) => state.sales.paymentHistory;
 export const selectPaymentSummary = (state) => state.sales.paymentSummary;
 
+// Activations Selectors
 export const selectSalesForActivation = (state) => state.activations.sales;
 export const selectSelectedSaleActivation = (state) => state.activations.selectedSale;
 export const selectActivations = (state) => state.activations.list;
+export const selectSelectedActivation = (state) => state.activations.selected;
 export const selectActivationStats = (state) => state.activations.stats;
 export const selectActivationsLoading = (state) => state.activations.loading;
+export const selectActivationsError = (state) => state.activations.error;
 export const selectActivationsPagination = (state) => state.activations.pagination;
-export const { clearActivationError, clearSelectedSale } = activationsSlice.actions;
-
 
 // Users Selectors
 export const selectUsers = (state) => state.users.list;
