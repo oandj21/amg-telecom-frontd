@@ -6,7 +6,6 @@ import axios from "axios";
 // 📡 API Configuration
 // ==============================================
 
-// Use a hardcoded URL or a window environment variable
 const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
 
 const api = axios.create({
@@ -19,7 +18,6 @@ const api = axios.create({
   }
 });
 
-// Add token interceptor
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
   if (token) {
@@ -28,7 +26,6 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor for handling auth errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -41,7 +38,6 @@ api.interceptors.response.use(
   }
 );
 
-// Error handler helper
 const handleError = (error, thunkAPI) => {
   const message = error.response?.data?.message || error.message || "Une erreur est survenue";
   return thunkAPI.rejectWithValue(message);
@@ -68,9 +64,8 @@ export const login = createAsyncThunk("auth/login", async (credentials, thunkAPI
 export const logout = createAsyncThunk("auth/logout", async (_, thunkAPI) => {
   try {
     await api.post("/logout");
-  } catch (error) {
-    // Ignore logout errors
-  } finally {
+  } catch (error) {}
+  finally {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
   }
@@ -473,6 +468,24 @@ export const getAvailableDevices = createAsyncThunk("gpsDevices/getAvailable", a
   }
 });
 
+export const fetchAvailableImeis = createAsyncThunk("gpsDevices/fetchAvailableImeis", async (_, thunkAPI) => {
+  try {
+    const response = await api.get("/gps-devices", { params: { status: 'available' } });
+    const devices = response.data.devices || response.data;
+    
+    // ✅ Include produit_id in the mapped objects
+    const imeis = devices.map(d => ({
+      id: d.id,
+      imei: d.imei,
+      produit_id: d.produit_id,          // <-- CRITICAL: needed for product filtering
+      produit_nom: d.produit?.nom || 'GPS'
+    }));
+    return imeis;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
 // ==============================================
 // 💰 SALE ACTIONS
 // ==============================================
@@ -495,6 +508,7 @@ export const fetchSaleById = createAsyncThunk("sales/fetchById", async (id, thun
     return handleError(error, thunkAPI);
   }
 });
+
 export const createSale = createAsyncThunk("sales/create", async (data, thunkAPI) => {
   try {
     const response = await api.post("/ventes", data);
@@ -550,7 +564,7 @@ export const updateSale = createAsyncThunk("sales/update", async ({ id, ...data 
 });
 
 // ==============================================
-// 📍 GPS ACTIVATION ACTIONS (UPDATED with new fields)
+// 📍 GPS ACTIVATION ACTIONS
 // ==============================================
 
 export const fetchSalesForActivation = createAsyncThunk("activations/fetchSales", async (_, thunkAPI) => {
@@ -668,6 +682,24 @@ export const exportActivations = createAsyncThunk("activations/export", async (f
     const response = await api.get(`/activations/export${params ? `?${params}` : ""}`, {
       responseType: "blob",
     });
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const createStandaloneActivation = createAsyncThunk("activations/createStandalone", async (data, thunkAPI) => {
+  try {
+    const response = await api.post("/activations/standalone", data);
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const createInstallation = createAsyncThunk("activations/createInstallation", async (data, thunkAPI) => {
+  try {
+    const response = await api.post("/installations", data);
     return response.data;
   } catch (error) {
     return handleError(error, thunkAPI);
@@ -829,7 +861,6 @@ export const fetchDashboardStats = createAsyncThunk("dashboard/fetchStats", asyn
 // 🎯 SLICES
 // ==============================================
 
-// Auth Slice
 const authSlice = createSlice({
   name: "auth",
   initialState: {
@@ -907,7 +938,6 @@ const authSlice = createSlice({
   },
 });
 
-// Checks Slice
 const checksSlice = createSlice({
   name: "checks",
   initialState: {
@@ -1016,7 +1046,6 @@ const checksSlice = createSlice({
   },
 });
 
-// Clients Slice
 const clientsSlice = createSlice({
   name: "clients",
   initialState: {
@@ -1074,7 +1103,6 @@ const clientsSlice = createSlice({
   },
 });
 
-// Products Slice
 const productsSlice = createSlice({
   name: "products",
   initialState: {
@@ -1122,7 +1150,6 @@ const productsSlice = createSlice({
   },
 });
 
-// Vehicles Slice
 const vehiclesSlice = createSlice({
   name: "vehicles",
   initialState: {
@@ -1166,13 +1193,13 @@ const vehiclesSlice = createSlice({
   },
 });
 
-// GPS Devices Slice
 const gpsDevicesSlice = createSlice({
   name: "gpsDevices",
   initialState: {
     list: [],
     selected: null,
     availableByProduct: {},
+    availableImeis: [],
     loading: false,
     error: null,
   },
@@ -1209,11 +1236,13 @@ const gpsDevicesSlice = createSlice({
       })
       .addCase(getAvailableDevices.fulfilled, (state, action) => {
         state.availableByProduct[action.payload.productId] = action.payload.devices;
+      })
+      .addCase(fetchAvailableImeis.fulfilled, (state, action) => {
+        state.availableImeis = action.payload;
       });
   },
 });
 
-// Sales Slice
 const salesSlice = createSlice({
   name: "sales",
   initialState: {
@@ -1324,7 +1353,6 @@ const salesSlice = createSlice({
   },
 });
 
-// Activations Slice (UPDATED with new fields support)
 const activationsSlice = createSlice({
   name: "activations",
   initialState: {
@@ -1355,7 +1383,6 @@ const activationsSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // Fetch sales for activation
       .addCase(fetchSalesForActivation.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -1368,7 +1395,6 @@ const activationsSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      // Fetch sale activation details
       .addCase(fetchSaleActivationDetails.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -1381,7 +1407,6 @@ const activationsSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      // Activate devices
       .addCase(activateDevices.pending, (state) => {
         state.loading = true;
       })
@@ -1393,7 +1418,6 @@ const activationsSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      // Bulk activate devices
       .addCase(bulkActivateDevices.pending, (state) => {
         state.loading = true;
       })
@@ -1405,7 +1429,6 @@ const activationsSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      // Fetch all activations
       .addCase(fetchActivations.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -1424,7 +1447,6 @@ const activationsSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      // Fetch single activation
       .addCase(fetchActivationById.pending, (state) => {
         state.loading = true;
       })
@@ -1436,43 +1458,67 @@ const activationsSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      // Update activation
       .addCase(updateActivation.fulfilled, (state, action) => {
         const index = state.list.findIndex(a => a.id === action.payload.id);
         if (index !== -1) state.list[index] = action.payload;
         if (state.selected?.id === action.payload.id) state.selected = action.payload;
       })
-      // Delete activation
       .addCase(deleteActivation.fulfilled, (state, action) => {
         state.list = state.list.filter(a => a.id !== action.payload);
         if (state.selected?.id === action.payload) state.selected = null;
       })
-      // Renew activation
       .addCase(renewActivation.fulfilled, (state, action) => {
         const index = state.list.findIndex(a => a.id === action.payload.id);
         if (index !== -1) state.list[index] = action.payload;
         if (state.selected?.id === action.payload.id) state.selected = action.payload;
       })
-      // Suspend activation
       .addCase(suspendActivation.fulfilled, (state, action) => {
         const index = state.list.findIndex(a => a.id === action.payload.id);
         if (index !== -1) state.list[index] = action.payload;
         if (state.selected?.id === action.payload.id) state.selected = action.payload;
       })
-      // Reactivate activation
       .addCase(reactivateActivation.fulfilled, (state, action) => {
         const index = state.list.findIndex(a => a.id === action.payload.id);
         if (index !== -1) state.list[index] = action.payload;
         if (state.selected?.id === action.payload.id) state.selected = action.payload;
       })
-      // Fetch stats
       .addCase(fetchActivationStats.fulfilled, (state, action) => {
         state.stats = action.payload;
+      })
+      .addCase(createStandaloneActivation.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(createStandaloneActivation.fulfilled, (state, action) => {
+        state.loading = false;
+        state.list.unshift(action.payload.activation);
+        if (state.stats) {
+          state.stats.total_activations += 1;
+          if (action.payload.activation.status === 'active') state.stats.active_activations += 1;
+        }
+      })
+      .addCase(createStandaloneActivation.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(createInstallation.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(createInstallation.fulfilled, (state, action) => {
+        state.loading = false;
+        const newActivations = action.payload.activations || [];
+        state.list.unshift(...newActivations);
+        if (state.stats) {
+          state.stats.total_activations += newActivations.length;
+          state.stats.active_activations += newActivations.filter(a => a.status === 'active').length;
+        }
+      })
+      .addCase(createInstallation.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
       });
   },
 });
 
-// Users Slice
 const usersSlice = createSlice({
   name: "users",
   initialState: {
@@ -1519,7 +1565,6 @@ const usersSlice = createSlice({
   },
 });
 
-// Dashboard Slice
 const dashboardSlice = createSlice({
   name: "dashboard",
   initialState: {
@@ -1585,12 +1630,10 @@ export const { clearActivationError, clearSelectedSale, setActivationPage } = ac
 // 📥 SELECTORS
 // ==============================================
 
-// Auth Selectors
 export const selectAuth = (state) => state.auth;
 export const selectCurrentUser = (state) => state.auth.user;
 export const selectIsAuthenticated = (state) => state.auth.isAuthenticated;
 
-// Checks Selectors
 export const selectChecks = (state) => state.checks.list;
 export const selectSelectedCheck = (state) => state.checks.selected;
 export const selectChecksSummary = (state) => state.checks.summary;
@@ -1599,31 +1642,27 @@ export const selectChecksLoading = (state) => state.checks.loading;
 export const selectChecksError = (state) => state.checks.error;
 export const selectChecksPagination = (state) => state.checks.pagination;
 
-// Clients Selectors
 export const selectClients = (state) => state.clients.list;
 export const selectSelectedClient = (state) => state.clients.selected;
 export const selectClientsLoading = (state) => state.clients.loading;
 export const selectClientVehicles = (state, clientId) => state.clients.vehicles[clientId] || [];
 export const selectClientSales = (state, clientId) => state.clients.sales[clientId] || [];
 
-// Products Selectors
 export const selectProducts = (state) => state.products.list;
 export const selectSelectedProduct = (state) => state.products.selected;
 export const selectCategories = (state) => state.products.categories;
 export const selectProductsLoading = (state) => state.products.loading;
 
-// Vehicles Selectors
 export const selectVehicles = (state) => state.vehicles.list;
 export const selectSelectedVehicle = (state) => state.vehicles.selected;
 export const selectVehiclesLoading = (state) => state.vehicles.loading;
 
-// GPS Devices Selectors
 export const selectGpsDevices = (state) => state.gpsDevices.list;
 export const selectSelectedDevice = (state) => state.gpsDevices.selected;
 export const selectAvailableDevices = (state, productId) => state.gpsDevices.availableByProduct[productId] || [];
+export const selectAvailableImeis = (state) => state.gpsDevices.availableImeis;
 export const selectDevicesLoading = (state) => state.gpsDevices.loading;
 
-// Sales Selectors
 export const selectSales = (state) => state.sales.list;
 export const selectSelectedSale = (state) => state.sales.selected;
 export const selectSaleStats = (state) => state.sales.stats;
@@ -1631,7 +1670,6 @@ export const selectSalesLoading = (state) => state.sales.loading;
 export const selectPaymentHistory = (state) => state.sales.paymentHistory;
 export const selectPaymentSummary = (state) => state.sales.paymentSummary;
 
-// Activations Selectors
 export const selectSalesForActivation = (state) => state.activations.sales;
 export const selectSelectedSaleActivation = (state) => state.activations.selectedSale;
 export const selectActivations = (state) => state.activations.list;
@@ -1641,12 +1679,10 @@ export const selectActivationsLoading = (state) => state.activations.loading;
 export const selectActivationsError = (state) => state.activations.error;
 export const selectActivationsPagination = (state) => state.activations.pagination;
 
-// Users Selectors
 export const selectUsers = (state) => state.users.list;
 export const selectSelectedUser = (state) => state.users.selected;
 export const selectUsersLoading = (state) => state.users.loading;
 
-// Dashboard Selectors
 export const selectDashboardStats = (state) => state.dashboard.stats;
 export const selectDashboardLoading = (state) => state.dashboard.loading;
 

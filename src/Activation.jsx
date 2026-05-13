@@ -5,7 +5,7 @@ import {
   Search, Eye, Edit, Trash2, X, Calendar, Wifi, Car,
   Smartphone, Ban, Power, DollarSign, Save, RotateCcw, ChevronDown, ChevronUp,
   FileSpreadsheet, Download, History, ChevronLeft, ChevronRight,
-  TrendingUp
+  TrendingUp, Check, AlertCircle
 } from 'lucide-react';
 import { ExportMenu } from './ExportMenu';
 import ExcelJS from 'exceljs';
@@ -27,15 +27,59 @@ import {
   deleteActivation,
   fetchGpsDevices,
   clearSelectedSale,
-  getAvailableDevices
+  getAvailableDevices,
+  fetchAvailableImeis,
+  selectAvailableImeis,
+  selectProducts
 } from './Store/store';
 
 // ==================== CONSTANTS ====================
 const PLAN_LABEL = { '1m': '1 mois', '3m': '3 mois', '6m': '6 mois', '12m': '12 mois' };
-const PLAN_MONTHS = { '1m': 1, '3m': 3, '6m': 6, '12m': 12 };
+const PLAN_OPTIONS = [
+  { value: '1m', label: '1 mois' },
+  { value: '3m', label: '3 mois' },
+  { value: '6m', label: '6 mois' },
+  { value: '12m', label: '12 mois' }
+];
 const OPERATORS = ['Inwi', 'Maroc Telecom', 'Orange', 'Autre'];
 
 const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
+
+// ==================== HELPER: Check if activation has empty required fields ====================
+const isActivationIncomplete = (activation) => {
+  if (!activation) return false;
+  
+  // Check required fields
+  const hasImei = (activation.imei && activation.imei.trim() !== '') || 
+                  (activation.client_imei && activation.client_imei.trim() !== '');
+  const hasNumeroSim = activation.numero_sim && activation.numero_sim.trim() !== '';
+  const hasOperateur = activation.operateur && activation.operateur.trim() !== '';
+  const hasMatricule = activation.matricule && activation.matricule.trim() !== '';
+  const hasPrice = activation.price !== null && activation.price !== undefined && activation.price > 0;
+  const hasPlan = activation.plan_abonnement && activation.plan_abonnement.trim() !== '';
+  
+  // Fields that are considered critical for a complete activation
+  const criticalFieldsMissing = !hasImei || !hasNumeroSim || !hasOperateur || !hasPlan;
+  // Optional but recommended fields
+  const recommendedFieldsMissing = !hasMatricule || !hasPrice;
+  
+  // Return true if any critical field is missing, or if at least 2 recommended fields are missing
+  return criticalFieldsMissing || (recommendedFieldsMissing && (!hasMatricule && !hasPrice));
+};
+
+// Get list of empty fields for display
+const getEmptyFields = (activation) => {
+  const empty = [];
+  const hasImei = (activation.imei && activation.imei.trim() !== '') || 
+                  (activation.client_imei && activation.client_imei.trim() !== '');
+  if (!hasImei) empty.push('IMEI');
+  if (!activation.numero_sim?.trim()) empty.push('N° SIM');
+  if (!activation.operateur?.trim()) empty.push('Opérateur');
+  if (!activation.plan_abonnement?.trim()) empty.push('Plan');
+  if (!activation.matricule?.trim()) empty.push('Matricule');
+  if (!activation.price || activation.price <= 0) empty.push('Prix');
+  return empty;
+};
 
 // ==================== STYLES ====================
 const styles = `
@@ -186,17 +230,9 @@ const styles = `
     line-height: 1;
   }
   
-  .activation-stat-trend {
-    font-size: 0.75rem;
-    color: #10b981;
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-  }
-  
   .activation-filter-bar {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.75rem;
     padding: 1rem;
@@ -206,7 +242,7 @@ const styles = `
   .activation-search-wrapper {
     position: relative;
     flex: 3;
-    min-width: 300px;
+    min-width: 250px;
   }
   
   .activation-search-icon {
@@ -246,34 +282,23 @@ const styles = `
     min-width: 130px;
   }
   
-  .activation-filter-select:focus {
-    border-color: #3b82f6;
-    outline: none;
-  }
-  
   .activation-filter-group {
     display: flex;
     gap: 0.5rem;
     flex-shrink: 0;
   }
   
-  @media (max-width: 1024px) {
-    .activation-search-wrapper {
-      flex: 2;
-      min-width: 250px;
-    }
-    .activation-filter-select {
-      min-width: 110px;
-    }
-  }
-  
   @media (max-width: 768px) {
     .activation-filter-bar {
-      flex-wrap: wrap;
+      flex-direction: column;
+      align-items: stretch;
     }
     .activation-search-wrapper {
-      flex: 1 1 100%;
+      flex: 1;
       min-width: auto;
+    }
+    .activation-filter-group {
+      flex-wrap: wrap;
     }
     .activation-filter-select {
       flex: 1;
@@ -299,15 +324,52 @@ const styles = `
     text-transform: uppercase;
     color: #6b7280;
     border-bottom: 1px solid #e5e7eb;
+    background: #f9fafb;
   }
   
   .activation-table td {
     padding: 0.75rem 1rem;
     border-bottom: 1px solid #f3f4f6;
+    vertical-align: middle;
   }
   
   .activation-table tr:hover {
     background: #f9fafb;
+  }
+  
+  /* Empty cell highlighting */
+  .empty-cell-highlight {
+    background-color: #fef2f2;
+    border-left: 3px solid #ef4444;
+    position: relative;
+  }
+  
+  .empty-cell-highlight .editable-cell-value {
+    color: #dc2626;
+    font-weight: 500;
+  }
+  
+  .empty-cell-warning {
+    display: inline-block;
+    margin-left: 6px;
+    color: #ef4444;
+    font-size: 0.7rem;
+    font-weight: bold;
+    animation: pulseWarning 1s ease-in-out;
+  }
+  
+  @keyframes pulseWarning {
+    0%, 100% { opacity: 0.6; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.1); }
+  }
+  
+  .incomplete-row {
+    background-color: #fef2f2;
+    transition: background 0.2s;
+  }
+  
+  .incomplete-row:hover {
+    background-color: #fee2e2;
   }
   
   .activation-badge {
@@ -435,6 +497,14 @@ const styles = `
     background: #f3f4f6;
   }
   
+  .action-buttons {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
+  }
+  
   .activation-icon-btn {
     background: transparent;
     border: none;
@@ -450,22 +520,6 @@ const styles = `
   .activation-icon-btn:hover {
     background: #f3f4f6;
     transform: scale(1.05);
-  }
-  
-  .activation-icon-btn-excel {
-    color: #217346;
-  }
-  
-  .activation-icon-btn-excel:hover {
-    background: #e8f5e9;
-  }
-  
-  .activation-icon-btn-activate {
-    color: #2563eb;
-  }
-  
-  .activation-icon-btn-activate:hover {
-    background: #eff6ff;
   }
   
   .activation-overlay {
@@ -509,6 +563,10 @@ const styles = `
     display: flex;
     justify-content: space-between;
     align-items: center;
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 10;
   }
   
   .activation-dialog-title {
@@ -526,6 +584,10 @@ const styles = `
     display: flex;
     justify-content: flex-end;
     gap: 0.75rem;
+    position: sticky;
+    bottom: 0;
+    background: white;
+    z-index: 10;
   }
   
   .confirmation-dialog {
@@ -667,157 +729,6 @@ const styles = `
     color: #9ca3af;
   }
   
-  .activation-product-row {
-    border: 1px solid #e5e7eb;
-    border-radius: 0.5rem;
-    margin-bottom: 1rem;
-    overflow: hidden;
-  }
-  
-  .activation-product-title {
-    padding: 0.75rem 1rem;
-    background: #f9fafb;
-    border-bottom: 1px solid #e5e7eb;
-    font-weight: 500;
-  }
-  
-  .activation-item-card {
-    padding: 1rem;
-    border-bottom: 1px solid #f3f4f6;
-  }
-  
-  .activation-item-card:last-child {
-    border-bottom: none;
-  }
-  
-  .activation-grid-2 {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-  }
-  
-  .activation-grid-3 {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 1rem;
-  }
-  
-  .activation-grid-4 {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr 1fr;
-    gap: 1rem;
-  }
-  
-  @media (max-width: 768px) {
-    .activation-grid-2, .activation-grid-3, .activation-grid-4 {
-      grid-template-columns: 1fr;
-    }
-  }
-  
-  .activation-form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-  
-  .activation-label {
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: #4b5563;
-  }
-  
-  .activation-label-required::after {
-    content: "*";
-    color: #ef4444;
-    margin-left: 0.25rem;
-  }
-  
-  .activation-input {
-    padding: 0.5rem 0.75rem;
-    border: 1px solid #d1d5db;
-    border-radius: 0.5rem;
-    font-size: 0.875rem;
-    outline: none;
-    transition: all 0.15s;
-  }
-  
-  .activation-input:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-  }
-  
-  .activation-select {
-    padding: 0.5rem 0.75rem;
-    border: 1px solid #d1d5db;
-    border-radius: 0.5rem;
-    font-size: 0.875rem;
-    background: white;
-    cursor: pointer;
-  }
-  
-  .activation-select:focus {
-    border-color: #3b82f6;
-    outline: none;
-  }
-  
-  .activation-combobox {
-    position: relative;
-    width: 100%;
-  }
-  
-  .activation-combobox-input {
-    width: 100%;
-    padding: 0.5rem 2rem 0.5rem 0.75rem;
-    border: 1px solid #d1d5db;
-    border-radius: 0.5rem;
-    font-size: 0.875rem;
-    font-family: monospace;
-    outline: none;
-    background: white;
-  }
-  
-  .activation-combobox-input:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-  }
-  
-  .activation-combobox-dropdown {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    max-height: 200px;
-    overflow-y: auto;
-    background: white;
-    border: 1px solid #d1d5db;
-    border-radius: 0.5rem;
-    margin-top: 0.25rem;
-    z-index: 10;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  }
-  
-  .activation-combobox-option {
-    padding: 0.5rem 0.75rem;
-    cursor: pointer;
-    font-family: monospace;
-    font-size: 0.875rem;
-    border-bottom: 1px solid #f3f4f6;
-  }
-  
-  .activation-combobox-option:hover {
-    background: #f3f4f6;
-  }
-  
-  .activation-combobox-option.selected {
-    background: #eff6ff;
-    color: #2563eb;
-  }
-  
-  .activation-combobox-highlight {
-    background: #bfdbfe;
-    font-weight: 500;
-  }
-  
   .activation-empty {
     text-align: center;
     padding: 3rem;
@@ -853,42 +764,22 @@ const styles = `
   .text-red-600 { color: #dc2626; }
   .text-yellow-600 { color: #ca8a04; }
   .text-blue-600 { color: #2563eb; }
+  .text-gray-400 { color: #9ca3af; }
+  .mb-1 { margin-bottom: 0.25rem; }
   .mb-2 { margin-bottom: 0.5rem; }
-  .mt-2 { margin-top: 0.5rem; }
   .mb-4 { margin-bottom: 1rem; }
+  .mt-2 { margin-top: 0.5rem; }
+  .mt-4 { margin-top: 1rem; }
   .ml-2 { margin-left: 0.5rem; }
   .p-2 { padding: 0.5rem; }
+  .p-3 { padding: 0.75rem; }
   .text-sm { font-size: 0.875rem; }
+  .text-xs { font-size: 0.75rem; }
   .font-medium { font-weight: 500; }
+  .font-bold { font-weight: 700; }
   .text-right { text-align: right; }
-  
-  .expandable-row {
-    cursor: pointer;
-  }
-  
-  .expandable-content {
-    background: #f9fafb;
-  }
-  
-  .expandable-content td {
-    padding: 0;
-  }
-  
-  .sub-table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-  
-  .sub-table th {
-    background: #f3f4f6;
-    padding: 0.5rem 1rem;
-    font-size: 0.7rem;
-  }
-  
-  .sub-table td {
-    padding: 0.5rem 1rem;
-    border-bottom: 1px solid #e5e7eb;
-  }
+  .text-left { text-align: left; }
+  .text-center { text-align: center; }
   
   .error-message {
     background: #fef2f2;
@@ -910,82 +801,13 @@ const styles = `
     font-size: 0.875rem;
   }
   
-  .action-buttons {
-    display: flex;
-    gap: 0.25rem;
-    flex-wrap: wrap;
-  }
-  
-  .product-status-item {
-    font-size: 0.75rem;
-    line-height: 1.4;
-    padding: 0.125rem 0;
-  }
-  .product-status-active { color: #16a34a; }
-  .product-status-suspended { color: #ca8a04; }
-  .product-status-expired { color: #dc2626; }
-  .product-status-pending { color: #6b7280; }
-  
-  .alert-banner {
-    background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
-    border: 1px solid #fed7aa;
-    border-radius: 0.5rem;
-    padding: 0.75rem 1rem;
-    margin-bottom: 1rem;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-    animation: slideDown 0.3s ease-out;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-  
-  .alert-banner:hover {
-    background: linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  }
-  
-  @keyframes slideDown {
-    from {
-      opacity: 0;
-      transform: translateY(-10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  
-  .alert-banner-icon {
-    color: #ea580c;
-    flex-shrink: 0;
-  }
-  
-  .alert-banner-content {
-    flex: 1;
-    font-size: 0.875rem;
-    color: #9a3412;
-  }
-  
-  .alert-banner-content strong {
-    font-weight: 600;
-    color: #c2410c;
-  }
-  
-  .alert-banner-close {
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    padding: 0.25rem;
-    color: #9a3412;
-    border-radius: 0.375rem;
+  .expiring-row {
+    background-color: #fffbeb;
     transition: background 0.2s;
   }
   
-  .alert-banner-close:hover {
-    background: rgba(154, 52, 18, 0.1);
+  .expiring-row:hover {
+    background-color: #fef3c7;
   }
   
   .activation-pagination-container {
@@ -1037,15 +859,6 @@ const styles = `
     color: #6b7280;
   }
   
-  .expiring-row {
-    background-color: #fffbeb;
-    transition: background 0.2s;
-  }
-  
-  .expiring-row:hover {
-    background-color: #fef3c7;
-  }
-  
   .price-input-group {
     position: relative;
   }
@@ -1065,42 +878,386 @@ const styles = `
     padding-right: 2.5rem;
   }
   
-  .total-price-summary {
-    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-    border: 1px solid #bbf7d0;
+  .grid {
+    display: grid;
+  }
+  
+  .grid-cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .gap-2 {
+    gap: 0.5rem;
+  }
+  
+  .bg-gray-50 {
+    background: #f9fafb;
+  }
+  
+  .rounded-lg {
     border-radius: 0.5rem;
-    padding: 0.75rem 1rem;
-    margin-top: 1rem;
+  }
+  
+  .border-t {
+    border-top: 1px solid #e5e7eb;
+  }
+  
+  .border-gray-200 {
+    border-color: #e5e7eb;
+  }
+  
+  .editable-cell {
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: space-between;
+    min-width: 100px;
   }
   
-  .total-price-label {
+  .editable-cell:hover {
+    background: #eff6ff;
+    border-radius: 0.375rem;
+  }
+  
+  .editable-cell-value {
+    flex: 1;
+    padding: 0.25rem 0.5rem;
+  }
+  
+  .editable-cell-edit-icon {
+    opacity: 0;
+    transition: opacity 0.15s;
+    margin-left: 8px;
+    color: #3b82f6;
+  }
+  
+  .editable-cell:hover .editable-cell-edit-icon {
+    opacity: 0.7;
+  }
+  
+  .inline-edit-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 300px;
+  }
+  
+  .inline-edit-input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 2px solid #3b82f6;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    outline: none;
+    font-family: inherit;
+    background: white;
+  }
+  
+  .inline-edit-input:focus {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  }
+  
+  .inline-edit-select {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 2px solid #3b82f6;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    outline: none;
+    background: white;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  
+  .inline-edit-select:focus {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  }
+  
+  .edit-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+  }
+  
+  .edit-save-btn {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    border: none;
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    transition: all 0.2s;
+  }
+  
+  .edit-save-btn:hover {
+    background: linear-gradient(135deg, #059669, #047857);
+    transform: translateY(-1px);
+  }
+  
+  .edit-cancel-btn {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+    border: none;
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    transition: all 0.2s;
+  }
+  
+  .edit-cancel-btn:hover {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    transform: translateY(-1px);
+  }
+  
+  .activation-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .activation-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #4b5563;
+  }
+  
+  .activation-label-required::after {
+    content: "*";
+    color: #ef4444;
+    margin-left: 0.25rem;
+  }
+  
+  .activation-input {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    outline: none;
+    transition: all 0.15s;
+  }
+  
+  .activation-input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  }
+  
+  .activation-select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    background: white;
+    cursor: pointer;
+  }
+  
+  .activation-select:focus {
+    border-color: #3b82f6;
+    outline: none;
+  }
+  
+  /* Searchable IMEI Select Styles */
+  .searchable-imei-select {
+    position: relative;
+    width: 100%;
+  }
+  
+  .searchable-imei-trigger {
+    width: 100%;
+    padding: 0.5rem 2rem 0.5rem 0.75rem;
+    border: 2px solid #3b82f6;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    background: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.2s;
+  }
+  
+  .searchable-imei-trigger:hover {
+    border-color: #2563eb;
+    background: #f8fafc;
+  }
+  
+  .searchable-imei-trigger.open {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  }
+  
+  .searchable-imei-trigger-placeholder {
+    color: #9ca3af;
+  }
+  
+  .searchable-imei-trigger-value {
+    color: #1e293b;
+    font-weight: 500;
+  }
+  
+  .searchable-imei-icon {
+    color: #94a3b8;
+    transition: transform 0.2s ease;
+  }
+  
+  .searchable-imei-icon.open {
+    transform: rotate(180deg);
+  }
+  
+  .searchable-imei-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    max-height: 320px;
+    overflow: hidden;
+    animation: dropdownFadeIn 0.2s ease;
+  }
+  
+  @keyframes dropdownFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .searchable-imei-search {
+    position: sticky;
+    top: 0;
+    padding: 0.75rem;
+    border-bottom: 1px solid #e2e8f0;
+    background: white;
+  }
+  
+  .searchable-imei-search-input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    font-size: 0.813rem;
+    outline: none;
+  }
+  
+  .searchable-imei-search-input:focus {
+    border-color: #3b82f6;
+    outline: none;
+  }
+  
+  .searchable-imei-options {
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  
+  .searchable-imei-option {
+    padding: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .searchable-imei-option:hover {
+    background: #f1f5f9;
+  }
+  
+  .searchable-imei-option.selected {
+    background: #eff6ff;
+  }
+  
+  .searchable-imei-option-imei {
     font-weight: 600;
-    color: #166534;
+    font-family: monospace;
+    color: #1e293b;
   }
   
-  .total-price-value {
-    font-size: 1.25rem;
-    font-weight: 800;
-    color: #166534;
-  }
-  
-  .renewals-list {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-  
-  .renewals-list li {
+  .searchable-imei-option-product {
     font-size: 0.7rem;
-    padding: 0.125rem 0;
-    border-bottom: 1px dashed #e5e7eb;
+    color: #64748b;
   }
   
-  .renewals-list li:last-child {
-    border-bottom: none;
+  .searchable-imei-no-results {
+    padding: 1rem;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.813rem;
+  }
+  
+  @media (max-width: 640px) {
+    .grid-cols-2 {
+      grid-template-columns: 1fr;
+    }
+    .action-buttons {
+      flex-wrap: wrap;
+    }
+    .inline-edit-wrapper {
+      min-width: 280px;
+    }
+  }
+  
+  /* Incomplete banner styles */
+  .incomplete-alert-banner {
+    background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+    border: 1px solid #fecaca;
+    border-radius: 0.75rem;
+    padding: 0.875rem 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
+  }
+  
+  .incomplete-alert-banner:hover {
+    transform: translateX(4px);
+    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  }
+  
+  .incomplete-alert-banner svg {
+    color: #dc2626;
+    flex-shrink: 0;
+  }
+  
+  .incomplete-alert-text {
+    flex: 1;
+    font-size: 0.875rem;
+    color: #991b1b;
+    font-weight: 600;
+  }
+  
+  .incomplete-alert-text strong {
+    font-weight: 800;
+    font-size: 1rem;
+  }
+  
+  .empty-fields-tooltip {
+    font-size: 0.7rem;
+    color: #dc2626;
+    margin-left: 6px;
+    font-weight: normal;
   }
 `;
 
@@ -1136,6 +1293,96 @@ const LoadingSpinner = () => (
     <div className="activation-spinner"></div>
   </div>
 );
+
+// ==================== SEARCHABLE IMEI SELECT COMPONENT ====================
+const SearchableImeiSelect = ({ options, value, onChange, placeholder = "Sélectionner un IMEI...", disabled = false }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const containerRef = useRef(null);
+  const searchInputRef = useRef(null);
+  
+  const selectedOption = options.find(opt => opt.imei === value);
+  
+  const filteredOptions = options.filter(opt => {
+    if (!searchTerm) return true;
+    const searchLower = searchTerm.toLowerCase();
+    return opt.imei.toLowerCase().includes(searchLower) ||
+           (opt.produit_nom && opt.produit_nom.toLowerCase().includes(searchLower));
+  });
+  
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm('');
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+  
+  useEffect(() => {
+    if (isOpen && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [isOpen]);
+  
+  const handleSelect = (option) => {
+    onChange(option.imei);
+    setIsOpen(false);
+    setSearchTerm('');
+  };
+  
+  return (
+    <div className="searchable-imei-select" ref={containerRef}>
+      <div 
+        className={`searchable-imei-trigger ${isOpen ? 'open' : ''}`}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        style={{ cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1 }}
+      >
+        <span className={selectedOption ? 'searchable-imei-trigger-value' : 'searchable-imei-trigger-placeholder'}>
+          {selectedOption ? selectedOption.imei : placeholder}
+        </span>
+        <ChevronDown size={16} className={`searchable-imei-icon ${isOpen ? 'open' : ''}`} />
+      </div>
+      
+      {isOpen && !disabled && (
+        <div className="searchable-imei-dropdown">
+          <div className="searchable-imei-search">
+            <input
+              ref={searchInputRef}
+              type="text"
+              className="searchable-imei-search-input"
+              placeholder="Rechercher par IMEI ou produit..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          <div className="searchable-imei-options">
+            {filteredOptions.length === 0 ? (
+              <div className="searchable-imei-no-results">
+                Aucun IMEI trouvé
+              </div>
+            ) : (
+              filteredOptions.map((option) => (
+                <div
+                  key={option.id}
+                  className={`searchable-imei-option ${selectedOption?.imei === option.imei ? 'selected' : ''}`}
+                  onClick={() => handleSelect(option)}
+                >
+                  <span className="searchable-imei-option-imei">{option.imei}</span>
+                  <span className="searchable-imei-option-product">{option.produit_nom}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ==================== CONFIRMATION DIALOG ====================
 const ConfirmationDialog = ({ isOpen, onClose, onConfirm, title, message, details, type = 'danger', confirmText = 'Confirmer', cancelText = 'Annuler', loading = false }) => {
@@ -1239,18 +1486,20 @@ const HistoryModal = ({ isOpen, onClose, activation, history }) => {
     <div className="activation-overlay" onClick={onClose}>
       <div className="activation-dialog history-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="activation-dialog-header">
-          <h2 className="activation-dialog-title">Historique - IMEI: {activation.imei}</h2>
+          <h2 className="activation-dialog-title">Historique - IMEI: {activation.imei || activation.client_imei}</h2>
           <button onClick={onClose} className="activation-btn-icon"><X size={20} /></button>
         </div>
         <div className="activation-dialog-body">
           <div className="mb-4 p-3 bg-gray-50 rounded-lg">
             <div className="grid grid-cols-2 gap-2 text-sm">
+              <div><strong>IMEI:</strong> {activation.imei || '-'}</div>
+              <div><strong>IMEI Client:</strong> {activation.client_imei || '-'}</div>
               <div><strong>N° SIM:</strong> {activation.numero_sim || '-'}</div>
               <div><strong>Opérateur:</strong> {activation.operateur || '-'}</div>
               <div><strong>Plan:</strong> {PLAN_LABEL[activation.plan_abonnement] || '-'}</div>
-              <div><strong>Prix activation:</strong> {activation.price || 0} MAD</div>
-              <div><strong>Prix produit:</strong> {activation.product_price ? `${activation.product_price} MAD` : '-'}</div>
-              <div><strong>Client:</strong> {activation.vente?.client?.nom || '-'}</div>
+              <div><strong>Prix activation:</strong> {safeFormatPrice(activation.price)} MAD</div>
+              <div><strong>Client:</strong> {activation.vente?.client?.nom || activation.client?.nom || '-'}</div>
+              <div><strong>Matricule:</strong> {activation.matricule || '-'}</div>
             </div>
           </div>
           
@@ -1290,311 +1539,23 @@ const HistoryModal = ({ isOpen, onClose, activation, history }) => {
   );
 };
 
-// ==================== IMEI COMBOBOX ====================
-const ImeiCombobox = ({ value, onChange, options, placeholder, disabled = false, usedImeis = [] }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(value || '');
-  const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const inputRef = useRef(null);
-  const containerRef = useRef(null);
-
-  const filteredOptions = useMemo(() => {
-    if (!options || options.length === 0) return [];
-    let filtered = [...options];
-    if (usedImeis && usedImeis.length > 0) {
-      filtered = filtered.filter(opt => !usedImeis.includes(opt.imei));
-    }
-    if (searchTerm) {
-      filtered = filtered.filter(opt => opt.imei.toLowerCase().includes(searchTerm.toLowerCase()));
-    }
-    return filtered;
-  }, [options, searchTerm, usedImeis]);
-
-  const handleInputChange = (e) => {
-    const newValue = e.target.value;
-    setSearchTerm(newValue);
-    onChange(newValue);
-    setIsOpen(true);
-    setHighlightedIndex(-1);
-  };
-
-  const handleSelectOption = (imei) => {
-    setSearchTerm(imei);
-    onChange(imei);
-    setIsOpen(false);
-    setHighlightedIndex(-1);
-  };
-
-  const handleKeyDown = (e) => {
-    if (!isOpen && filteredOptions.length > 0 && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
-      setIsOpen(true);
-      e.preventDefault();
-      return;
-    }
-    if (isOpen) {
-      switch (e.key) {
-        case 'ArrowDown':
-          e.preventDefault();
-          setHighlightedIndex(prev => prev < filteredOptions.length - 1 ? prev + 1 : prev);
-          break;
-        case 'ArrowUp':
-          e.preventDefault();
-          setHighlightedIndex(prev => prev > 0 ? prev - 1 : -1);
-          break;
-        case 'Enter':
-          e.preventDefault();
-          if (highlightedIndex >= 0 && filteredOptions[highlightedIndex]) {
-            handleSelectOption(filteredOptions[highlightedIndex].imei);
-          } else if (filteredOptions.length === 1) {
-            handleSelectOption(filteredOptions[0].imei);
-          }
-          break;
-        case 'Escape':
-          setIsOpen(false);
-          setHighlightedIndex(-1);
-          break;
-        default: break;
-      }
-    }
-  };
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
-        setIsOpen(false);
-        setHighlightedIndex(-1);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const highlightMatch = (text, search) => {
-    if (!search) return text;
-    const index = text.toLowerCase().indexOf(search.toLowerCase());
-    if (index === -1) return text;
-    return (
-      <>
-        {text.substring(0, index)}
-        <span className="activation-combobox-highlight">
-          {text.substring(index, index + search.length)}
-        </span>
-        {text.substring(index + search.length)}
-      </>
-    );
-  };
-
-  return (
-    <div className="activation-combobox" ref={containerRef}>
-      <input
-        ref={inputRef}
-        type="text"
-        className="activation-combobox-input"
-        placeholder={placeholder || "Sélectionner ou saisir un IMEI..."}
-        value={searchTerm}
-        onChange={handleInputChange}
-        onFocus={() => setIsOpen(true)}
-        onKeyDown={handleKeyDown}
-        disabled={disabled}
-        autoComplete="off"
-      />
-      {isOpen && filteredOptions.length > 0 && (
-        <div className="activation-combobox-dropdown">
-          {filteredOptions.map((option, index) => (
-            <div
-              key={option.id || option.imei}
-              className={`activation-combobox-option ${index === highlightedIndex ? 'selected' : ''}`}
-              onClick={() => handleSelectOption(option.imei)}
-              onMouseEnter={() => setHighlightedIndex(index)}
-            >
-              {highlightMatch(option.imei, searchTerm)}
-              {option.model && (
-                <span style={{ fontSize: '0.7rem', color: '#6b7280', marginLeft: '0.5rem' }}>
-                  ({option.model})
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-      {isOpen && filteredOptions.length === 0 && options.length > 0 && (
-        <div className="activation-combobox-dropdown">
-          <div className="activation-combobox-option" style={{ color: '#9ca3af' }}>
-            {searchTerm ? "Aucun IMEI correspondant" : "Tous les IMEI sont déjà utilisés"}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+// Helper functions
+const safeFormatPrice = (value) => {
+  if (value === null || value === undefined) return '0.00';
+  const num = parseFloat(value);
+  return isNaN(num) ? '0.00' : num.toFixed(2);
 };
 
-// Helper function to get renewal history from renewal_history field
-const getRenewalHistoryFromField = (activation) => {
-  if (activation.renewal_history && Array.isArray(activation.renewal_history)) {
-    return activation.renewal_history.filter(item => item.action === 'renewal' || item.action === 'activation');
-  }
-  if (activation.histories && Array.isArray(activation.histories)) {
-    return activation.histories.filter(item => item.action === 'renewal' || item.action === 'activation');
-  }
-  return [];
-};
-
-// Helper function to get individual renewal entries
-const getRenewalEntries = (activation) => {
-  const renewalHistory = getRenewalHistoryFromField(activation);
-  return renewalHistory.filter(entry => entry.action === 'renewal');
-};
-
-// Helper function to get total paid (activation price + all renewals)
-const getTotalPaid = (activation) => {
-  let total = parseFloat(activation.price) || 0;
-  const renewalHistory = getRenewalHistoryFromField(activation);
-  renewalHistory.forEach(entry => {
-    if (entry.action === 'renewal') {
-      total += parseFloat(entry.price) || 0;
-    }
-  });
-  return total;
-};
-
-// Helper function to get product price (from product table via relation)
-const getProductPrice = (activation) => {
-  if (activation.product && activation.product.prix) {
-    return parseFloat(activation.product.prix);
-  }
-  if (activation.product && activation.product.prix_vente) {
-    return parseFloat(activation.product.prix_vente);
-  }
-  if (activation.produit && activation.produit.prix) {
-    return parseFloat(activation.produit.prix);
-  }
-  return parseFloat(activation.price) || 0;
-};
-
-// Helper function to calculate product price with 20% markup
-const getProductPriceWithMarkup = (activation) => {
-  const productPrice = getProductPrice(activation);
-  return productPrice * 1.2;
-};
-
-// Helper function to get all action history entries (activation + renewals + status changes)
-const getAllActionHistory = (activation) => {
-  const actions = [];
-  
-  // Add initial activation
-  if (activation.activated_at) {
-    actions.push({
-      id: `activation_${activation.id}`,
-      date: activation.activated_at,
-      action_type: 'Activation',
-      plan: activation.plan_abonnement,
-      amount: parseFloat(activation.price) || 0,
-      old_plan: null,
-      new_plan: activation.plan_abonnement,
-      user_name: activation.created_by_user_name || 'System',
-      details: `Activation initiale avec plan ${PLAN_LABEL[activation.plan_abonnement] || activation.plan_abonnement}`
-    });
-  }
-  
-  // Add renewals from renewal_history
-  if (activation.renewal_history && Array.isArray(activation.renewal_history)) {
-    activation.renewal_history.forEach((entry, idx) => {
-      if (entry.action === 'renewal') {
-        actions.push({
-          id: `renewal_${activation.id}_${idx}`,
-          date: entry.date,
-          action_type: 'Renouvellement',
-          plan: entry.new_plan,
-          amount: entry.price || 0,
-          old_plan: entry.old_plan,
-          new_plan: entry.new_plan,
-          user_name: entry.user_name || 'System',
-          details: `${PLAN_LABEL[entry.old_plan] || entry.old_plan} → ${PLAN_LABEL[entry.new_plan] || entry.new_plan}`
-        });
-      } else if (entry.action === 'suspension') {
-        actions.push({
-          id: `suspension_${activation.id}_${idx}`,
-          date: entry.date,
-          action_type: 'Suspension',
-          plan: activation.plan_abonnement,
-          amount: 0,
-          old_plan: null,
-          new_plan: null,
-          user_name: entry.user_name || 'System',
-          details: `Service suspendu${entry.reason ? `: ${entry.reason}` : ''}`
-        });
-      } else if (entry.action === 'reactivation') {
-        actions.push({
-          id: `reactivation_${activation.id}_${idx}`,
-          date: entry.date,
-          action_type: 'Réactivation',
-          plan: activation.plan_abonnement,
-          amount: 0,
-          old_plan: null,
-          new_plan: null,
-          user_name: entry.user_name || 'System',
-          details: 'Service réactivé'
-        });
-      }
-    });
-  }
-  
-  // Sort by date
-  actions.sort((a, b) => new Date(a.date) - new Date(b.date));
-  
-  return actions;
-};
-
-// SIMPLIFIED EXPORT FUNCTION - each action in its own row
-
-
-const addTextHeader = (worksheet, companyName, companyAddress, companyPhone, companyEmail, companyIce, companyRc, companyPatente) => {
-  worksheet.mergeCells(`A1:N1`);
-  worksheet.getCell('A1').value = companyName;
-  worksheet.getCell('A1').font = { bold: true, size: 16 };
-  worksheet.getCell('A1').alignment = { horizontal: 'center' };
-  worksheet.mergeCells(`A2:N2`);
-  worksheet.getCell('A2').value = companyAddress;
-  worksheet.getCell('A2').font = { size: 10 };
-  worksheet.getCell('A2').alignment = { horizontal: 'center' };
-  worksheet.mergeCells(`A3:N3`);
-  worksheet.getCell('A3').value = `TEL: ${companyPhone} | EMAIL: ${companyEmail}`;
-  worksheet.getCell('A3').font = { size: 10 };
-  worksheet.getCell('A3').alignment = { horizontal: 'center' };
-  worksheet.mergeCells(`A4:N4`);
-  worksheet.getCell('A4').value = `ICE: ${companyIce} | RC: ${companyRc} | Patente: ${companyPatente}`;
-  worksheet.getCell('A4').font = { size: 9 };
-  worksheet.getCell('A4').alignment = { horizontal: 'center' };
-};
-
-const getGlobalActionLabel = (action) => {
-  const labels = {
-    'activation': '✅ Activation', 'renewal': '🔄 Renouvellement',
-    'suspension': '⛔ Suspension', 'reactivation': '▶️ Réactivation', 'deletion': '🗑️ Suppression'
-  };
-  return labels[action] || action;
-};
-
-const getStatusText = (activation) => {
-  if (activation.status === 'suspended') return 'Suspendu';
-  if (activation.status === 'expired') return 'Expiré';
-  if (activation.status === 'pending') return 'En attente';
-  if (activation.expires_at && new Date(activation.expires_at) < new Date()) return 'Expiré';
-  return 'Actif';
+const safeParseNumber = (value) => {
+  if (value === null || value === undefined) return 0;
+  const num = parseFloat(value);
+  return isNaN(num) ? 0 : num;
 };
 
 const formatDate = (dateString) => {
   if (!dateString) return '-';
   return new Date(dateString).toLocaleDateString('fr-FR', {
     day: '2-digit', month: '2-digit', year: 'numeric'
-  });
-};
-
-const formatDateTime = (dateString) => {
-  if (!dateString) return '-';
-  return new Date(dateString).toLocaleString('fr-FR', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit'
   });
 };
 
@@ -1609,49 +1570,43 @@ const getStatusBadge = (activation) => {
   return <Badge variant="success">Actif</Badge>;
 };
 
-
-
-// ==================== MAIN COMPONENT ====================
+// ==================== MAIN ACTIVATION COMPONENT ====================
 const Activation = () => {
   const dispatch = useDispatch();
   
-  const sales = useSelector(selectSalesForActivation);
-  const selectedSaleData = useSelector(selectSelectedSaleActivation);
   const activations = useSelector(selectActivations);
   const stats = useSelector(selectActivationStats);
   const loading = useSelector(selectActivationsLoading);
   const pagination = useSelector(selectActivationsPagination);
-  const availableDevicesByProduct = useSelector(state => state.gpsDevices?.availableByProduct || {});
+  const availableImeis = useSelector(selectAvailableImeis);
+  const products = useSelector(selectProducts);
   
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [operatorFilter, setOperatorFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [expandedSales, setExpandedSales] = useState({});
-  const [selectedSale, setSelectedSale] = useState(null);
-  const [showActivationModal, setShowActivationModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(null);
-  const [editActivation, setEditActivation] = useState(null);
   const [loadingAction, setLoadingAction] = useState(false);
-  const [activationsData, setActivationsData] = useState([]);
   const [errorMessage, setErrorMessage] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
   const [alertDismissed, setAlertDismissed] = useState(false);
   const [showExpiringOnly, setShowExpiringOnly] = useState(false);
+  const [showIncompleteOnly, setShowIncompleteOnly] = useState(false);
   
-  // Sales Pagination
-  const [salesPage, setSalesPage] = useState(1);
-  const salesPerPage = 12;
+  // Inline editing states
+  const [editingCell, setEditingCell] = useState({ id: null, field: null });
+  const [editValue, setEditValue] = useState('');
+  const [editImeiType, setEditImeiType] = useState('existing');
   
   // Items per page
-  const itemsPerPage = 12;
+  const itemsPerPage = 15;
   
   // Confirmation dialog state
   const [confirmationState, setConfirmationState] = useState({
     isOpen: false, title: '', message: '', details: null, type: 'danger', confirmText: 'Confirmer', onConfirm: null
   });
   
-  // Renew selection modal state with price
+  // Renew selection modal state
   const [renewSelectionState, setRenewSelectionState] = useState({
     isOpen: false, activation: null, selectedPlan: '12m', price: 0
   });
@@ -1663,47 +1618,21 @@ const Activation = () => {
   
   const [actionHistory, setActionHistory] = useState({});
   
+  // Fetch available IMEIs and products on mount
+  useEffect(() => {
+    dispatch(fetchAvailableImeis());
+  }, [dispatch]);
+  
   useEffect(() => {
     loadData();
   }, [dispatch, currentPage]);
   
   const loadData = () => {
-    dispatch(fetchSalesForActivation());
     dispatch(fetchActivations({ page: currentPage, per_page: itemsPerPage }));
     dispatch(fetchActivationStats());
-    dispatch(fetchGpsDevices({ status: 'available' }));
   };
   
-  useEffect(() => {
-    if (selectedSale) {
-      dispatch(fetchSaleActivationDetails(selectedSale.id));
-    }
-  }, [dispatch, selectedSale]);
-  
-  useEffect(() => {
-    if (selectedSaleData?.activation_details) {
-      const forms = [];
-      for (const detail of selectedSaleData.activation_details) {
-        for (let i = 0; i < detail.remaining; i++) {
-          forms.push({
-            id: `${detail.produit_id}_${i}_${Date.now()}_${Math.random()}`,
-            produit_id: detail.produit_id,
-            produit_nom: detail.produit_nom,
-            produit_prix: detail.produit_prix || detail.default_price || 0,
-            imei: '',
-            numero_sim: '',
-            operateur: 'Inwi',
-            plan_abonnement: '12m',
-            matricule: '',
-            price: detail.default_price || 0,
-          });
-        }
-      }
-      setActivationsData(forms);
-    }
-  }, [selectedSaleData]);
-  
-  // Build action history from renewal_history field
+  // Build action history
   useEffect(() => {
     if (activations && activations.length > 0) {
       const historyMap = {};
@@ -1766,341 +1695,6 @@ const Activation = () => {
     }
   }, [activations]);
   
-  const getSaleActivations = (saleId) => {
-    if (!activations || !Array.isArray(activations)) return [];
-    return activations.filter(act => act.vente_id === saleId || act.sale_id === saleId || act.vente?.id === saleId);
-  };
-  const renderProductStatus = (sale) => {
-  const saleActivations = getSaleActivations(sale.id);
-  const remainingProducts = sale.remaining_activations || [];
-  
-  if (!remainingProducts.length && saleActivations.length === 0) {
-    return <span className="text-sm text-gray-400">Aucun produit GPS</span>;
-  }
-  
-  const productStatusMap = {};
-  saleActivations.forEach(act => {
-    if (!productStatusMap[act.produit_id]) {
-      productStatusMap[act.produit_id] = { name: act.produit_nom || 'GPS', active: 0, suspended: 0, expired: 0, total: 0, totalPaid: 0 };
-    }
-    if (act.status === 'active') productStatusMap[act.produit_id].active++;
-    else if (act.status === 'suspended') productStatusMap[act.produit_id].suspended++;
-    else if (act.status === 'expired') productStatusMap[act.produit_id].expired++;
-    productStatusMap[act.produit_id].total++;
-    productStatusMap[act.produit_id].totalPaid += getTotalPaid(act);
-  });
-  
-  remainingProducts.forEach(prod => {
-    if (!productStatusMap[prod.produit_id]) {
-      productStatusMap[prod.produit_id] = { name: prod.produit_nom, active: 0, suspended: 0, expired: 0, total: 0, totalPaid: 0, remaining: prod.remaining || prod.quantity };
-    } else {
-      productStatusMap[prod.produit_id].remaining = (prod.remaining || 0);
-    }
-  });
-  
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-      {Object.values(productStatusMap).map((prod, idx) => {
-        const activatedCount = prod.active + prod.suspended + prod.expired;
-        const totalCount = prod.total + (prod.remaining || 0);
-        const remaining = (prod.remaining !== undefined) ? prod.remaining : (totalCount - activatedCount);
-        return (
-          <div key={idx} className="product-status-item">
-            <span className="font-medium">{prod.name}:</span>{' '}
-            {activatedCount > 0 && (
-              <>
-                <span className="product-status-active">✓ {prod.active} actif(s)</span>
-                {prod.suspended > 0 && <span className="product-status-suspended"> ⚠️ {prod.suspended} suspendu(s)</span>}
-                {prod.expired > 0 && <span className="product-status-expired"> ✗ {prod.expired} expiré(s)</span>}
-                {prod.totalPaid > 0 && <span className="text-green-600"> ({prod.totalPaid} MAD)</span>}
-              </>
-            )}
-            {remaining > 0 && <span className="product-status-pending"> ⌛ {remaining} à activer</span>}
-            {activatedCount === 0 && remaining === 0 && <span className="text-gray-400">Aucun</span>}
-          </div>
-        );
-      })}
-    </div>
-  );
-};
-const exportSaleDetailsToExcel = async (sale) => {
-  const saleActivations = getSaleActivations(sale.id);
-  if (!saleActivations || saleActivations.length === 0) {
-    alert('Aucune activation pour cette vente');
-    return;
-  }
-  
-  try {
-    const token = localStorage.getItem('token');
-    const saleDetailsResponse = await fetch(`${API_URL}/ventes/${sale.id}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    const saleDetails = await saleDetailsResponse.json();
-    const completeSale = saleDetails.vente || saleDetails;
-    
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet(`Vente_${sale.id}`);
-    
-    // ==================== AJOUT DU LOGO ====================
-    let logoAdded = false;
-    try {
-      const logoUrl = '/logo.png';
-      const response = await fetch(logoUrl);
-      if (response.ok) {
-        const blob = await response.blob();
-        const reader = new FileReader();
-        const base64Logo = await new Promise((resolve) => {
-          reader.onloadend = () => resolve(reader.result);
-          reader.readAsDataURL(blob);
-        });
-        const base64Data = base64Logo.split(',')[1];
-        const imageId = workbook.addImage({
-          base64: base64Data,
-          extension: 'png',
-        });
-        worksheet.addImage(imageId, {
-          tl: { col: 0, row: 0 },
-          ext: { width: 180, height: 130 }
-        });
-        logoAdded = true;
-      }
-    } catch (err) {
-      console.warn('Logo non trouvé, poursuite sans logo', err);
-    }
-    
-    // Décaler les lignes si le logo est présent
-    let rowOffset = 0;
-    if (logoAdded) {
-      worksheet.addRow([]);
-      rowOffset = 2;
-    }
-    
-    const companyInfo = JSON.parse(localStorage.getItem('company_info') || '{}');
-    const companyName = companyInfo.name || 'AMG TELECOM Sarl';
-    const companyAddress = companyInfo.address || '82 Angle Abdelmounem et Rue Soumaya ETG 2 N°4, CASABLANCA';
-    const companyPhone = companyInfo.phone || '+212 661 685 758';
-    const companyEmail = companyInfo.email || 'contact@amgtelecom.ma';
-    const companyIce = companyInfo.ice || '003272997000058';
-    const companyRc = companyInfo.rc || '577849';
-    const companyPatente = companyInfo.patente || '34779711';
-    
-    // ========== COMPANY INFO BLOCK – CENTERED BETWEEN COLUMNS D & F ==========
-    const headerRowStart = 1 + rowOffset;
-    
-    // Company name – merged D:F, centered
-    worksheet.mergeCells(`D${headerRowStart}:F${headerRowStart}`);
-    worksheet.getCell(`D${headerRowStart}`).value = companyName;
-    worksheet.getCell(`D${headerRowStart}`).font = { bold: true, size: 16 };
-    worksheet.getCell(`D${headerRowStart}`).alignment = { horizontal: 'center', vertical: 'middle' };
-    
-    // Company address
-    worksheet.mergeCells(`D${headerRowStart + 1}:F${headerRowStart + 1}`);
-    worksheet.getCell(`D${headerRowStart + 1}`).value = companyAddress;
-    worksheet.getCell(`D${headerRowStart + 1}`).font = { size: 10 };
-    worksheet.getCell(`D${headerRowStart + 1}`).alignment = { horizontal: 'center', vertical: 'middle' };
-    
-    // Phone & email
-    worksheet.mergeCells(`D${headerRowStart + 2}:F${headerRowStart + 2}`);
-    worksheet.getCell(`D${headerRowStart + 2}`).value = `TEL: ${companyPhone} | EMAIL: ${companyEmail}`;
-    worksheet.getCell(`D${headerRowStart + 2}`).font = { size: 10 };
-    worksheet.getCell(`D${headerRowStart + 2}`).alignment = { horizontal: 'center', vertical: 'middle' };
-    
-    // ICE / RC / Patente
-    worksheet.mergeCells(`D${headerRowStart + 3}:F${headerRowStart + 3}`);
-    worksheet.getCell(`D${headerRowStart + 3}`).value = `ICE: ${companyIce} | RC: ${companyRc} | Patente: ${companyPatente}`;
-    worksheet.getCell(`D${headerRowStart + 3}`).font = { size: 9 };
-    worksheet.getCell(`D${headerRowStart + 3}`).alignment = { horizontal: 'center', vertical: 'middle' };
-    
-    // Ligne vide après l'en-tête
-    worksheet.addRow([]);
-    
-    // ========== INFORMATIONS VENTE ==========
-    const saleInfoRowStart = headerRowStart + 6;
-    worksheet.addRow(['INFORMATIONS VENTE']);
-    worksheet.mergeCells(`A${saleInfoRowStart}:N${saleInfoRowStart}`);
-    worksheet.getCell(`A${saleInfoRowStart}`).font = { bold: true, size: 12 };
-    worksheet.getCell(`A${saleInfoRowStart}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
-    worksheet.getCell(`A${saleInfoRowStart}`).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    
-    worksheet.addRow(['N° Vente', sale.id]);
-    worksheet.addRow(['Client', sale.client?.nom || '-']);
-    worksheet.addRow(['ICE Client', sale.client?.ice_client || '-']);
-    worksheet.addRow(['Téléphone', sale.client?.telephone || sale.client?.phone || '-']);
-    worksheet.addRow(['Email', sale.client?.email || '-']);
-    worksheet.addRow(['Adresse', sale.client?.adresse || '-']);
-    worksheet.addRow(['Date Vente', formatDate(sale.created_at)]);
-    worksheet.addRow([]);
-    
-    // ========== PRODUITS VENDUS ==========
-    const productStartRow = saleInfoRowStart + 9;
-    worksheet.addRow(['PRODUITS VENDUS']);
-    worksheet.mergeCells(`A${productStartRow}:N${productStartRow}`);
-    worksheet.getCell(`A${productStartRow}`).font = { bold: true, size: 12 };
-    worksheet.getCell(`A${productStartRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3B82F6' } };
-    worksheet.getCell(`A${productStartRow}`).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    
-    const productHeaders = [
-      'Produit', 'Quantité', 'Prix Unitaire (MAD)',
-      'TVA 20% (MAD)', 'Total TTC (MAD)'
-    ];
-    const productHeaderRow = worksheet.addRow(productHeaders);
-    productHeaderRow.eachCell((cell) => {
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
-      cell.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
-      cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    });
-    
-    let totalProductsHT = 0;
-    let totalProductsTTC = 0;
-    const productsList = completeSale.produits || [];
-    
-    for (const prod of productsList) {
-      const qty = prod.pivot?.quantite || 1;
-      const unitPrice = parseFloat(prod.pivot?.prix || prod.prix_vente || prod.prix || 0);
-      const totalHT = qty * unitPrice;
-      const tva = totalHT * 0.2;
-      const totalTTC = totalHT + tva;
-      
-      totalProductsHT += totalHT;
-      totalProductsTTC += totalTTC;
-      
-      const row = worksheet.addRow([
-        prod.nom,
-        qty,
-        unitPrice.toFixed(2),
-        tva.toFixed(2),
-        totalTTC.toFixed(2)
-      ]);
-      row.eachCell((cell, colNumber) => {
-        if (colNumber >= 3) cell.alignment = { horizontal: 'right' };
-      });
-    }
-    
-    worksheet.addRow([]);
-    const productsTotalRow = worksheet.addRow([
-      '', '', '', '',
-      `Total TTC: ${totalProductsTTC.toFixed(2)} MAD`
-    ]);
-    productsTotalRow.eachCell((cell, colNumber) => {
-      if (colNumber === 5) {
-        cell.font = { bold: true, color: { argb: 'FF2563EB' } };
-        cell.alignment = { horizontal: 'right' };
-      }
-    });
-    worksheet.addRow([]);
-    
-    // ========== HISTORIQUE DES ACTIONS ==========
-    const actionStartRow = productStartRow + 6 + productsList.length;
-    worksheet.addRow(['HISTORIQUE DES ACTIONS']);
-    worksheet.mergeCells(`A${actionStartRow}:N${actionStartRow}`);
-    worksheet.getCell(`A${actionStartRow}`).font = { bold: true, size: 12 };
-    worksheet.getCell(`A${actionStartRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF059669' } };
-    worksheet.getCell(`A${actionStartRow}`).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    
-    const actionHeaders = [
-      'Matricule', 'Action', 'Date', "Date d'expiration", 'Plan', 'Montant (MAD)', 'Statut Actuel'
-    ];
-    const actionHeaderRow = worksheet.addRow(actionHeaders);
-    actionHeaderRow.eachCell((cell) => {
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
-      cell.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
-      cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    });
-    
-    let grandTotalActivations = 0;
-    
-    saleActivations.forEach(activation => {
-      const actions = getAllActionHistory(activation);
-      const currentStatus = getStatusText(activation);
-      const expirationDateFormatted = formatDate(activation.expires_at);
-      
-      actions.forEach(action => {
-        const amount = action.amount > 0 ? action.amount : 0;
-        if (action.action_type === 'Activation' || action.action_type === 'Renouvellement') {
-          grandTotalActivations += amount;
-        }
-        const rowData = [
-          activation.matricule || '-',
-          action.action_type,
-          formatDateTime(action.date),
-          expirationDateFormatted,
-          action.plan ? (PLAN_LABEL[action.plan] || action.plan) : (action.new_plan ? (PLAN_LABEL[action.new_plan] || action.new_plan) : '-'),
-          amount > 0 ? amount.toFixed(2) : '-',
-          currentStatus
-        ];
-        worksheet.addRow(rowData);
-      });
-    });
-    
-    worksheet.addRow([]);
-    const activationTotalRow = worksheet.addRow(['', '', '', '', '', 'Total Activations :', `${grandTotalActivations.toFixed(2)} MAD`]);
-    activationTotalRow.eachCell((cell, colNumber) => {
-      if (colNumber === 6) {
-        cell.font = { bold: true };
-        cell.alignment = { horizontal: 'right' };
-      }
-      if (colNumber === 7) {
-        cell.font = { bold: true, color: { argb: 'FF16A34A' } };
-        cell.alignment = { horizontal: 'left' };
-      }
-    });
-    
-    // ========== GRAND TOTAL ==========
-    worksheet.addRow([]);
-    const grandTotalRow = worksheet.addRow([
-      '', '', '', '', '', 
-      'GRAND TOTAL :', 
-      `${(totalProductsTTC + grandTotalActivations).toFixed(2)} MAD`
-    ]);
-    grandTotalRow.eachCell((cell, colNumber) => {
-      if (colNumber === 6) {
-        cell.font = { bold: true, size: 11 };
-        cell.alignment = { horizontal: 'right' };
-      }
-      if (colNumber === 7) {
-        cell.font = { bold: true, size: 11, color: { argb: 'FFDC2626' } };
-        cell.alignment = { horizontal: 'left' };
-      }
-    });
-    
-    // Auto-size columns
-    worksheet.columns.forEach((column) => {
-      let maxLength = 0;
-      column.eachCell({ includeEmpty: true }, (cell) => {
-        const cellValue = cell.value ? cell.value.toString() : '';
-        let columnLength = cellValue.length;
-        if (columnLength > maxLength) maxLength = columnLength;
-      });
-      let width = Math.max(10, Math.min(maxLength + 2, 25));
-      column.width = width;
-    });
-    
-    const buffer = await workbook.xlsx.writeBuffer();
-    const fileName = `Vente_${sale.id}_${sale.client?.nom || 'client'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    saveAs(new Blob([buffer]), fileName);
-  } catch (error) {
-    console.error('Excel export error:', error);
-    alert('Erreur lors de l\'export Excel');
-  }
-};
-
-  const filteredSales = useMemo(() => {
-    if (!sales || !Array.isArray(sales)) return [];
-    return sales.filter(sale => {
-      const matchesSearch = search === '' || 
-        sale.client?.nom?.toLowerCase().includes(search.toLowerCase()) ||
-        sale.id?.toString().includes(search);
-      return matchesSearch;
-    });
-  }, [sales, search]);
-  
-  const paginatedSales = useMemo(() => {
-    const start = (salesPage - 1) * salesPerPage;
-    return filteredSales.slice(start, start + salesPerPage);
-  }, [filteredSales, salesPage]);
-  
-  const salesTotalPages = Math.ceil(filteredSales.length / salesPerPage);
-  
   const expiringActivations = useMemo(() => {
     if (!activations || !Array.isArray(activations)) return [];
     const today = new Date();
@@ -2116,6 +1710,14 @@ const exportSaleDetailsToExcel = async (sale) => {
   
   const expiringCount = expiringActivations.length;
   
+  // Compute incomplete activations
+  const incompleteActivations = useMemo(() => {
+    if (!activations || !Array.isArray(activations)) return [];
+    return activations.filter(act => isActivationIncomplete(act));
+  }, [activations]);
+  
+  const incompleteCount = incompleteActivations.length;
+  
   const filteredActivations = useMemo(() => {
     if (!activations || !Array.isArray(activations)) return [];
     let filtered = activations;
@@ -2125,16 +1727,12 @@ const exportSaleDetailsToExcel = async (sale) => {
       filtered = filtered.filter(act => expiringIds.has(act.id));
     }
     
-    if (search) {
-      filtered = filtered.filter(act => 
-        act.imei?.toLowerCase().includes(search.toLowerCase()) ||
-        act.numero_sim?.toLowerCase().includes(search.toLowerCase()) ||
-        act.matricule?.toLowerCase().includes(search.toLowerCase()) ||
-        act.vente?.client?.nom?.toLowerCase().includes(search.toLowerCase())
-      );
+    if (showIncompleteOnly) {
+      const incompleteIds = new Set(incompleteActivations.map(a => a.id));
+      filtered = filtered.filter(act => incompleteIds.has(act.id));
     }
     
-    if (statusFilter !== 'all') {
+    if (statusFilter !== 'all' && !showExpiringOnly && !showIncompleteOnly) {
       filtered = filtered.filter(act => act.status === statusFilter);
     }
     
@@ -2142,117 +1740,304 @@ const exportSaleDetailsToExcel = async (sale) => {
       filtered = filtered.filter(act => act.operateur === operatorFilter);
     }
     
-    return filtered;
-  }, [activations, search, statusFilter, operatorFilter, showExpiringOnly, expiringActivations]);
-  
-  const getImeiOptions = (productId) => {
-    if (selectedSaleData?.activation_details) {
-      const detail = selectedSaleData.activation_details.find(d => d.produit_id === productId);
-      if (detail?.available_devices) return detail.available_devices;
+    if (search) {
+      filtered = filtered.filter(act => 
+        act.imei?.toLowerCase().includes(search.toLowerCase()) ||
+        act.client_imei?.toLowerCase().includes(search.toLowerCase()) ||
+        act.numero_sim?.toLowerCase().includes(search.toLowerCase()) ||
+        act.matricule?.toLowerCase().includes(search.toLowerCase()) ||
+        act.vente?.client?.nom?.toLowerCase().includes(search.toLowerCase()) ||
+        act.vente?.id?.toString().includes(search)
+      );
     }
-    return availableDevicesByProduct[productId] || [];
-  };
-  
-  const getUsedImeisForProduct = (productId, currentId) => {
-    return activationsData
-      .filter(a => a.produit_id === productId && a.id !== currentId)
-      .map(a => a.imei)
-      .filter(Boolean);
-  };
-  
-  const getTotalActivationPrice = () => {
-    const total = activationsData
-      .filter(a => a.imei)
-      .reduce((total, a) => {
-        const price = parseFloat(a.price) || 0;
-        return total + price;
-      }, 0);
-    return total;
-  };
-  
-  const toggleExpand = (saleId, e) => {
-    if (e) e.stopPropagation();
-    setExpandedSales(prev => ({ ...prev, [saleId]: !prev[saleId] }));
-  };
-  
-  const openActivationModal = async (sale) => {
-    setSelectedSale(sale);
-    setShowActivationModal(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-  };
-  
-  const validateActivationForm = () => {
-    const filled = activationsData.filter(a => a.imei);
-    if (filled.length === 0) {
-      setErrorMessage("Veuillez sélectionner au moins un IMEI");
-      return false;
-    }
-    for (const act of filled) {
-      if (!act.numero_sim) {
-        setErrorMessage(`Veuillez saisir le numéro SIM pour l'IMEI ${act.imei}`);
-        return false;
-      }
-      if (!act.price || act.price <= 0) {
-        setErrorMessage(`Veuillez saisir un prix d'activation valide pour l'IMEI ${act.imei}`);
-        return false;
-      }
-    }
-    return true;
-  };
-  
-  const handleActivate = async () => {
-    if (!validateActivationForm()) return;
     
+    return filtered;
+  }, [activations, search, statusFilter, operatorFilter, showExpiringOnly, showIncompleteOnly, expiringActivations, incompleteActivations]);
+  
+  const paginatedActivations = useMemo(() => {
+    if (showExpiringOnly || showIncompleteOnly) {
+      const start = (currentPage - 1) * itemsPerPage;
+      return filteredActivations.slice(start, start + itemsPerPage);
+    }
+    return filteredActivations;
+  }, [filteredActivations, currentPage, itemsPerPage, showExpiringOnly, showIncompleteOnly]);
+  
+  const totalPages = (showExpiringOnly || showIncompleteOnly)
+    ? Math.ceil(filteredActivations.length / itemsPerPage)
+    : (pagination?.last_page || 1);
+  
+  // Get filtered IMEIs for a specific activation
+  const getFilteredImeisForActivation = (activation) => {
+    if (!availableImeis || !Array.isArray(availableImeis)) return [];
+    
+    // Filter IMEIs by product ID if the activation has a produit_id
+    if (activation.produit_id) {
+      return availableImeis.filter(imei => imei.produit_id === activation.produit_id);
+    }
+    
+    return availableImeis;
+  };
+  
+  // ==================== INLINE EDITING FUNCTIONS ====================
+  const startEditing = (activationId, field, currentValue, currentImeiType = null) => {
+    setEditingCell({ id: activationId, field });
+    let displayValue = currentValue !== null && currentValue !== undefined ? currentValue.toString() : '';
+    
+    if (field === 'plan_abonnement' && currentValue && PLAN_LABEL[currentValue]) {
+      displayValue = currentValue;
+    }
+    
+    setEditValue(displayValue);
+    
+    if (field === 'imei') {
+      setEditImeiType(currentImeiType || 'existing');
+    }
+  };
+  
+  const cancelEditing = () => {
+    setEditingCell({ id: null, field: null });
+    setEditValue('');
+    setEditImeiType('existing');
+  };
+  
+  const handleInlineSave = async (activationId, field, value) => {
     setLoadingAction(true);
     setErrorMessage(null);
-    setSuccessMessage(null);
     
     try {
-      const activationsToSend = activationsData.filter(a => a.imei).map(act => ({
-        produit_id: act.produit_id,
-        imei: act.imei,
-        numero_sim: act.numero_sim,
-        operateur: act.operateur,
-        plan_abonnement: act.plan_abonnement,
-        matricule: act.matricule,
-        price: parseFloat(act.price) || 0,
-      }));
+      let updateData = {};
       
-      await dispatch(activateDevices({
-        saleId: selectedSale.id,
-        activations: activationsToSend
-      })).unwrap();
+      if (field === 'imei') {
+        if (editImeiType === 'existing') {
+          // Find the activation to get its produit_id
+          const activation = activations.find(a => a.id === activationId);
+          const selectedImei = availableImeis.find(imei => imei.imei === value);
+          
+          // Validate that the selected IMEI belongs to the same product
+          if (activation && selectedImei && activation.produit_id && activation.produit_id !== selectedImei.produit_id) {
+            const product = products.find(p => p.id === activation.produit_id);
+            setErrorMessage(`Cet IMEI n'est pas compatible avec le produit "${product?.nom || 'associé'}"`);
+            cancelEditing();
+            setLoadingAction(false);
+            return;
+          }
+          updateData = { imei: value };
+        } else {
+          updateData = { client_imei: value };
+        }
+      } else {
+        switch (field) {
+          case 'matricule':
+            updateData = { matricule: value };
+            break;
+          case 'numero_sim':
+            updateData = { numero_sim: value };
+            break;
+          case 'operateur':
+            updateData = { operateur: value };
+            break;
+          case 'plan_abonnement':
+            updateData = { plan_abonnement: value };
+            break;
+          case 'price':
+            updateData = { price: safeParseNumber(value) };
+            break;
+          default:
+            setErrorMessage(`Le champ "${field}" ne peut pas être modifié directement`);
+            cancelEditing();
+            setLoadingAction(false);
+            return;
+        }
+      }
       
-      const totalPrice = getTotalActivationPrice();
-      setSuccessMessage(`Activation réussie - Total des activations: ${totalPrice.toFixed(2)} MAD`);
-      setTimeout(() => {
-        setShowActivationModal(false);
-        setSelectedSale(null);
-        setActivationsData([]);
-        setSuccessMessage(null);
-        loadData();
-      }, 1500);
+      await dispatch(updateActivation({ id: activationId, ...updateData })).unwrap();
+      setSuccessMessage(`${getFieldLabel(field)} mis à jour avec succès`);
+      loadData();
+      setTimeout(() => setSuccessMessage(null), 2000);
     } catch (err) {
-      setErrorMessage(err || 'Erreur lors de l\'activation');
+      setErrorMessage(err || `Erreur lors de la mise à jour de ${getFieldLabel(field)}`);
+      setTimeout(() => setErrorMessage(null), 3000);
     } finally {
       setLoadingAction(false);
+      cancelEditing();
     }
   };
   
-  const updateActivationField = (id, field, value) => {
-    const newData = [...activationsData];
-    const index = newData.findIndex(a => a.id === id);
-    if (index !== -1) {
-      if (field === 'price') {
-        newData[index][field] = parseFloat(value) || 0;
-      } else {
-        newData[index][field] = value;
+  const getFieldLabel = (field) => {
+    const labels = {
+      'imei': 'IMEI',
+      'matricule': 'Matricule',
+      'numero_sim': 'Numéro SIM',
+      'operateur': 'Opérateur',
+      'plan_abonnement': 'Plan',
+      'price': 'Prix'
+    };
+    return labels[field] || field;
+  };
+  
+  const handleKeyDown = (e, activationId, field) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleInlineSave(activationId, field, editValue);
+    } else if (e.key === 'Escape') {
+      cancelEditing();
+    }
+  };
+  
+  // Helper to check if a field value is empty
+  const isFieldEmpty = (value) => {
+    return value === null || value === undefined || value === '' || (typeof value === 'string' && value.trim() === '');
+  };
+  
+  // ==================== RENDER EDITABLE CELL ====================
+  const renderEditableCell = (activation, field, value, type = 'text') => {
+    const isEditing = editingCell.id === activation.id && editingCell.field === field;
+    const isEmpty = isFieldEmpty(value);
+    
+    if (isEditing) {
+      if (field === 'imei') {
+        const filteredImeis = getFilteredImeisForActivation(activation);
+        
+        return (
+          <div className="inline-edit-wrapper" style={{ minWidth: '300px' }}>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+              <label style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <input type="radio" value="existing" checked={editImeiType === 'existing'} onChange={() => setEditImeiType('existing')} />
+                IMEI existant
+              </label>
+              <label style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <input type="radio" value="client" checked={editImeiType === 'client'} onChange={() => setEditImeiType('client')} />
+                IMEI client
+              </label>
+            </div>
+            {editImeiType === 'existing' ? (
+              <SearchableImeiSelect
+                options={filteredImeis}
+                value={editValue}
+                onChange={(selectedImei) => setEditValue(selectedImei)}
+                placeholder="-- Sélectionner un IMEI --"
+              />
+            ) : (
+              <input
+                type="text"
+                className="inline-edit-input"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onKeyDown={(e) => handleKeyDown(e, activation.id, field)}
+                placeholder="Saisir l'IMEI client"
+                autoFocus
+              />
+            )}
+            <div className="edit-actions">
+              <button onClick={() => handleInlineSave(activation.id, field, editValue)} className="edit-save-btn">
+                <Check size={14} /> Enregistrer
+              </button>
+              <button onClick={cancelEditing} className="edit-cancel-btn">
+                <X size={14} /> Annuler
+              </button>
+            </div>
+          </div>
+        );
+      } else if (type === 'select') {
+        const options = field === 'operateur' ? OPERATORS : PLAN_OPTIONS;
+        // Add an empty option for operator field
+        const selectOptions = field === 'operateur' 
+          ? [{ value: '', label: '-- Sélectionner --' }, ...options.map(opt => ({ value: opt, label: opt }))]
+          : options;
+        
+        return (
+          <div className="inline-edit-wrapper">
+            <select
+              className="inline-edit-select"
+              value={editValue || ''}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => handleKeyDown(e, activation.id, field)}
+              autoFocus
+            >
+              {selectOptions.map(opt => (
+                <option key={opt.value || opt} value={opt.value || opt}>
+                  {opt.label || opt}
+                </option>
+              ))}
+            </select>
+            <div className="edit-actions">
+              <button onClick={() => handleInlineSave(activation.id, field, editValue)} className="edit-save-btn">
+                <Check size={14} /> Enregistrer
+              </button>
+              <button onClick={cancelEditing} className="edit-cancel-btn">
+                <X size={14} /> Annuler
+              </button>
+            </div>
+          </div>
+        );
       }
+      
+      return (
+        <div className="inline-edit-wrapper">
+          <input
+            type={type === 'number' ? 'number' : 'text'}
+            className="inline-edit-input"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={(e) => handleKeyDown(e, activation.id, field)}
+            step={type === 'number' ? "0.01" : undefined}
+            autoFocus
+          />
+          <div className="edit-actions">
+            <button onClick={() => handleInlineSave(activation.id, field, editValue)} className="edit-save-btn">
+              <Check size={14} /> Enregistrer
+            </button>
+            <button onClick={cancelEditing} className="edit-cancel-btn">
+              <X size={14} /> Annuler
+            </button>
+          </div>
+        </div>
+      );
     }
-    setActivationsData(newData);
+    
+    // Display value
+    let displayValue = value || '-';
+    if (field === 'imei') {
+      let imeiDisplay = '';
+      if (activation.imei && activation.client_imei) {
+        imeiDisplay = `${activation.imei} (client: ${activation.client_imei})`;
+      } else if (activation.imei) {
+        imeiDisplay = activation.imei;
+      } else if (activation.client_imei) {
+        imeiDisplay = `Client: ${activation.client_imei}`;
+      } else {
+        imeiDisplay = '-';
+      }
+      displayValue = imeiDisplay;
+    } else if (type === 'number' && value !== null && value !== undefined) {
+      displayValue = `${safeFormatPrice(value)} MAD`;
+    } else if (field === 'plan_abonnement' && value && PLAN_LABEL[value]) {
+      displayValue = PLAN_LABEL[value];
+    }
+    
+    const imeiType = activation.imei ? 'existing' : (activation.client_imei ? 'client' : null);
+    const showEmptyWarning = isEmpty && (!isEditing);
+    
+    return (
+      <div 
+        className={`editable-cell ${isEmpty ? 'empty-cell-highlight' : ''}`} 
+        onClick={() => startEditing(activation.id, field, field === 'imei' ? (activation.imei || activation.client_imei) : value, imeiType)} 
+        title={isEmpty ? "⚠️ Champ vide - Cliquer pour remplir" : "Cliquer pour modifier"}
+      >
+        <span className="editable-cell-value">
+          {displayValue}
+          {showEmptyWarning && (
+            <span className="empty-cell-warning" title="Champ requis manquant">
+              ⚠️
+            </span>
+          )}
+        </span>
+        <Edit size={14} className="editable-cell-edit-icon" />
+      </div>
+    );
   };
   
+  // ==================== OTHER HANDLERS ====================
   const openRenewSelectionModal = (activation) => {
     setRenewSelectionState({ 
       isOpen: true, 
@@ -2283,7 +2068,7 @@ const exportSaleDetailsToExcel = async (sale) => {
         renew: true,
         price: price
       })).unwrap();
-      setSuccessMessage(`Abonnement renouvelé avec +${PLAN_LABEL[selectedPlan]} pour ${price} MAD (IMEI ${activation.imei})`);
+      setSuccessMessage(`Abonnement renouvelé avec +${PLAN_LABEL[selectedPlan]} pour ${safeFormatPrice(price)} MAD (IMEI ${activation.imei || activation.client_imei})`);
       loadData();
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
@@ -2314,21 +2099,17 @@ const exportSaleDetailsToExcel = async (sale) => {
   };
   
   const showDeleteConfirmation = (activation) => {
-    const productPrice = getProductPrice(activation);
-    const productPriceWithMarkup = productPrice * 1.2;
-    
     setConfirmationState({
       isOpen: true,
       title: 'Confirmer la suppression',
-      message: `Êtes-vous sûr de vouloir supprimer l'activation pour l'IMEI ${activation.imei} ?`,
+      message: `Êtes-vous sûr de vouloir supprimer l'activation pour l'IMEI ${activation.imei || activation.client_imei} ?`,
       details: (
         <div>
-          <p><strong>IMEI:</strong> {activation.imei}</p>
+          <p><strong>IMEI:</strong> {activation.imei || '-'}</p>
+          <p><strong>IMEI Client:</strong> {activation.client_imei || '-'}</p>
           <p><strong>N° SIM:</strong> {activation.numero_sim || '-'}</p>
-          <p><strong>Client:</strong> {activation.vente?.client?.nom || '-'}</p>
-          <p><strong>Prix produit:</strong> {productPrice.toFixed(2)} MAD</p>
-          <p><strong>Prix produit +20%:</strong> {productPriceWithMarkup.toFixed(2)} MAD</p>
-          <p><strong>Prix activation total (avec renouvellements):</strong> {getTotalPaid(activation)} MAD</p>
+          <p><strong>Client:</strong> {activation.vente?.client?.nom || activation.client?.nom || '-'}</p>
+          <p><strong>Prix activation total (avec renouvellements):</strong> {safeFormatPrice(activation.price)} MAD</p>
           <p className="text-red-600 mt-2">⚠️ Cette action est irréversible.</p>
         </div>
       ),
@@ -2352,12 +2133,13 @@ const exportSaleDetailsToExcel = async (sale) => {
       isOpen: true,
       title: isSuspending ? 'Confirmer la suspension' : 'Confirmer la réactivation',
       message: isSuspending 
-        ? `Êtes-vous sûr de vouloir suspendre l'activation pour l'IMEI ${activation.imei} ?`
-        : `Êtes-vous sûr de vouloir réactiver l'activation pour l'IMEI ${activation.imei} ?`,
+        ? `Êtes-vous sûr de vouloir suspendre l'activation pour l'IMEI ${activation.imei || activation.client_imei} ?`
+        : `Êtes-vous sûr de vouloir réactiver l'activation pour l'IMEI ${activation.imei || activation.client_imei} ?`,
       details: (
         <div>
-          <p><strong>IMEI:</strong> {activation.imei}</p>
-          <p><strong>Client:</strong> {activation.vente?.client?.nom || '-'}</p>
+          <p><strong>IMEI:</strong> {activation.imei || '-'}</p>
+          <p><strong>IMEI Client:</strong> {activation.client_imei || '-'}</p>
+          <p><strong>Client:</strong> {activation.vente?.client?.nom || activation.client?.nom || '-'}</p>
           {isSuspending && <p className="text-yellow-600 mt-2">⚠️ Le service sera temporairement désactivé.</p>}
         </div>
       ),
@@ -2388,31 +2170,8 @@ const exportSaleDetailsToExcel = async (sale) => {
     }
   };
   
-  const getLogoAsBase64 = async () => {
-    try {
-      const logoPaths = ['/logo.png', '/logo.jpg', '/logo.jpeg', '/assets/logo.png', '/images/logo.png'];
-      for (const logoPath of logoPaths) {
-        try {
-          const response = await fetch(logoPath);
-          if (response.ok) {
-            const blob = await response.blob();
-            const base64Logo = await new Promise((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result);
-              reader.readAsDataURL(blob);
-            });
-            return base64Logo;
-          }
-        } catch (e) {}
-      }
-      const savedLogo = localStorage.getItem('company_logo');
-      if (savedLogo) return savedLogo;
-    } catch (error) {}
-    return null;
-  };
-  
   const handlePageChange = (page) => {
-    if (!showExpiringOnly) {
+    if (!showExpiringOnly && !showIncompleteOnly) {
       setCurrentPage(page);
       dispatch(fetchActivations({ page: page, per_page: itemsPerPage }));
     } else {
@@ -2448,18 +2207,150 @@ const exportSaleDetailsToExcel = async (sale) => {
     return pages;
   };
   
-  const getSalesTotalPages = Math.ceil(filteredSales.length / salesPerPage);
-  const getActivationsTotalPages = showExpiringOnly ? Math.ceil(filteredActivations.length / itemsPerPage) : (pagination?.last_page || 1);
-  
   const handleAlertClick = () => {
     setShowExpiringOnly(true);
+    setShowIncompleteOnly(false);
     setCurrentPage(1);
     setAlertDismissed(true);
   };
   
-  const clearExpiringFilter = () => {
+  const handleIncompleteClick = () => {
+    setShowIncompleteOnly(true);
     setShowExpiringOnly(false);
     setCurrentPage(1);
+  };
+  
+  const clearFilters = () => {
+    setShowExpiringOnly(false);
+    setShowIncompleteOnly(false);
+    setCurrentPage(1);
+  };
+  
+  // Export function
+  const exportToExcel = async () => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Activations GPS');
+      
+      const companyInfo = JSON.parse(localStorage.getItem('company_info') || '{}');
+      const companyName = companyInfo.name || 'AMG TELECOM Sarl';
+      const companyAddress = companyInfo.address || '82 Angle Abdelmounem et Rue Soumaya ETG 2 N°4, CASABLANCA';
+      const companyPhone = companyInfo.phone || '+212 661 685 758';
+      const companyEmail = companyInfo.email || 'contact@amgtelecom.ma';
+      const companyIce = companyInfo.ice || '003272997000058';
+      const companyRc = companyInfo.rc || '577849';
+      const companyPatente = companyInfo.patente || '34779711';
+      
+      let logoAdded = false;
+      try {
+        const logoUrl = '/logo.png';
+        const response = await fetch(logoUrl);
+        if (response.ok) {
+          const blob = await response.blob();
+          const reader = new FileReader();
+          const base64Logo = await new Promise((resolve) => {
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(blob);
+          });
+          const base64Data = base64Logo.split(',')[1];
+          const imageId = workbook.addImage({
+            base64: base64Data,
+            extension: 'png',
+          });
+          worksheet.addImage(imageId, {
+            tl: { col: 0, row: 0 },
+            ext: { width: 120, height: 80 }
+          });
+          logoAdded = true;
+        }
+      } catch (err) {
+        console.warn('Logo not found', err);
+      }
+      
+      let rowOffset = logoAdded ? 3 : 0;
+      
+      worksheet.mergeCells(`A${1 + rowOffset}:J${1 + rowOffset}`);
+      worksheet.getCell(`A${1 + rowOffset}`).value = companyName;
+      worksheet.getCell(`A${1 + rowOffset}`).font = { bold: true, size: 16 };
+      worksheet.getCell(`A${1 + rowOffset}`).alignment = { horizontal: 'center' };
+      
+      worksheet.mergeCells(`A${2 + rowOffset}:J${2 + rowOffset}`);
+      worksheet.getCell(`A${2 + rowOffset}`).value = companyAddress;
+      worksheet.getCell(`A${2 + rowOffset}`).font = { size: 10 };
+      worksheet.getCell(`A${2 + rowOffset}`).alignment = { horizontal: 'center' };
+      
+      worksheet.mergeCells(`A${3 + rowOffset}:J${3 + rowOffset}`);
+      worksheet.getCell(`A${3 + rowOffset}`).value = `TEL: ${companyPhone} | EMAIL: ${companyEmail}`;
+      worksheet.getCell(`A${3 + rowOffset}`).font = { size: 10 };
+      worksheet.getCell(`A${3 + rowOffset}`).alignment = { horizontal: 'center' };
+      
+      worksheet.mergeCells(`A${4 + rowOffset}:J${4 + rowOffset}`);
+      worksheet.getCell(`A${4 + rowOffset}`).value = `ICE: ${companyIce} | RC: ${companyRc} | Patente: ${companyPatente}`;
+      worksheet.getCell(`A${4 + rowOffset}`).font = { size: 9 };
+      worksheet.getCell(`A${4 + rowOffset}`).alignment = { horizontal: 'center' };
+      
+      worksheet.addRow([]);
+      
+      worksheet.mergeCells(`A${6 + rowOffset}:J${6 + rowOffset}`);
+      worksheet.getCell(`A${6 + rowOffset}`).value = 'LISTE DES ACTIVATIONS GPS';
+      worksheet.getCell(`A${6 + rowOffset}`).font = { bold: true, size: 14 };
+      worksheet.getCell(`A${6 + rowOffset}`).alignment = { horizontal: 'center' };
+      worksheet.getCell(`A${6 + rowOffset}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3B82F6' } };
+      worksheet.getCell(`A${6 + rowOffset}`).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      
+      worksheet.addRow([]);
+      
+      const headers = [
+        'Client', 'Type IMEI', 'IMEI', 'IMEI Client', 'N° SIM', 'Opérateur', 'Plan',
+        'Prix Activation', 'Matricule', 'Date Activation', 'Expiration', 'Statut', 'Champs manquants'
+      ];
+      const headerRow = worksheet.addRow(headers);
+      headerRow.eachCell((cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+        cell.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } };
+      });
+      
+      const dataToExport = showExpiringOnly || showIncompleteOnly ? filteredActivations : activations;
+      dataToExport.forEach(activation => {
+        const imeiType = activation.imei ? 'Existant' : (activation.client_imei ? 'Client' : '-');
+        const emptyFields = getEmptyFields(activation);
+        worksheet.addRow([
+          activation.vente?.client?.nom || activation.client?.nom || '-',
+          imeiType,
+          activation.imei || '-',
+          activation.client_imei || '-',
+          activation.numero_sim || '-',
+          activation.operateur || '-',
+          PLAN_LABEL[activation.plan_abonnement] || '-',
+          safeFormatPrice(activation.price),
+          activation.matricule || '-',
+          formatDate(activation.activated_at),
+          formatDate(activation.expires_at),
+          activation.status === 'active' ? 'Actif' : activation.status === 'suspended' ? 'Suspendu' : activation.status === 'expired' ? 'Expiré' : 'En attente',
+          emptyFields.length > 0 ? emptyFields.join(', ') : '-'
+        ]);
+      });
+      
+      worksheet.columns.forEach((column) => {
+        let maxLength = 0;
+        column.eachCell({ includeEmpty: true }, (cell) => {
+          const cellValue = cell.value ? cell.value.toString() : '';
+          let columnLength = cellValue.length;
+          if (columnLength > maxLength) maxLength = columnLength;
+        });
+        let width = Math.max(10, Math.min(maxLength + 2, 25));
+        column.width = width;
+      });
+      
+      const buffer = await workbook.xlsx.writeBuffer();
+      const fileName = `activations_gps_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.xlsx`;
+      saveAs(new Blob([buffer]), fileName);
+    } catch (error) {
+      console.error('Export error:', error);
+      setErrorMessage('Erreur lors de l\'export Excel');
+    }
   };
   
   if (loading && (!activations || activations.length === 0)) {
@@ -2496,12 +2387,12 @@ const exportSaleDetailsToExcel = async (sale) => {
             </div>
             <div className="activation-dialog-body">
               <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                <p className="text-sm mb-1"><strong>IMEI:</strong> <span className="font-mono">{renewSelectionState.activation.imei}</span></p>
-                <p className="text-sm mb-1"><strong>Client:</strong> {renewSelectionState.activation.vente?.client?.nom || '-'}</p>
+                <p className="text-sm mb-1"><strong>IMEI:</strong> <span className="font-mono">{renewSelectionState.activation.imei || renewSelectionState.activation.client_imei}</span></p>
+                <p className="text-sm mb-1"><strong>Client:</strong> {renewSelectionState.activation.vente?.client?.nom || renewSelectionState.activation.client?.nom || '-'}</p>
                 <p className="text-sm mb-1"><strong>Plan actuel:</strong> {PLAN_LABEL[renewSelectionState.activation.plan_abonnement]}</p>
                 <p className="text-sm"><strong>Expire le:</strong> {formatDate(renewSelectionState.activation.expires_at)}</p>
               </div>
-              <div className="activation-grid-2">
+              <div className="grid grid-cols-2 gap-2">
                 <div className="activation-form-group">
                   <label className="activation-label activation-label-required">Nouvelle durée</label>
                   <select 
@@ -2534,14 +2425,14 @@ const exportSaleDetailsToExcel = async (sale) => {
                 <p className="font-medium text-blue-800 mb-1">Information:</p>
                 <p className="text-blue-700">Le renouvellement ajoutera <strong>{PLAN_LABEL[renewSelectionState.selectedPlan]}</strong> à l'abonnement actuel.</p>
                 {renewSelectionState.price > 0 && (
-                  <p className="text-blue-700 mt-1">Montant à payer: <strong>{renewSelectionState.price} MAD</strong></p>
+                  <p className="text-blue-700 mt-1">Montant à payer: <strong>{safeFormatPrice(renewSelectionState.price)} MAD</strong></p>
                 )}
               </div>
             </div>
             <div className="activation-dialog-footer">
               <button onClick={() => setRenewSelectionState(prev => ({ ...prev, isOpen: false }))} className="activation-btn activation-btn-secondary" disabled={loadingAction}>Annuler</button>
               <button onClick={handleRenewWithPlan} disabled={loadingAction || !renewSelectionState.price} className="activation-btn activation-btn-primary">
-                {loadingAction ? <><div className="activation-spinner" style={{ width: '1rem', height: '1rem', borderWidth: '2px' }} /> Renouvellement...</> : `Renouveler (${renewSelectionState.price} MAD)`}
+                {loadingAction ? <><div className="activation-spinner" style={{ width: '1rem', height: '1rem', borderWidth: '2px' }} /> Renouvellement...</> : `Renouveler (${safeFormatPrice(renewSelectionState.price)} MAD)`}
               </button>
             </div>
           </div>
@@ -2553,374 +2444,258 @@ const exportSaleDetailsToExcel = async (sale) => {
       <div className="activation-container">
         <div className="activation-page-header">
           <div>
-            <h1 className="activation-title">Activation GPS</h1>
-            <p className="activation-subtitle">Gérez les activations des traceurs GPS pour vos clients</p>
+            <h1 className="activation-title">Activations GPS</h1>
+            <p className="activation-subtitle">Gérez toutes les activations des traceurs GPS (Cliquez sur n'importe quelle cellule pour la modifier)</p>
           </div>
           <div className="activation-actions">
-            <ExportMenu 
-              title="Activations GPS" 
-              rows={filteredActivations} 
-              columns={[
-                { header: 'IMEI', accessor: a => a.imei },
-                { header: 'N° SIM', accessor: a => a.numero_sim },
-                { header: 'Opérateur', accessor: a => a.operateur },
-                { header: 'Client', accessor: a => a.vente?.client?.nom },
-                { header: 'Plan', accessor: a => PLAN_LABEL[a.plan_abonnement] },
-                { header: 'Prix Produit', accessor: a => `${getProductPrice(a).toFixed(2)} MAD` },
-                { header: 'Prix Produit +20%', accessor: a => `${getProductPriceWithMarkup(a).toFixed(2)} MAD` },
-                { header: 'Prix Activation', accessor: a => `${(a.price || 0)} MAD` },
-                { header: 'Matricule', accessor: a => a.matricule },
-                { header: 'Expiration', accessor: a => formatDate(a.expires_at) },
-                { header: 'Statut', accessor: a => a.status },
-                { header: 'Total Payé', accessor: a => `${getTotalPaid(a)} MAD` },
-              ]} 
-            />
-            {showExpiringOnly && (
-              <button onClick={clearExpiringFilter} className="activation-btn activation-btn-outline"><X size={16} /> Effacer le filtre</button>
+            <button onClick={exportToExcel} className="activation-btn activation-btn-outline">
+              <FileSpreadsheet size={16} /> Exporter Excel
+            </button>
+            <button onClick={() => loadData()} className="activation-btn activation-btn-outline">
+              <RefreshCw size={16} /> Actualiser
+            </button>
+            {(showExpiringOnly || showIncompleteOnly) && (
+              <button onClick={clearFilters} className="activation-btn activation-btn-outline">
+                <X size={16} /> Effacer les filtres
+              </button>
             )}
           </div>
         </div>
         
         <div className="activation-stats-grid">
           <StatCard icon={Satellite} label="Total Activations" value={stats?.total_activations || 0} color="primary" />
-          <StatCard icon={DollarSign} label="Chiffre d'affaires" value={`${parseFloat(stats?.total_revenue ?? 0).toFixed(2)} MAD`} color="success" />
+          <StatCard icon={DollarSign} label="Chiffre d'affaires" value={`${safeFormatPrice(stats?.total_revenue ?? 0)} MAD`} color="success" />
           <StatCard icon={CheckCircle2} label="Actives" value={stats?.active_activations || 0} color="success" />
           <StatCard icon={Clock} label="Expirent bientôt" value={stats?.expiring_soon || 0} color="warning" />
           <StatCard icon={AlertTriangle} label="Expirées" value={stats?.expired_activations || 0} color="danger" />
         </div>
         
-        {expiringCount > 0 && !alertDismissed && (
-          <div className="alert-banner" onClick={handleAlertClick}>
-            <AlertTriangle size={20} className="alert-banner-icon" />
-            <div className="alert-banner-content">
+        {/* Expiring Alert Banner */}
+        {expiringCount > 0 && !alertDismissed && !showExpiringOnly && !showIncompleteOnly && (
+          <div className="alert-banner" onClick={handleAlertClick} style={{ cursor: 'pointer', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '0.5rem', padding: '0.75rem 1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <AlertTriangle size={20} style={{ color: '#d97706' }} />
+            <div style={{ flex: 1, fontSize: '0.875rem', color: '#92400e' }}>
               <strong>{expiringCount} activation{expiringCount > 1 ? 's' : ''}</strong> {expiringCount > 1 ? 'expirent' : 'expire'} dans 7 jours ou moins.
-              <span style={{ fontWeight: 500, marginLeft: '0.5rem' }}><Search /> Cliquez ici pour les voir</span>
+              <span style={{ fontWeight: 500, marginLeft: '0.5rem' }}>Cliquez ici pour les voir</span>
             </div>
-            <button onClick={(e) => { e.stopPropagation(); setAlertDismissed(true); }} className="alert-banner-close"><X size={16} /></button>
+            <button onClick={(e) => { e.stopPropagation(); setAlertDismissed(true); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#92400e' }}><X size={16} /></button>
+          </div>
+        )}
+        
+        {/* Incomplete Activations Alert Banner */}
+        {incompleteCount > 0 && !showIncompleteOnly && !showExpiringOnly && (
+          <div className="incomplete-alert-banner" onClick={handleIncompleteClick}>
+            <AlertCircle size={22} />
+            <div className="incomplete-alert-text">
+              <strong>{incompleteCount} activation{incompleteCount > 1 ? 's' : ''}</strong> {incompleteCount > 1 ? 'ont' : 'a'} des champs obligatoires vides 
+              (IMEI, N° SIM, Opérateur, Plan, etc.)
+              <span style={{ fontWeight: 500, marginLeft: '0.5rem' }}>→ Cliquez pour les voir et compléter</span>
+            </div>
+            <ChevronRight size={18} style={{ color: '#dc2626' }} />
           </div>
         )}
         
         {errorMessage && <div className="error-message"><AlertTriangle size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />{errorMessage}</div>}
         {successMessage && <div className="success-message"><CheckCircle2 size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />{successMessage}</div>}
         
-        <div className="activation-card" style={{ marginBottom: '1rem' }}>
+        <div className="activation-card">
           <div className="activation-filter-bar">
             <div className="activation-search-wrapper">
               <Search className="activation-search-icon" />
-              <input className="activation-search-input" placeholder="Rechercher par client, N° vente, IMEI, N° SIM, matricule..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              <input 
+                className="activation-search-input" 
+                placeholder="Rechercher par IMEI, N° SIM, matricule, client, N° vente..." 
+                value={search} 
+                onChange={(e) => setSearch(e.target.value)} 
+              />
             </div>
             <div className="activation-filter-group">
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="activation-filter-select">
-                <option value="all">Tous statuts</option>
-                <option value="active">Actifs</option>
-                <option value="expired">Expirés</option>
-                <option value="suspended">Suspendus</option>
-                <option value="pending">En attente</option>
-              </select>
-              <select value={operatorFilter} onChange={(e) => setOperatorFilter(e.target.value)} className="activation-filter-select">
-                <option value="all">Tous opérateurs</option>
-                {OPERATORS.map(op => <option key={op} value={op}>{op}</option>)}
-              </select>
+              {!showExpiringOnly && !showIncompleteOnly && (
+                <>
+                  <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="activation-filter-select">
+                    <option value="all">Tous statuts</option>
+                    <option value="active">Actifs</option>
+                    <option value="expired">Expirés</option>
+                    <option value="suspended">Suspendus</option>
+                    <option value="pending">En attente</option>
+                  </select>
+                  <select value={operatorFilter} onChange={(e) => setOperatorFilter(e.target.value)} className="activation-filter-select">
+                    <option value="all">Tous opérateurs</option>
+                    {OPERATORS.map(op => <option key={op} value={op}>{op}</option>)}
+                  </select>
+                </>
+              )}
+              {showIncompleteOnly && (
+                <div style={{ padding: '0.5rem 0.75rem', background: '#fee2e2', borderRadius: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#991b1b' }}>
+                  🔍 Filtre: Activations incomplètes uniquement
+                </div>
+              )}
+              {showExpiringOnly && (
+                <div style={{ padding: '0.5rem 0.75rem', background: '#fef3c7', borderRadius: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#92400e' }}>
+                  🔍 Filtre: Expirations proches uniquement
+                </div>
+              )}
             </div>
           </div>
-        </div>
-        
-        <div className="activation-card">
+          
           <div className="activation-table-container">
             <table className="activation-table">
               <thead>
                 <tr>
-                  <th style={{ width: '40px' }}></th>
-                  <th>N° Vente</th>
                   <th>Client</th>
-                  <th>Date</th>
-                  <th>Produits GPS</th>
-                  <th>Status</th>
-                  <th style={{ width: '120px' }}>Actions</th>
+                  <th>Type IMEI</th>
+                  <th>IMEI</th>
+                  <th>N° SIM</th>
+                  <th>Opérateur</th>
+                  <th>Plan</th>
+                  <th>Prix Activation</th>
+                  <th>Matricule</th>
+                  <th>Expiration</th>
+                  <th>Statut</th>
+                  <th style={{ width: '160px' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {paginatedSales.map(sale => {
-                  const saleActivations = getSaleActivations(sale.id);
-                  const isExpanded = expandedSales[sale.id];
-                  const hasActivations = saleActivations.length > 0;
-                  const needsActivation = sale.needs_activation;
+                {(showExpiringOnly || showIncompleteOnly ? paginatedActivations : (paginatedActivations.length > 0 ? paginatedActivations : filteredActivations)).map(activation => {
+                  const daysRemaining = activation.days_remaining || 
+                    (activation.expires_at ? Math.ceil((new Date(activation.expires_at) - new Date()) / (1000 * 60 * 60 * 24)) : 999);
+                  const isExpiringSoon = daysRemaining > 0 && daysRemaining <= 7 && activation.status === 'active';
+                  const isIncomplete = isActivationIncomplete(activation);
+                  const imeiType = activation.imei ? 'existing' : (activation.client_imei ? 'client' : '-');
+                  const imeiTypeLabel = imeiType === 'existing' ? 'Existant' : imeiType === 'client' ? 'Client' : '-';
+                  const emptyFields = getEmptyFields(activation);
                   
                   return (
-                    <React.Fragment key={sale.id}>
-                      <tr className="expandable-row" onClick={() => toggleExpand(sale.id)}>
-                        <td onClick={(e) => e.stopPropagation()}>{isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</td>
-                        <td className="font-mono">#{sale.id}</td>
-                        <td className="font-medium">{sale.client?.nom || '-'}</td>
-                        <td>{formatDate(sale.created_at)}</td>
-                        <td>{renderProductStatus(sale)}</td>
-                        <td>
-                          {needsActivation ? <Badge variant="warning">Activation en attente</Badge> : hasActivations ? <Badge variant="success">Partiellement activé</Badge> : <Badge variant="secondary">Aucun GPS</Badge>}
-                        </td>
-                        <td onClick={(e) => e.stopPropagation()}>
-                          <div className="action-buttons">
-                            {needsActivation && <button onClick={() => openActivationModal(sale)} className="activation-icon-btn activation-icon-btn-activate" title="Activer les appareils GPS"><Wifi size={18} /></button>}
-                            {hasActivations && <button onClick={() => exportSaleDetailsToExcel(sale)} className="activation-icon-btn activation-icon-btn-excel" title="Exporter les détails de cette vente"><FileSpreadsheet size={18} /></button>}
-                            {!needsActivation && !hasActivations && <span className="text-gray-400 text-xs">-</span>}
-                          </div>
-                        </td>
-                      </tr>
-                      
-                      {isExpanded && (
-                        <tr key={`${sale.id}-expanded`} className="expandable-content">
-                          <td colSpan={7}>
-                            <div style={{ padding: '1rem' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                                <h4 style={{ fontWeight: '600' }}>Activations pour la vente #{sale.id}</h4>
-                              </div>
-                              {saleActivations.length > 0 ? (
-                                <table className="sub-table">
-                                  <thead>
-                                    <tr>
-                                      <th>Plan</th>
-                                      <th>Prix Produit</th>
-                                      <th>Prix Produit+20%</th>
-                                      <th>Prix Activation</th>
-                                      <th>Matricule</th>
-                                      <th>Expiration</th>
-                                      <th>Statut</th>
-                                      <th>Total Payé</th>
-                                      <th>Historique Renouvellements</th>
-                                      <th>Actions</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {saleActivations.map(activation => {
-                                      const daysRemaining = activation.days_remaining || 
-                                        (activation.expires_at ? Math.ceil((new Date(activation.expires_at) - new Date()) / (1000 * 60 * 60 * 24)) : 999);
-                                      const isExpiringSoon = daysRemaining > 0 && daysRemaining <= 7;
-                                      const totalPaid = getTotalPaid(activation);
-                                      const productPrice = getProductPrice(activation);
-                                      const productPriceWithMarkup = productPrice * 1.2;
-                                      const activationPrice = parseFloat(activation.price) || 0;
-                                      const renewalEntries = getRenewalEntries(activation);
-                                      
-                                      return (
-                                        <tr key={activation.id} className={isExpiringSoon ? 'expiring-row' : ''}>
-                                          <td>{PLAN_LABEL[activation.plan_abonnement]}</td>
-                                          <td className="text-green-600 font-medium">{productPrice.toFixed(2)} MAD</td>
-                                          <td className="text-blue-600 font-medium">{productPriceWithMarkup.toFixed(2)} MAD</td>
-                                          <td>{activationPrice} MAD</td>
-                                          <td className="font-mono">{activation.matricule || '-'}</td>
-                                          <td className={daysRemaining <= 30 && daysRemaining > 0 ? 'text-red-600' : ''}>
-                                            {formatDate(activation.expires_at)}
-                                            {daysRemaining > 0 && daysRemaining < 999 && <span className="text-sm ml-2">({daysRemaining}j{isExpiringSoon && ' ⚠️'})</span>}
-                                          </td>
-                                          <td>{getStatusBadge(activation)}</td>
-                                          <td className="font-medium">{totalPaid} MAD</td>
-                                          <td>
-                                            {renewalEntries.length > 0 ? (
-                                              <ul className="renewals-list">
-                                                {renewalEntries.map((renewal, idx) => (
-                                                  <li key={idx}>
-                                                    {formatDate(renewal.date)}: {PLAN_LABEL[renewal.old_plan]} → {PLAN_LABEL[renewal.new_plan]} ({renewal.price} MAD)
-                                                  </li>
-                                                ))}
-                                              </ul>
-                                            ) : (
-                                              <span className="text-gray-400 text-xs">Aucun</span>
-                                            )}
-                                          </td>
-                                          <td>
-                                            <div className="action-buttons">
-                                              <button onClick={() => setShowDetailModal(activation)} className="activation-icon-btn" title="Détails"><Eye size={16} /></button>
-                                              <button onClick={() => showHistoryModal(activation)} className="activation-icon-btn" title="Historique"><History size={16} className="text-blue-600" /></button>
-                                              <button onClick={() => openRenewSelectionModal(activation)} className="activation-icon-btn" title="Renouveler l'abonnement"><RotateCcw size={16} style={{ color: '#16a34a' }} /></button>
-                                              {activation.status === 'active' && <button onClick={() => showStatusConfirmation(activation, 'suspended')} className="activation-icon-btn" title="Suspendre"><Ban size={16} className="text-yellow-600" /></button>}
-                                              {activation.status === 'suspended' && <button onClick={() => showStatusConfirmation(activation, 'active')} className="activation-icon-btn" title="Réactiver"><Power size={16} className="text-green-600" /></button>}
-                                              <button onClick={() => showDeleteConfirmation(activation)} className="activation-icon-btn" title="Supprimer"><Trash2 size={16} className="text-red-600" /></button>
-                                            </div>
-                                          </td>
-                                        </tr>
-                                      );
-                                    })}
-                                  </tbody>
-                                </table>
-                              ) : (
-                                <div className="activation-empty" style={{ padding: '2rem' }}><Satellite size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />Aucune activation pour cette vente</div>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
+                    <tr key={activation.id} className={`${isExpiringSoon ? 'expiring-row' : ''} ${isIncomplete ? 'incomplete-row' : ''}`}>
+                      <td className="font-medium">
+                        {activation.vente?.client?.nom || activation.client?.nom || '-'}
+                        {isIncomplete && emptyFields.length > 0 && (
+                          <span className="empty-fields-tooltip" title={`Champs manquants: ${emptyFields.join(', ')}`}>
+                            ⚠️
+                          </span>
+                        )}
+                      </td>
+                      <td>{imeiTypeLabel}</td>
+                      <td>{renderEditableCell(activation, 'imei', activation.imei || activation.client_imei, 'text')}</td>
+                      <td>{renderEditableCell(activation, 'numero_sim', activation.numero_sim, 'text')}</td>
+                      <td>{renderEditableCell(activation, 'operateur', activation.operateur, 'select')}</td>
+                      <td>{renderEditableCell(activation, 'plan_abonnement', activation.plan_abonnement, 'select')}</td>
+                      <td>{renderEditableCell(activation, 'price', activation.price, 'number')}</td>
+                      <td>{renderEditableCell(activation, 'matricule', activation.matricule, 'text')}</td>
+                      <td className={daysRemaining <= 30 && daysRemaining > 0 ? 'text-red-600' : ''}>
+                        {formatDate(activation.expires_at)}
+                        {daysRemaining > 0 && daysRemaining < 999 && <span className="text-xs ml-2">({daysRemaining}j{isExpiringSoon && ' ⚠️'})</span>}
+                      </td>
+                      <td>{getStatusBadge(activation)}</td>
+                      <td>
+                        <div className="action-buttons">
+                          <button onClick={() => setShowDetailModal(activation)} className="activation-icon-btn" title="Détails">
+                            <Eye size={16} className="text-blue-600" />
+                          </button>
+                          <button onClick={() => showHistoryModal(activation)} className="activation-icon-btn" title="Historique">
+                            <History size={16} className="text-purple-600" />
+                          </button>
+                          <button onClick={() => openRenewSelectionModal(activation)} className="activation-icon-btn" title="Renouveler">
+                            <RotateCcw size={16} style={{ color: '#16a34a' }} />
+                          </button>
+                          {activation.status === 'active' && (
+                            <button onClick={() => showStatusConfirmation(activation, 'suspended')} className="activation-icon-btn" title="Suspendre">
+                              <Ban size={16} className="text-yellow-600" />
+                            </button>
+                          )}
+                          {activation.status === 'suspended' && (
+                            <button onClick={() => showStatusConfirmation(activation, 'active')} className="activation-icon-btn" title="Réactiver">
+                              <Power size={16} className="text-green-600" />
+                            </button>
+                          )}
+                          <button onClick={() => showDeleteConfirmation(activation)} className="activation-icon-btn" title="Supprimer">
+                            <Trash2 size={16} className="text-red-600" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   );
                 })}
-                {paginatedSales.length === 0 && (
-                  <tr><td colSpan={7} className="activation-empty"><Satellite size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />Aucune vente trouvée</td></tr>
+                {filteredActivations.length === 0 && (
+                  <tr>
+                    <td colSpan={11} className="activation-empty">
+                      <Satellite size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
+                      {showIncompleteOnly ? 'Aucune activation incomplète trouvée' : 'Aucune activation trouvée'}
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>
           </div>
           
-          {getSalesTotalPages > 1 && (
+          {totalPages > 1 && (
             <div className="activation-pagination-container">
-              <button className="activation-pagination-btn" onClick={() => setSalesPage(prev => Math.max(1, prev - 1))} disabled={salesPage === 1}><ChevronLeft size={16} /> Précédent</button>
-              {getPageNumbers(getSalesTotalPages).map((page, idx) => page === '...' ? <span key={`ellipsis-${idx}`} className="activation-pagination-info">...</span> : (
-                <button key={page} className={`activation-pagination-btn ${salesPage === page ? 'activation-pagination-active' : ''}`} onClick={() => setSalesPage(page)}>{page}</button>
-              ))}
-              <button className="activation-pagination-btn" onClick={() => setSalesPage(prev => Math.min(getSalesTotalPages, prev + 1))} disabled={salesPage === getSalesTotalPages}>Suivant <ChevronRight size={16} /></button>
-            </div>
-          )}
-          
-          {getActivationsTotalPages > 1 && (
-            <div className="activation-pagination-container" style={{ borderTop: '1px solid #e5e7eb', marginTop: '0.5rem' }}>
-              <button className="activation-pagination-btn" onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1}><ChevronLeft size={16} /> Précédent</button>
-              {getPageNumbers(getActivationsTotalPages).map((page, idx) => page === '...' ? <span key={`ellipsis-${idx}`} className="activation-pagination-info">...</span> : (
-                <button key={page} className={`activation-pagination-btn ${currentPage === page ? 'activation-pagination-active' : ''}`} onClick={() => handlePageChange(page)}>{page}</button>
-              ))}
-              <button className="activation-pagination-btn" onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === getActivationsTotalPages}>Suivant <ChevronRight size={16} /></button>
+              <button 
+                className="activation-pagination-btn" 
+                onClick={() => handlePageChange(currentPage - 1)} 
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft size={16} /> Précédent
+              </button>
+              {getPageNumbers(totalPages).map((page, idx) => 
+                page === '...' ? (
+                  <span key={`ellipsis-${idx}`} className="activation-pagination-info">...</span>
+                ) : (
+                  <button 
+                    key={page} 
+                    className={`activation-pagination-btn ${currentPage === page ? 'activation-pagination-active' : ''}`} 
+                    onClick={() => handlePageChange(page)}
+                  >
+                    {page}
+                  </button>
+                )
+              )}
+              <button 
+                className="activation-pagination-btn" 
+                onClick={() => handlePageChange(currentPage + 1)} 
+                disabled={currentPage === totalPages}
+              >
+                Suivant <ChevronRight size={16} />
+              </button>
             </div>
           )}
         </div>
       </div>
       
-      {/* Activation Modal */}
-      {showActivationModal && selectedSaleData && selectedSale && (
-        <div className="activation-overlay">
-          <div className="activation-dialog" style={{ maxWidth: '64rem' }}>
-            <div className="activation-dialog-header">
-              <h2 className="activation-dialog-title">Activation GPS - Vente #{selectedSale.id}</h2>
-              <button onClick={() => { setShowActivationModal(false); setSelectedSale(null); setActivationsData([]); setErrorMessage(null); setSuccessMessage(null); }} className="activation-btn-icon"><X size={20} /></button>
-            </div>
-            <div className="activation-dialog-body">
-              <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-                <p className="text-sm"><strong>Client:</strong> {selectedSaleData.sale?.client?.nom || selectedSale.client?.nom}<br /><strong>Date vente:</strong> {formatDate(selectedSaleData.sale?.sale_date || selectedSale.created_at)}</p>
-                {selectedSale.client?.ice_client && <p className="text-sm"><strong>ICE Client:</strong> {selectedSale.client.ice_client}</p>}
-              </div>
-              
-              {selectedSaleData.activation_details?.map((detail, idx) => detail.remaining > 0 && (
-                <div key={detail.produit_id} className="activation-product-row">
-                  <div className="activation-product-title">{detail.produit_nom} ({detail.produit_marque}) - Prix produit: {detail.produit_prix || detail.default_price || 0} MAD - {detail.remaining} à activer</div>
-                  {activationsData.filter(a => a.produit_id === detail.produit_id).map((act) => {
-                    const availableImeiList = getImeiOptions(detail.produit_id);
-                    const usedImeisForProduct = getUsedImeisForProduct(detail.produit_id, act.id);
-                    const productPrice = act.produit_prix || detail.produit_prix || detail.default_price || 0;
-                    const productPriceWithMarkup = productPrice * 1.2;
-                    
-                    return (
-                      <div key={act.id} className="activation-item-card">
-                        <div className="activation-grid-2">
-                          <div className="activation-form-group">
-                            <label className="activation-label activation-label-required">IMEI *</label>
-                            <ImeiCombobox 
-                              value={act.imei} 
-                              onChange={(value) => updateActivationField(act.id, 'imei', value)} 
-                              options={availableImeiList} 
-                              placeholder="Sélectionner ou saisir un IMEI..." 
-                              usedImeis={usedImeisForProduct} 
-                            />
-                            {availableImeiList.length === 0 && <p className="text-xs text-red-600 mt-1">Aucun appareil disponible pour ce produit.</p>}
-                          </div>
-                          <div className="activation-form-group">
-                            <label className="activation-label activation-label-required">N° SIM *</label>
-                            <input type="text" className="activation-input font-mono" placeholder="0612345678" value={act.numero_sim} onChange={(e) => updateActivationField(act.id, 'numero_sim', e.target.value)} />
-                          </div>
-                        </div>
-                        <div className="activation-grid-3 mt-2">
-                          <div className="activation-form-group">
-                            <label className="activation-label activation-label-required">Opérateur *</label>
-                            <select className="activation-select" value={act.operateur} onChange={(e) => updateActivationField(act.id, 'operateur', e.target.value)}>
-                              {OPERATORS.map(op => <option key={op} value={op}>{op}</option>)}
-                            </select>
-                          </div>
-                          <div className="activation-form-group">
-                            <label className="activation-label activation-label-required">Plan *</label>
-                            <select className="activation-select" value={act.plan_abonnement} onChange={(e) => updateActivationField(act.id, 'plan_abonnement', e.target.value)}>
-                              <option value="1m">1 mois</option>
-                              <option value="3m">3 mois</option>
-                              <option value="6m">6 mois</option>
-                              <option value="12m">12 mois</option>
-                            </select>
-                          </div>
-                          <div className="activation-form-group">
-                            <label className="activation-label activation-label-required">Prix Activation (MAD) *</label>
-                            <div className="price-input-group">
-                              <input 
-                                type="number" 
-                                className="activation-input price-input" 
-                                placeholder="0.00"
-                                onChange={(e) => updateActivationField(act.id, 'price', parseFloat(e.target.value) || 0)}
-                                step="0.01"
-                                min="0"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                        <div className="activation-grid-2 mt-2">
-                          <div className="activation-form-group">
-                            <label className="activation-label">Matricule (véhicule)</label>
-                            <input type="text" className="activation-input" placeholder="123 ABC 45" value={act.matricule} onChange={(e) => updateActivationField(act.id, 'matricule', e.target.value)} />
-                          </div>
-                          <div className="activation-form-group">
-                            <label className="activation-label">Informations produit</label>
-                            <div className="text-sm">
-                              <span className="text-gray-600">Prix produit: </span>
-                              <span className="text-green-600 font-medium">{productPrice} MAD</span>
-                              <span className="text-gray-600 ml-2">(+20%: </span>
-                              <span className="text-blue-600 font-medium">{productPriceWithMarkup.toFixed(2)} MAD</span>
-                              <span className="text-gray-600">)</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-              
-              <div className="total-price-summary">
-                <span className="total-price-label">Total des activations à encaisser :</span>
-                <span className="total-price-value">{getTotalActivationPrice().toFixed(2)} MAD</span>
-              </div>
-            </div>
-            <div className="activation-dialog-footer">
-              <button onClick={() => { setShowActivationModal(false); setSelectedSale(null); setActivationsData([]); }} className="activation-btn activation-btn-secondary" disabled={loadingAction}>Annuler</button>
-              <button onClick={handleActivate} disabled={loadingAction} className="activation-btn activation-btn-primary">
-                {loadingAction ? <><div className="activation-spinner" style={{ width: '1rem', height: '1rem', borderWidth: '2px' }} /> Activation...</> : `Activer (${getTotalActivationPrice().toFixed(2)} MAD)`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
       {/* Detail Modal */}
       {showDetailModal && (
         <div className="activation-overlay">
-          <div className="activation-dialog" style={{ maxWidth: '32rem' }}>
+          <div className="activation-dialog" style={{ maxWidth: '36rem' }}>
             <div className="activation-dialog-header">
               <h2 className="activation-dialog-title">Détails de l'activation</h2>
               <button onClick={() => setShowDetailModal(null)} className="activation-btn-icon"><X size={20} /></button>
             </div>
             <div className="activation-dialog-body">
-              <div className="activation-grid-2">
-                <div><strong>IMEI:</strong> <span className="font-mono">{showDetailModal.imei}</span></div>
-                <div><strong>N° SIM:</strong> <span className="font-mono">{showDetailModal.numero_sim}</span></div>
-                <div><strong>Opérateur:</strong> {showDetailModal.operateur}</div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div><strong>ID:</strong> {showDetailModal.id}</div>
+                <div><strong>Type IMEI:</strong> {showDetailModal.imei ? 'Existant' : (showDetailModal.client_imei ? 'Client' : '-')}</div>
+                <div><strong>IMEI:</strong> <span className="font-mono">{showDetailModal.imei || '-'}</span></div>
+                <div><strong>IMEI Client:</strong> <span className="font-mono">{showDetailModal.client_imei || '-'}</span></div>
+                <div><strong>N° SIM:</strong> <span className="font-mono">{showDetailModal.numero_sim || '-'}</span></div>
+                <div><strong>Opérateur:</strong> {showDetailModal.operateur || '-'}</div>
                 <div><strong>Plan:</strong> {PLAN_LABEL[showDetailModal.plan_abonnement]}</div>
-                <div><strong>Prix Produit (Origine):</strong> <span className="text-green-600 font-medium">{getProductPrice(showDetailModal).toFixed(2)} MAD</span></div>
-                <div><strong>Prix Produit +20%:</strong> <span className="text-blue-600 font-medium">{getProductPriceWithMarkup(showDetailModal).toFixed(2)} MAD</span></div>
-                <div><strong>Prix Activation:</strong> <span className="text-green-600 font-medium">{showDetailModal.price || 0} MAD</span></div>
-                <div><strong>Total payé (activations + renouvellements):</strong> <span className="text-green-600 font-medium">{getTotalPaid(showDetailModal)} MAD</span></div>
-                <div><strong>Client:</strong> {showDetailModal.vente?.client?.nom}</div>
-                <div><strong>ICE Client:</strong> {showDetailModal.vente?.client?.ice_client || '-'}</div>
                 <div><strong>Matricule:</strong> {showDetailModal.matricule || '-'}</div>
+                <div><strong>Client:</strong> {showDetailModal.vente?.client?.nom || showDetailModal.client?.nom || '-'}</div>
+                <div><strong>ICE Client:</strong> {showDetailModal.vente?.client?.ice_client || showDetailModal.client?.ice_client || '-'}</div>
+                <div><strong>N° Vente:</strong> #{showDetailModal.vente_id || '-'}</div>
                 <div><strong>Date activation:</strong> {formatDate(showDetailModal.activated_at)}</div>
                 <div><strong>Expiration:</strong> {formatDate(showDetailModal.expires_at)}</div>
                 <div><strong>Statut:</strong> {getStatusBadge(showDetailModal)}</div>
+                <div><strong>Prix Activation:</strong> <span className="text-green-600 font-medium">{safeFormatPrice(showDetailModal.price)} MAD</span></div>
+                <div><strong>Total payé:</strong> <span className="text-green-600 font-medium">{safeFormatPrice(showDetailModal.getTotalPricePaid?.() || showDetailModal.price)} MAD</span></div>
               </div>
-              {getRenewalEntries(showDetailModal).length > 0 && (
+              {showDetailModal.renewal_history && showDetailModal.renewal_history.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-gray-200">
                   <strong>Historique des renouvellements:</strong>
                   <ul className="mt-2 space-y-1">
-                    {getRenewalEntries(showDetailModal).map((renewal, idx) => (
+                    {showDetailModal.renewal_history.filter(entry => entry.action === 'renewal').map((renewal, idx) => (
                       <li key={idx} className="text-sm text-gray-600">
-                        {formatDate(renewal.date)}: {PLAN_LABEL[renewal.old_plan]} → {PLAN_LABEL[renewal.new_plan]} - {renewal.price} MAD
+                        {formatDate(renewal.date)}: {PLAN_LABEL[renewal.old_plan]} → {PLAN_LABEL[renewal.new_plan]} - {safeFormatPrice(renewal.price)} MAD
                       </li>
                     ))}
                   </ul>
@@ -2937,5 +2712,4 @@ const exportSaleDetailsToExcel = async (sale) => {
   );
 };
 
-import React from 'react';
 export default Activation;

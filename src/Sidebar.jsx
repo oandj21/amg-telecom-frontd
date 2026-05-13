@@ -1,4 +1,4 @@
-// Sidebar.jsx - Fully Responsive with Bright Alert Colors
+// Sidebar.jsx - Fully Responsive with Bright Alert Colors + Incomplete Activations Alert
 import React, { useState, useEffect } from 'react';
 import { NavLink as RouterNavLink } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -51,6 +51,24 @@ const getDaysUntilDate = (dateString) => {
   return diffDays;
 };
 
+// Helper to check if activation has empty required fields (same logic as Activation.jsx)
+const isActivationIncomplete = (activation) => {
+  if (!activation) return false;
+  
+  const hasImei = (activation.imei && activation.imei.trim() !== '') || 
+                  (activation.client_imei && activation.client_imei.trim() !== '');
+  const hasNumeroSim = activation.numero_sim && activation.numero_sim.trim() !== '';
+  const hasOperateur = activation.operateur && activation.operateur.trim() !== '';
+  const hasPlan = activation.plan_abonnement && activation.plan_abonnement.trim() !== '';
+  
+  const criticalFieldsMissing = !hasImei || !hasNumeroSim || !hasOperateur || !hasPlan;
+  const hasMatricule = activation.matricule && activation.matricule.trim() !== '';
+  const hasPrice = activation.price !== null && activation.price !== undefined && activation.price > 0;
+  const recommendedFieldsMissing = !hasMatricule || !hasPrice;
+  
+  return criticalFieldsMissing || (recommendedFieldsMissing && (!hasMatricule && !hasPrice));
+};
+
 // =============================================================================
 // NAVLINK COMPONENT
 // =============================================================================
@@ -95,6 +113,9 @@ const Sidebar = () => {
   const [expiringActivationsCount, setExpiringActivationsCount] = useState(0);
   const [urgentActivationsCount, setUrgentActivationsCount] = useState(0);
   const [veryUrgentActivationsCount, setVeryUrgentActivationsCount] = useState(0);
+  
+  // Incomplete activations alert state
+  const [incompleteActivationsCount, setIncompleteActivationsCount] = useState(0);
 
   // Fetch checks periodically to update the alert count
   useEffect(() => {
@@ -137,7 +158,7 @@ const Sidebar = () => {
     }
   }, [checks]);
 
-  // Calculate expiring activations (within 7 days)
+  // Calculate expiring activations (within 7 days) and incomplete activations
   useEffect(() => {
     if (activations && activations.length > 0) {
       const today = new Date();
@@ -171,10 +192,15 @@ const Sidebar = () => {
         return daysRemaining === 1;
       });
       setVeryUrgentActivationsCount(veryUrgent.length);
+      
+      // Calculate incomplete activations
+      const incomplete = activations.filter(act => isActivationIncomplete(act));
+      setIncompleteActivationsCount(incomplete.length);
     } else {
       setExpiringActivationsCount(0);
       setUrgentActivationsCount(0);
       setVeryUrgentActivationsCount(0);
+      setIncompleteActivationsCount(0);
     }
   }, [activations]);
 
@@ -211,8 +237,7 @@ const Sidebar = () => {
     { to: '/clients', label: 'Clients', icon: UsersIcon },
     { to: '/ventes', label: 'Ventes', icon: ShoppingCart },
     { to: '/remises', label: 'Remises', icon: Receipt, alert: approachingCount > 0 },
-    { to: '/activation', label: 'Activation GPS', icon: Satellite, alert: expiringActivationsCount > 0 },
-    { to: '/client-activation', label: 'Client Activation', icon: Smartphone }, // New link added
+    { to: '/activation', label: 'Activation GPS', icon: Satellite, alert: expiringActivationsCount > 0 || incompleteActivationsCount > 0 },
     { to: '/utilisateurs', label: 'Utilisateurs', icon: UserCog, adminOnly: true },
     { to: '/parametres', label: 'Paramètres', icon: Settings, adminOnly: true },
     { to: '/profile', label: 'Mon Profil', icon: User }, 
@@ -228,11 +253,19 @@ const Sidebar = () => {
     return null;
   };
 
-  // Get alert severity for Activations
+  // Get alert severity for Activations (expiring)
   const getActivationAlertColor = () => {
     if (veryUrgentActivationsCount > 0) return 'critical';
     if (urgentActivationsCount > 0) return 'danger';
     if (expiringActivationsCount > 0) return 'warning';
+    return null;
+  };
+
+  // Get alert severity for Incomplete Activations
+  const getIncompleteAlertColor = () => {
+    if (incompleteActivationsCount > 10) return 'critical';
+    if (incompleteActivationsCount > 5) return 'danger';
+    if (incompleteActivationsCount > 0) return 'warning';
     return null;
   };
 
@@ -243,18 +276,28 @@ const Sidebar = () => {
     return approachingCount;
   };
 
-  // Get badge text for Activations
+  // Get badge text for Activations (expiring)
   const getActivationBadgeText = () => {
     if (veryUrgentActivationsCount > 0) return veryUrgentActivationsCount;
     if (urgentActivationsCount > 0) return urgentActivationsCount;
     return expiringActivationsCount;
   };
 
+  // Get combined badge for Activation menu (shows highest priority)
+  const getCombinedActivationBadge = () => {
+    if (incompleteActivationsCount > 0) {
+      return { text: incompleteActivationsCount, color: getIncompleteAlertColor() };
+    }
+    return { text: getActivationBadgeText(), color: getActivationAlertColor() };
+  };
+
   const alertColor = getAlertColor();
   const activationAlertColor = getActivationAlertColor();
+  const incompleteAlertColor = getIncompleteAlertColor();
   const totalExpiring = expiringActivationsCount;
+  const combinedActivationBadge = getCombinedActivationBadge();
 
-  // Get activation alert banner text
+  // Get activation alert banner text (expiring)
   const getActivationAlertText = () => {
     if (veryUrgentActivationsCount > 0) {
       return `🔴 ${veryUrgentActivationsCount} activation${veryUrgentActivationsCount > 1 ? 's' : ''} expire${veryUrgentActivationsCount > 1 ? 'nt' : ''} DEMAIN!`;
@@ -264,6 +307,14 @@ const Sidebar = () => {
     }
     if (expiringActivationsCount > 0) {
       return `📅 ${expiringActivationsCount} activation${expiringActivationsCount > 1 ? 's' : ''} expire${expiringActivationsCount > 1 ? 'nt' : ''} dans les 7 jours`;
+    }
+    return '';
+  };
+
+  // Get incomplete activations alert text
+  const getIncompleteAlertText = () => {
+    if (incompleteActivationsCount > 0) {
+      return `⚠️ ${incompleteActivationsCount} activation${incompleteActivationsCount > 1 ? 's' : ''} ${incompleteActivationsCount > 1 ? 'ont' : 'a'} des champs obligatoires vides (IMEI, SIM, Opérateur...)`;
     }
     return '';
   };
@@ -285,7 +336,24 @@ const Sidebar = () => {
         {visible.map((item) => {
           const isActive = location.pathname === item.to;
           const showRemiseAlert = item.to === '/remises' && approachingCount > 0;
-          const showActivationAlert = item.to === '/activation' && expiringActivationsCount > 0;
+          const showActivationAlert = item.to === '/activation' && (expiringActivationsCount > 0 || incompleteActivationsCount > 0);
+          
+          let badgeInfo = null;
+          let alertColorForItem = null;
+          
+          if (showRemiseAlert) {
+            alertColorForItem = getAlertColor();
+            badgeInfo = { text: getBadgeText(), color: alertColorForItem };
+          } else if (showActivationAlert) {
+            // For activation, prioritize incomplete alert over expiring
+            if (incompleteActivationsCount > 0) {
+              alertColorForItem = getIncompleteAlertColor();
+              badgeInfo = { text: incompleteActivationsCount, color: alertColorForItem };
+            } else {
+              alertColorForItem = getActivationAlertColor();
+              badgeInfo = { text: getActivationBadgeText(), color: alertColorForItem };
+            }
+          }
           
           return (
             <NavLink
@@ -296,16 +364,10 @@ const Sidebar = () => {
             >
               <item.icon className="sidebar-nav-icon" />
               <span style={{ flex: 1 }}>{item.label}</span>
-              {showRemiseAlert && (
-                <div className={`sidebar-alert-badge alert-${alertColor}`}>
+              {badgeInfo && (
+                <div className={`sidebar-alert-badge alert-${badgeInfo.color}`}>
                   <Bell size={12} className="alert-icon" />
-                  {getBadgeText()}
-                </div>
-              )}
-              {showActivationAlert && (
-                <div className={`sidebar-alert-badge alert-${activationAlertColor}`}>
-                  <Bell size={12} className="alert-icon" />
-                  {getActivationBadgeText()}
+                  {badgeInfo.text}
                 </div>
               )}
             </NavLink>
@@ -338,7 +400,7 @@ const Sidebar = () => {
       )}
 
       {/* Alert Banner for Activations Expiring Soon */}
-      {expiringActivationsCount > 0 && (
+      {expiringActivationsCount > 0 && incompleteActivationsCount === 0 && (
         <div className={`sidebar-alert-banner banner-${activationAlertColor}`}>
           <AlertCircle size={18} />
           <div className="sidebar-alert-text">
@@ -361,6 +423,18 @@ const Sidebar = () => {
         </div>
       )}
 
+      {/* Alert Banner for Incomplete Activations (shows even if expiring also exists) */}
+      {incompleteActivationsCount > 0 && (
+        <div className={`sidebar-alert-banner banner-${incompleteAlertColor}`}>
+          <AlertCircle size={18} />
+          <div className="sidebar-alert-text">
+            <span className={incompleteAlertColor === 'critical' ? 'very-urgent-text' : incompleteAlertColor === 'danger' ? 'urgent-text' : 'warning-text'}>
+              ⚠️ {incompleteActivationsCount} activation{incompleteActivationsCount > 1 ? 's' : ''} {incompleteActivationsCount > 1 ? 'ont' : 'a'} des champs manquants
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="sidebar-user-section">
         <div className="sidebar-user-info">
           <div className="sidebar-user-name">{user?.name || 'Utilisateur'}</div>
@@ -377,6 +451,26 @@ const Sidebar = () => {
       </div>
     </>
   );
+
+  // Combined badge count for mobile menu button (shows highest priority)
+  const getMobileBadgeInfo = () => {
+    const hasIncomplete = incompleteActivationsCount > 0;
+    const hasExpiring = expiringActivationsCount > 0;
+    const hasRemise = approachingCount > 0;
+    
+    if (hasIncomplete) {
+      return { count: incompleteActivationsCount, color: getIncompleteAlertColor() };
+    }
+    if (hasExpiring) {
+      return { count: getActivationBadgeText(), color: getActivationAlertColor() };
+    }
+    if (hasRemise) {
+      return { count: getBadgeText(), color: getAlertColor() };
+    }
+    return null;
+  };
+
+  const mobileBadge = getMobileBadgeInfo();
 
   return (
     <>
@@ -438,7 +532,7 @@ const Sidebar = () => {
   width: 4px;
 }
 
-/* Optional: Adjust the main content area to align with the spaced sidebar */
+/* Optional: Adjust the main content area to sit next to the spaced sidebar */
 @media (min-width: 768px) {
   /* Target the main content wrapper to sit next to the spaced sidebar */
   .flex-1 {
@@ -525,7 +619,7 @@ const Sidebar = () => {
             }
           }
 
-          /* Critical Level - Dark Red/Purple with Blinking (1 day or less) */
+          /* Critical Level - Dark Red/Purple with Blinking (1 day or less / high count) */
           .sidebar-alert-badge.alert-critical {
             background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
             color: #ffffff;
@@ -1017,17 +1111,9 @@ const Sidebar = () => {
       >
         <Menu size={20} />
         Menu
-        {(approachingCount > 0 || expiringActivationsCount > 0) && (
-          <span className={`menu-badge ${
-            veryUrgentCount > 0 || veryUrgentActivationsCount > 0 ? 'menu-badge-critical' :
-            urgentCount > 0 || urgentActivationsCount > 0 ? 'menu-badge-danger' :
-            'menu-badge-warning'
-          }`}>
-            {(veryUrgentCount + veryUrgentActivationsCount) > 0 
-              ? (veryUrgentCount + veryUrgentActivationsCount)
-              : (urgentCount + urgentActivationsCount) > 0
-                ? (urgentCount + urgentActivationsCount)
-                : (approachingCount + expiringActivationsCount)}
+        {mobileBadge && (
+          <span className={`menu-badge menu-badge-${mobileBadge.color}`}>
+            {mobileBadge.count}
           </span>
         )}
       </button>
@@ -1069,7 +1155,23 @@ const Sidebar = () => {
           {visible.map((item) => {
             const isActive = location.pathname === item.to;
             const showRemiseAlert = item.to === '/remises' && approachingCount > 0;
-            const showActivationAlert = item.to === '/activation' && expiringActivationsCount > 0;
+            const showActivationAlert = item.to === '/activation' && (expiringActivationsCount > 0 || incompleteActivationsCount > 0);
+            
+            let badgeInfo = null;
+            let alertColorForItem = null;
+            
+            if (showRemiseAlert) {
+              alertColorForItem = getAlertColor();
+              badgeInfo = { text: getBadgeText(), color: alertColorForItem };
+            } else if (showActivationAlert) {
+              if (incompleteActivationsCount > 0) {
+                alertColorForItem = getIncompleteAlertColor();
+                badgeInfo = { text: incompleteActivationsCount, color: alertColorForItem };
+              } else {
+                alertColorForItem = getActivationAlertColor();
+                badgeInfo = { text: getActivationBadgeText(), color: alertColorForItem };
+              }
+            }
             
             return (
               <NavLink
@@ -1080,16 +1182,10 @@ const Sidebar = () => {
               >
                 <item.icon className="sidebar-nav-icon" />
                 <span style={{ flex: 1 }}>{item.label}</span>
-                {showRemiseAlert && (
-                  <div className={`sidebar-alert-badge alert-${alertColor}`}>
+                {badgeInfo && (
+                  <div className={`sidebar-alert-badge alert-${badgeInfo.color}`}>
                     <Bell size={12} className="alert-icon" />
-                    {getBadgeText()}
-                  </div>
-                )}
-                {showActivationAlert && (
-                  <div className={`sidebar-alert-badge alert-${activationAlertColor}`}>
-                    <Bell size={12} className="alert-icon" />
-                    {getActivationBadgeText()}
+                    {badgeInfo.text}
                   </div>
                 )}
               </NavLink>
@@ -1121,8 +1217,8 @@ const Sidebar = () => {
           </div>
         )}
 
-        {/* Mobile Alert Banner for Activations */}
-        {expiringActivationsCount > 0 && (
+        {/* Mobile Alert Banner for Activations Expiring Soon */}
+        {expiringActivationsCount > 0 && incompleteActivationsCount === 0 && (
           <div className={`sidebar-alert-banner banner-${activationAlertColor}`}>
             <AlertCircle size={18} />
             <div className="sidebar-alert-text">
@@ -1141,6 +1237,18 @@ const Sidebar = () => {
                   📅 {expiringActivationsCount} activation{expiringActivationsCount > 1 ? 's' : ''} expire{expiringActivationsCount > 1 ? 'nt' : ''} dans les 7 jours
                 </span>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Mobile Alert Banner for Incomplete Activations */}
+        {incompleteActivationsCount > 0 && (
+          <div className={`sidebar-alert-banner banner-${incompleteAlertColor}`}>
+            <AlertCircle size={18} />
+            <div className="sidebar-alert-text">
+              <span className={incompleteAlertColor === 'critical' ? 'very-urgent-text' : incompleteAlertColor === 'danger' ? 'urgent-text' : 'warning-text'}>
+                ⚠️ {incompleteActivationsCount} activation{incompleteActivationsCount > 1 ? 's' : ''} {incompleteActivationsCount > 1 ? 'ont' : 'a'} des champs manquants
+              </span>
             </div>
           </div>
         )}
