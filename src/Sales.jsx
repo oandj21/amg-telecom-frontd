@@ -1,4 +1,4 @@
-// Sales.tsx - Updated (removed Type de vente section)
+// Sales.tsx - Updated with cache.png under Cachet & signature section
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
@@ -6,7 +6,8 @@ import {
   Edit, Save, Check, CreditCard, DollarSign, Calendar, Clock, User, 
   Phone, Mail, MapPin, Car, Wifi, ChevronLeft, ChevronRight,
   Info, Wallet, Receipt, History, TrendingUp, Loader, RefreshCw,
-  CheckCircle, Printer, AlertTriangle, ChevronDown, Package, Filter
+  CheckCircle, Printer, AlertTriangle, ChevronDown, Package, Filter,
+  Image as ImageIcon, EyeOff
 } from 'lucide-react';
 import companyLogo from './assets/logo.png';
 
@@ -1432,6 +1433,67 @@ const styles = `
     font-size: 0.7rem;
     cursor: pointer;
   }
+  
+  /* Invoice Image Toggle Button Styles */
+  .invoice-image-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+  }
+  
+  .invoice-image-toggle:hover {
+    background: #e2e8f0;
+    transform: translateY(-1px);
+  }
+  
+  .invoice-image-toggle.active {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    border-color: #3b82f6;
+  }
+  
+  /* Cache Image Styles for signature section */
+  .signature-section {
+    margin-top: 55px;
+    margin-bottom: 55px;
+    display: flex;
+    justify-content: flex-end;
+    padding-right: 20px;
+  }
+  
+  .signature-box {
+    text-align: center;
+    width: 200px;
+  }
+  
+  .signature-label {
+    font-size: 11px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    text-decoration: underline;
+    color: #1f2937;
+  }
+  
+  .signature-image {
+    margin-top: 10px;
+    display: flex;
+    justify-content: center;
+  }
+  
+  .signature-img {
+    max-width: 150px;
+    max-height: 80px;
+    object-fit: contain;
+  }
 `;
 
 // ==================== SEARCHABLE SELECT COMPONENT ====================
@@ -1708,7 +1770,7 @@ const PaymentHistoryModal = ({
   sale, 
   onClose,
   onPaymentChange,
-  showToast ,
+  showToast,
   showConfirm
 }) => {
   const [editPaymentId, setEditPaymentId] = useState(null);
@@ -2221,6 +2283,10 @@ const Sales = () => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [toasts, setToasts] = useState([]);
   
+  // ---- Invoice Image Toggle State ----
+  const [showCacheImage, setShowCacheImage] = useState(true);
+  const [cacheImageBase64, setCacheImageBase64] = useState(null);
+  
   // ---- Delete Confirm State ----
   const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, saleId: null, saleInfo: '' });
   const [deletingSale, setDeletingSale] = useState(false);
@@ -2264,6 +2330,29 @@ const Sales = () => {
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
+
+  // ---- Load cache.png from public folder ----
+  useEffect(() => {
+    const loadCacheImage = async () => {
+      try {
+        // Try to load from public folder
+        const response = await fetch('/cache.png');
+        if (response.ok) {
+          const blob = await response.blob();
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            setCacheImageBase64(reader.result);
+          };
+          reader.readAsDataURL(blob);
+        } else {
+          console.log('cache.png not found in public folder');
+        }
+      } catch (err) {
+        console.log('Error loading cache.png:', err);
+      }
+    };
+    loadCacheImage();
+  }, []);
 
   // ---- Toast Management ----
   const showToast = (message, type = 'success') => {
@@ -2630,7 +2719,7 @@ const Sales = () => {
     }
   };
 
-  // ---- Invoice Generation ----
+  // ---- Invoice Generation with Cache Image in Signature Section ----
   const getLogoBase64 = async () => {
     try {
       const response = await fetch(companyLogo);
@@ -2645,7 +2734,7 @@ const Sales = () => {
     }
   };
 
-  const generateInvoiceHTML = (sale, companyInfo, logoBase64 = null) => {
+  const generateInvoiceHTML = (sale, companyInfo, logoBase64 = null, includeCacheImage = true) => {
     const saleItems = sale.items || sale.produits || [];
     const totalAmount = safeNumber(sale.total);
     const subtotalCalc = sale.subtotal || (totalAmount / 1.2);
@@ -2754,6 +2843,11 @@ const Sales = () => {
           .executive-footer .footer-company-name { font-weight: 700; color: #0f172a; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
           .bank-info { margin-top: 12px; font-size: 11px; color: #475569; border-top: 1px dashed #e2e8f0; padding-top: 10px; }
           .bank-info strong { color: #0f172a; }
+          .signature-section { margin-top: 55px; margin-bottom: 55px; display: flex; justify-content: flex-end; padding-right: 20px; }
+          .signature-box { text-align: center; width: 200px; }
+          .signature-label { font-size: 11px; font-weight: bold; margin-bottom: 10px; text-decoration: underline; color: #1f2937; }
+          .signature-image { margin-top: 10px; display: flex; justify-content: center; }
+          .signature-img { max-width: 150px; max-height: 80px; object-fit: contain; }
         </style>
       </head>
       <body>
@@ -2857,13 +2951,18 @@ const Sales = () => {
               </table>
             </div>
           </div>
-          <div style="margin-top: 55px; margin-bottom: 55px; display: flex; justify-content: flex-end; padding-right: 20px;">
-            <div style="text-align: center; width: 200px;">
-              <p style="font-size: 11px; font-weight: bold; margin-bottom: 50px; text-decoration: underline; color: #1f2937;">
-                Cachet & signature
-              </p>
+          
+          <div class="signature-section">
+            <div class="signature-box">
+              <div class="signature-label">Cachet & signature</div>
+              ${includeCacheImage && cacheImageBase64 ? `
+              <div class="signature-image">
+                <img src="${cacheImageBase64}" alt="Cachet" class="signature-img" />
+              </div>
+              ` : '<div style="height: 50px;"></div>'}
             </div>
           </div>
+          
           <div class="payment-routing">
             <div class="routing-title">Règlement & Informations Légales</div>
             <div class="routing-grid">
@@ -2872,7 +2971,6 @@ const Sales = () => {
               <div class="routing-item"><strong>Patente</strong> ${companyInfo.patente || '-'}</div>
               <div class="routing-item"><strong>IF</strong> ${companyInfo.tax_number || '-'}</div>
             </div>
-
           </div>
           
           <div class="executive-footer">
@@ -2889,7 +2987,7 @@ const Sales = () => {
     setLoading(true);
     const companyInfo = getCompanyInfo();
     const logoBase64 = await getLogoBase64();
-    const html = generateInvoiceHTML(sale, companyInfo, logoBase64);
+    const html = generateInvoiceHTML(sale, companyInfo, logoBase64, showCacheImage);
 
     const element = document.createElement('div');
     element.innerHTML = html;
@@ -2926,7 +3024,7 @@ const Sales = () => {
   const printInvoice = async (sale) => {
     const companyInfo = getCompanyInfo();
     const logoBase64 = await getLogoBase64();
-    const html = generateInvoiceHTML(sale, companyInfo, logoBase64);
+    const html = generateInvoiceHTML(sale, companyInfo, logoBase64, showCacheImage);
     const win = window.open('', '_blank');
     win.document.write(html);
     win.document.close();
@@ -3106,6 +3204,14 @@ const Sales = () => {
         subtitle={`${filteredSales.length} ventes · ${safeToFixed(totalRevenue)} MAD encaissés`} 
         actions={
           <>
+            <button 
+              onClick={() => setShowCacheImage(!showCacheImage)} 
+              className={`invoice-image-toggle ${showCacheImage ? 'active' : ''}`}
+              title={showCacheImage ? "Masquer l'image cache.png" : "Afficher l'image cache.png"}
+            >
+              {showCacheImage ? <EyeOff size={16} /> : <ImageIcon size={16} />}
+              {showCacheImage ? "Masquer cache" : "Afficher cache"}
+            </button>
             <ExportMenu 
               title="Liste des ventes" 
               rows={filteredSales} 

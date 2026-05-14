@@ -1582,29 +1582,31 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       });
 
       // TOTAL
-      const total = activationsData.reduce(
-        (s, i) => s + safeNumber(i.displayPrice),
-        0
-      );
+     // TOTAL
+const total = activationsData.reduce(
+  (s, i) => s + safeNumber(i.displayPrice),
+  0
+);
 
-      const finalY = doc.lastAutoTable.finalY + 15;
+const finalY = doc.lastAutoTable.finalY + 15;
 
-      doc.setFillColor(248, 250, 252);
-      doc.roundedRect(130, finalY - 9, 68, 14, 3, 3, 'FD');
+// Smaller width box
+doc.setFillColor(248, 250, 252);
+doc.roundedRect(145, finalY - 9, 50, 14, 3, 3, 'FD');
 
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
+doc.setFont('helvetica', 'bold');
+doc.setFontSize(11);
 
-      doc.text('TOTAL TTC :', 135, finalY);
+doc.text('TOTAL :', 155, finalY);
 
-      doc.setFont('times', 'bold');
+doc.setFont('times', 'bold');
 
-      doc.text(
-        formatMoney(total),
-        193,
-        finalY,
-        { align: 'right' }
-      );
+doc.text(
+  formatMoney(total),
+  190,
+  finalY,
+  { align: 'right' }
+);
 
       // SAVE
       doc.save(
