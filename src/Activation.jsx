@@ -1498,6 +1498,7 @@ const HistoryModal = ({ isOpen, onClose, activation, history }) => {
               <div><strong>Opérateur:</strong> {activation.operateur || '-'}</div>
               <div><strong>Plan:</strong> {PLAN_LABEL[activation.plan_abonnement] || '-'}</div>
               <div><strong>Prix activation:</strong> {safeFormatPrice(activation.price)} MAD</div>
+              <div><strong>Total payé:</strong> <span className="text-green-600 font-bold">{safeFormatPrice(activation.total_price_paid || activation.price)} MAD</span></div>
               <div><strong>Client:</strong> {activation.vente?.client?.nom || activation.client?.nom || '-'}</div>
               <div><strong>Matricule:</strong> {activation.matricule || '-'}</div>
             </div>
@@ -1870,7 +1871,7 @@ const Activation = () => {
       'numero_sim': 'Numéro SIM',
       'operateur': 'Opérateur',
       'plan_abonnement': 'Plan',
-      'price': 'Prix'
+      'price': 'Prix d\'activation'
     };
     return labels[field] || field;
   };
@@ -2062,11 +2063,12 @@ const Activation = () => {
     setSuccessMessage(null);
     
     try {
+      // Send renew: true - this will NOT overwrite the original price field
       await dispatch(updateActivation({ 
         id: activation.id, 
         plan_abonnement: selectedPlan, 
         renew: true,
-        price: price
+        price: price  // This goes into renewal_history, NOT the main price field
       })).unwrap();
       setSuccessMessage(`Abonnement renouvelé avec +${PLAN_LABEL[selectedPlan]} pour ${safeFormatPrice(price)} MAD (IMEI ${activation.imei || activation.client_imei})`);
       loadData();
@@ -2109,7 +2111,9 @@ const Activation = () => {
           <p><strong>IMEI Client:</strong> {activation.client_imei || '-'}</p>
           <p><strong>N° SIM:</strong> {activation.numero_sim || '-'}</p>
           <p><strong>Client:</strong> {activation.vente?.client?.nom || activation.client?.nom || '-'}</p>
-          <p><strong>Prix activation total (avec renouvellements):</strong> {safeFormatPrice(activation.price)} MAD</p>
+          <p><strong>Prix activation original:</strong> {safeFormatPrice(activation.price)} MAD</p>
+          <p><strong>Total payé (avec renouvellements):</strong> {safeFormatPrice(activation.total_price_paid || activation.price)} MAD</p>
+          <p><strong>Nombre de renouvellements:</strong> {activation.renewal_count || 0}</p>
           <p className="text-red-600 mt-2">⚠️ Cette action est irréversible.</p>
         </div>
       ),
@@ -2269,29 +2273,29 @@ const Activation = () => {
       
       let rowOffset = logoAdded ? 3 : 0;
       
-      worksheet.mergeCells(`A${1 + rowOffset}:J${1 + rowOffset}`);
+      worksheet.mergeCells(`A${1 + rowOffset}:K${1 + rowOffset}`);
       worksheet.getCell(`A${1 + rowOffset}`).value = companyName;
       worksheet.getCell(`A${1 + rowOffset}`).font = { bold: true, size: 16 };
       worksheet.getCell(`A${1 + rowOffset}`).alignment = { horizontal: 'center' };
       
-      worksheet.mergeCells(`A${2 + rowOffset}:J${2 + rowOffset}`);
+      worksheet.mergeCells(`A${2 + rowOffset}:K${2 + rowOffset}`);
       worksheet.getCell(`A${2 + rowOffset}`).value = companyAddress;
       worksheet.getCell(`A${2 + rowOffset}`).font = { size: 10 };
       worksheet.getCell(`A${2 + rowOffset}`).alignment = { horizontal: 'center' };
       
-      worksheet.mergeCells(`A${3 + rowOffset}:J${3 + rowOffset}`);
+      worksheet.mergeCells(`A${3 + rowOffset}:K${3 + rowOffset}`);
       worksheet.getCell(`A${3 + rowOffset}`).value = `TEL: ${companyPhone} | EMAIL: ${companyEmail}`;
       worksheet.getCell(`A${3 + rowOffset}`).font = { size: 10 };
       worksheet.getCell(`A${3 + rowOffset}`).alignment = { horizontal: 'center' };
       
-      worksheet.mergeCells(`A${4 + rowOffset}:J${4 + rowOffset}`);
+      worksheet.mergeCells(`A${4 + rowOffset}:K${4 + rowOffset}`);
       worksheet.getCell(`A${4 + rowOffset}`).value = `ICE: ${companyIce} | RC: ${companyRc} | Patente: ${companyPatente}`;
       worksheet.getCell(`A${4 + rowOffset}`).font = { size: 9 };
       worksheet.getCell(`A${4 + rowOffset}`).alignment = { horizontal: 'center' };
       
       worksheet.addRow([]);
       
-      worksheet.mergeCells(`A${6 + rowOffset}:J${6 + rowOffset}`);
+      worksheet.mergeCells(`A${6 + rowOffset}:K${6 + rowOffset}`);
       worksheet.getCell(`A${6 + rowOffset}`).value = 'LISTE DES ACTIVATIONS GPS';
       worksheet.getCell(`A${6 + rowOffset}`).font = { bold: true, size: 14 };
       worksheet.getCell(`A${6 + rowOffset}`).alignment = { horizontal: 'center' };
@@ -2302,7 +2306,7 @@ const Activation = () => {
       
       const headers = [
         'Client', 'Type IMEI', 'IMEI', 'IMEI Client', 'N° SIM', 'Opérateur', 'Plan',
-        'Prix Activation', 'Matricule', 'Date Activation', 'Expiration', 'Statut', 'Champs manquants'
+        'Prix Activation', 'Total Payé', 'Nb Renouv.', 'Matricule', 'Date Activation', 'Expiration', 'Statut', 'Champs manquants'
       ];
       const headerRow = worksheet.addRow(headers);
       headerRow.eachCell((cell) => {
@@ -2316,6 +2320,9 @@ const Activation = () => {
       dataToExport.forEach(activation => {
         const imeiType = activation.imei ? 'Existant' : (activation.client_imei ? 'Client' : '-');
         const emptyFields = getEmptyFields(activation);
+        const totalPaid = activation.total_price_paid || activation.price;
+        const renewalCount = activation.renewal_count || 0;
+        
         worksheet.addRow([
           activation.vente?.client?.nom || activation.client?.nom || '-',
           imeiType,
@@ -2325,6 +2332,8 @@ const Activation = () => {
           activation.operateur || '-',
           PLAN_LABEL[activation.plan_abonnement] || '-',
           safeFormatPrice(activation.price),
+          safeFormatPrice(totalPaid),
+          renewalCount,
           activation.matricule || '-',
           formatDate(activation.activated_at),
           formatDate(activation.expires_at),
@@ -2391,6 +2400,7 @@ const Activation = () => {
                 <p className="text-sm mb-1"><strong>Client:</strong> {renewSelectionState.activation.vente?.client?.nom || renewSelectionState.activation.client?.nom || '-'}</p>
                 <p className="text-sm mb-1"><strong>Plan actuel:</strong> {PLAN_LABEL[renewSelectionState.activation.plan_abonnement]}</p>
                 <p className="text-sm"><strong>Expire le:</strong> {formatDate(renewSelectionState.activation.expires_at)}</p>
+                <p className="text-sm mt-2"><strong>Prix d'activation original:</strong> {safeFormatPrice(renewSelectionState.activation.price)} MAD</p>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="activation-form-group">
@@ -2424,8 +2434,9 @@ const Activation = () => {
               <div className="mt-4 p-3 bg-blue-50 rounded-lg text-sm">
                 <p className="font-medium text-blue-800 mb-1">Information:</p>
                 <p className="text-blue-700">Le renouvellement ajoutera <strong>{PLAN_LABEL[renewSelectionState.selectedPlan]}</strong> à l'abonnement actuel.</p>
+                <p className="text-blue-700">Le prix d'activation original ({safeFormatPrice(renewSelectionState.activation.price)} MAD) restera inchangé.</p>
                 {renewSelectionState.price > 0 && (
-                  <p className="text-blue-700 mt-1">Montant à payer: <strong>{safeFormatPrice(renewSelectionState.price)} MAD</strong></p>
+                  <p className="text-blue-700 mt-1">Montant du renouvellement: <strong>{safeFormatPrice(renewSelectionState.price)} MAD</strong></p>
                 )}
               </div>
             </div>
@@ -2464,8 +2475,17 @@ const Activation = () => {
         
         <div className="activation-stats-grid">
           <StatCard icon={Satellite} label="Total Activations" value={stats?.total_activations || 0} color="primary" />
-          <StatCard icon={DollarSign} label="Chiffre d'affaires" value={`${safeFormatPrice(stats?.total_revenue ?? 0)} MAD`} color="success" />
-          <StatCard icon={CheckCircle2} label="Actives" value={stats?.active_activations || 0} color="success" />
+<StatCard 
+  icon={DollarSign} 
+  label="Chiffre d'affaires" 
+  value={`${safeFormatPrice(
+    (activations || []).reduce(
+      (sum, act) => sum + (act.total_price_paid || act.price || 0), 
+      0
+    )
+  )} MAD`} 
+  color="success" 
+/>          <StatCard icon={CheckCircle2} label="Actives" value={stats?.active_activations || 0} color="success" />
           <StatCard icon={Clock} label="Expirent bientôt" value={stats?.expiring_soon || 0} color="warning" />
           <StatCard icon={AlertTriangle} label="Expirées" value={stats?.expired_activations || 0} color="danger" />
         </div>
@@ -2549,6 +2569,7 @@ const Activation = () => {
                   <th>Opérateur</th>
                   <th>Plan</th>
                   <th>Prix Activation</th>
+                  <th>Total Payé</th>
                   <th>Matricule</th>
                   <th>Expiration</th>
                   <th>Statut</th>
@@ -2564,6 +2585,8 @@ const Activation = () => {
                   const imeiType = activation.imei ? 'existing' : (activation.client_imei ? 'client' : '-');
                   const imeiTypeLabel = imeiType === 'existing' ? 'Existant' : imeiType === 'client' ? 'Client' : '-';
                   const emptyFields = getEmptyFields(activation);
+                  const totalPaid = activation.total_price_paid || activation.price;
+                  const renewalCount = activation.renewal_count || 0;
                   
                   return (
                     <tr key={activation.id} className={`${isExpiringSoon ? 'expiring-row' : ''} ${isIncomplete ? 'incomplete-row' : ''}`}>
@@ -2580,7 +2603,22 @@ const Activation = () => {
                       <td>{renderEditableCell(activation, 'numero_sim', activation.numero_sim, 'text')}</td>
                       <td>{renderEditableCell(activation, 'operateur', activation.operateur, 'select')}</td>
                       <td>{renderEditableCell(activation, 'plan_abonnement', activation.plan_abonnement, 'select')}</td>
-                      <td>{renderEditableCell(activation, 'price', activation.price, 'number')}</td>
+                      <td>
+                        {renderEditableCell(activation, 'price', activation.price, 'number')}
+                        {renewalCount > 0 && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            (original: {safeFormatPrice(activation.price)} MAD)
+                          </div>
+                        )}
+                      </td>
+                      <td className="text-green-600 font-medium">
+                        {safeFormatPrice(totalPaid)} MAD
+                        {renewalCount > 0 && (
+                          <span className="text-xs text-gray-500 block">
+                            +{renewalCount} renouvellement(s)
+                          </span>
+                        )}
+                      </td>
                       <td>{renderEditableCell(activation, 'matricule', activation.matricule, 'text')}</td>
                       <td className={daysRemaining <= 30 && daysRemaining > 0 ? 'text-red-600' : ''}>
                         {formatDate(activation.expires_at)}
@@ -2618,7 +2656,7 @@ const Activation = () => {
                 })}
                 {filteredActivations.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="activation-empty">
+                    <td colSpan={12} className="activation-empty">
                       <Satellite size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
                       {showIncompleteOnly ? 'Aucune activation incomplète trouvée' : 'Aucune activation trouvée'}
                     </td>
@@ -2686,8 +2724,9 @@ const Activation = () => {
                 <div><strong>Date activation:</strong> {formatDate(showDetailModal.activated_at)}</div>
                 <div><strong>Expiration:</strong> {formatDate(showDetailModal.expires_at)}</div>
                 <div><strong>Statut:</strong> {getStatusBadge(showDetailModal)}</div>
-                <div><strong>Prix Activation:</strong> <span className="text-green-600 font-medium">{safeFormatPrice(showDetailModal.price)} MAD</span></div>
-                <div><strong>Total payé:</strong> <span className="text-green-600 font-medium">{safeFormatPrice(showDetailModal.getTotalPricePaid?.() || showDetailModal.price)} MAD</span></div>
+                <div><strong>Prix Activation Original:</strong> <span className="text-blue-600 font-medium">{safeFormatPrice(showDetailModal.price)} MAD</span></div>
+                <div><strong>Total payé (avec renouvellements):</strong> <span className="text-green-600 font-bold">{safeFormatPrice(showDetailModal.total_price_paid || showDetailModal.price)} MAD</span></div>
+                <div><strong>Nombre de renouvellements:</strong> {showDetailModal.renewal_count || 0}</div>
               </div>
               {showDetailModal.renewal_history && showDetailModal.renewal_history.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-gray-200">

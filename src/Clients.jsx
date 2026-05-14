@@ -175,37 +175,36 @@ const styles = `
     border-collapse: collapse;
     font-size: 0.75rem;
   }
-  /* Action column – fixed width, prevent squishing other columns */
-.clients-table th:last-child,
-.clients-table td:last-child {
-  width: 100px;
-  text-align: center;
-  white-space: nowrap;
-}
-
-/* Buttons container – no wrapping, consistent spacing */
-.clients-actions-cell {
-  display: flex;
-  gap: 0.25rem;
-  justify-content: flex-end;
-  flex-wrap: nowrap;          /* Prevent buttons from wrapping */
-}
-
-/* Slightly smaller buttons on very small screens */
-@media (max-width: 480px) {
-  .clients-btn-icon {
-    width: 1.75rem;
-    height: 1.75rem;
-  }
-  .clients-btn-icon svg {
-    width: 12px;
-    height: 12px;
-  }
+  
   .clients-table th:last-child,
   .clients-table td:last-child {
-    width: 80px;              /* Narrower column on tiny devices */
+    width: 100px;
+    text-align: center;
+    white-space: nowrap;
   }
-}
+  
+  .clients-actions-cell {
+    display: flex;
+    gap: 0.25rem;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+  }
+  
+  @media (max-width: 480px) {
+    .clients-btn-icon {
+      width: 1.75rem;
+      height: 1.75rem;
+    }
+    .clients-btn-icon svg {
+      width: 12px;
+      height: 12px;
+    }
+    .clients-table th:last-child,
+    .clients-table td:last-child {
+      width: 80px;
+    }
+  }
+  
   @media (min-width: 768px) {
     .clients-table {
       font-size: 0.875rem;
@@ -279,7 +278,6 @@ const styles = `
     font-family: monospace;
   }
   
-  /* Hide less important columns on small screens */
   @media (max-width: 640px) {
     .clients-table .hide-on-mobile {
       display: none;
@@ -450,7 +448,6 @@ const styles = `
     justify-content: flex-end;
   }
   
-  /* Modal/Dialog Responsive Styles */
   .clients-overlay {
     position: fixed;
     inset: 0;
@@ -1020,7 +1017,6 @@ const styles = `
     }
   }
   
-  /* Hide scrollbar for cleaner look on mobile */
   @media (max-width: 640px) {
     .clients-table-container::-webkit-scrollbar {
       height: 4px;
@@ -1035,6 +1031,17 @@ const styles = `
 const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
 const safeNumber = (value) => { const n = Number(value); return isNaN(n) ? 0 : n; };
 const safeToFixed = (value, decimals = 2) => safeNumber(value).toFixed(decimals);
+
+// Helper function to get display IMEI (prefers imei, falls back to client_imei)
+const getDisplayImei = (activation) => {
+  if (activation.imei && activation.imei.trim() !== '') {
+    return activation.imei;
+  }
+  if (activation.client_imei && activation.client_imei.trim() !== '') {
+    return activation.client_imei;
+  }
+  return '-';
+};
 
 const getCompanyInfo = () => {
   const saved = localStorage.getItem('company_info');
@@ -1154,7 +1161,6 @@ const exportClientActivationsToExcel = async (client, activationsData) => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet(`Client_${client.nom}_Activations`);
     
-    // Add logo if available
     try {
       const response = await fetch('/logo.png');
       if (response.ok) {
@@ -1197,8 +1203,7 @@ const exportClientActivationsToExcel = async (client, activationsData) => {
     worksheet.addRow(['Adresse:', client.adresse || '-']); 
     worksheet.addRow([]);
     
-    // Headers for Excel
-    const headers = ['Date', 'Type', 'Matricule', 'IMEI', 'Opérateur', 'Expiration', 'Plan', 'Prix Total (MAD)', 'Statut'];
+    const headers = ['Date', 'Type', 'Matricule', 'IMEI / Client IMEI', 'Opérateur', 'Expiration', 'Plan', 'Prix Total (MAD)', 'Statut'];
     const headerRow = worksheet.addRow(headers);
     headerRow.eachCell(cell => { 
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } }; 
@@ -1212,7 +1217,7 @@ const exportClientActivationsToExcel = async (client, activationsData) => {
         act.date ? new Date(act.date).toLocaleDateString('fr-FR') : '-',
         act.type,
         act.matricule,
-        act.imei,
+        act.displayImei,
         act.operator || '-',
         act.expirationDate ? new Date(act.expirationDate).toLocaleDateString('fr-FR') : '-',
         PLAN_LABEL[act.plan] || act.plan || '-',
@@ -1258,12 +1263,10 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       try {
         const token = localStorage.getItem('token');
         
-        // Fetch all activations for this client
         const activationsResponse = await fetch(`${API_URL}/activations?client_id=${client.id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         
-        // Fetch sales for this client
         const salesResponse = await fetch(`${API_URL}/ventes?client_id=${client.id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -1282,25 +1285,21 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
           setSalesData(clientSales);
         }
         
-        // Process all activations into a unified format
         const processedActions = [];
         const processedKeys = new Set();
         
         for (const activation of allActivations) {
           const associatedSale = clientSales.find(s => s.id === activation.vente_id);
           
-          // Calculate total price for this activation (includes product sale price if applicable)
           let totalActivationPrice = safeNumber(activation.price);
           let saleTotalPrice = 0;
           
           if (associatedSale) {
-            // Find the specific product in the sale
             const saleProduct = associatedSale.produits?.find(p => p.id === activation.produit_id);
             if (saleProduct) {
               const productQuantity = saleProduct.pivot?.quantite || 1;
               const productUnitPrice = saleProduct.pivot?.prix || saleProduct.prix_vente || 0;
               saleTotalPrice = safeNumber(productUnitPrice) * productQuantity;
-              // Calculate product sale price including VAT
               saleTotalPrice = saleTotalPrice * 1.20;
             }
           }
@@ -1323,7 +1322,9 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
               type: activationType,
               date: activation.activated_at,
               matricule: activation.matricule || '-',
-              imei: activation.imei || '-',
+              imei: activation.imei || null,
+              clientImei: activation.client_imei || null,
+              displayImei: getDisplayImei(activation),
               operator: activation.operateur || '-',
               expirationDate: activation.expires_at,
               plan: activation.plan_abonnement,
@@ -1337,7 +1338,6 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
             });
           }
           
-          // Process renewal history
           if (activation.renewal_history && Array.isArray(activation.renewal_history)) {
             activation.renewal_history.forEach((entry, idx) => {
               if (entry.action === 'renewal') {
@@ -1349,7 +1349,9 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                     type: 'Renouvellement',
                     date: entry.date,
                     matricule: activation.matricule || '-',
-                    imei: activation.imei || '-',
+                    imei: activation.imei || null,
+                    clientImei: activation.client_imei || null,
+                    displayImei: getDisplayImei(activation),
                     operator: activation.operateur || '-',
                     expirationDate: entry.new_expires_at || activation.expires_at,
                     plan: entry.new_plan,
@@ -1691,7 +1693,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                       <th>Date</th>
                       <th>Type</th>
                       <th>Matricule</th>
-                      <th className="hide-on-tablet">IMEI</th>
+                      <th className="hide-on-tablet">IMEI / Client</th>
                       <th className="hide-on-mobile">Opérateur</th>
                       <th className="hide-on-tablet">Expiration</th>
                       <th>Plan</th>
@@ -1717,7 +1719,15 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                           </span>
                         </td>
                         <td style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{act.matricule}</td>
-                        <td className="hide-on-tablet" style={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>{act.imei}</td>
+                        <td className="hide-on-tablet" style={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>
+                          {act.displayImei}
+                          {act.clientImei && act.imei && (
+                            <span style={{ fontSize: '0.6rem', color: '#6b7280', marginLeft: '4px' }}>(IMEI)</span>
+                          )}
+                          {act.clientImei && !act.imei && (
+                            <span style={{ fontSize: '0.6rem', color: '#f59e0b', marginLeft: '4px' }}>(client)</span>
+                          )}
+                        </td>
                         <td className="hide-on-mobile">{act.operator || '-'}</td>
                         <td className="hide-on-tablet">{act.expirationDate ? new Date(act.expirationDate).toLocaleDateString('fr-FR') : '-'}</td>
                         <td>{PLAN_LABEL[act.plan] || act.plan || '-'}</td>
@@ -1841,7 +1851,6 @@ const Clients = () => {
   const [activationProducts, setActivationProducts] = useState([]);
   const [productPrices, setProductPrices] = useState({});
 
-  // Fetch all activations for total spent calculation
   const [allActivations, setAllActivations] = useState([]);
 
   useEffect(() => {
@@ -1917,62 +1926,56 @@ const Clients = () => {
   };
   
   const openEdit = (c) => {
-  setEditing(c);
-  setForm({
-    nom: c.nom || '',
-    telephone: c.telephone || '',
-    email: c.email || '',
-    ice_client: c.ice_client?.toString() || '',   // ✅ convert number to string
-    adresse: c.adresse || ''
-  });
-  setFormError('');
-  setOpen(true);
-};
-
-  const save = async () => {
-  // Validate nom
-  if (!form.nom?.trim()) {
-    setFormError('Le nom du client est requis');
-    showToast('Le nom du client est requis', 'error');
-    return;
-  }
-  // Validate telephone
-  if (!form.telephone?.trim()) {
-    setFormError('Le numéro de téléphone est requis');
-    showToast('Le numéro de téléphone est requis', 'error');
-    return;
-  }
-
-  // ✅ Validate ice_client (works with string or number)
-  const iceValue = String(form.ice_client || '').trim();
-
-
-
-  // Prepare client data
-  const clientData = {
-    nom: form.nom.trim(),
-    telephone: form.telephone.trim(),
-    email: form.email?.trim() || null,
-    ice_client: parseInt(iceValue, 10),   // ✅ send as number
-    adresse: form.adresse?.trim() || null
+    setEditing(c);
+    setForm({
+      nom: c.nom || '',
+      telephone: c.telephone || '',
+      email: c.email || '',
+      ice_client: c.ice_client?.toString() || '',
+      adresse: c.adresse || ''
+    });
+    setFormError('');
+    setOpen(true);
   };
 
-  try {
-    if (editing) {
-      await dispatch(updateClient({ id: editing.id, ...clientData })).unwrap();
-      showToast(`Client "${form.nom}" mis à jour avec succès`, 'success');
-    } else {
-      await dispatch(createClient(clientData)).unwrap();
-      showToast(`Client "${form.nom}" ajouté avec succès`, 'success');
+  const save = async () => {
+    if (!form.nom?.trim()) {
+      setFormError('Le nom du client est requis');
+      showToast('Le nom du client est requis', 'error');
+      return;
     }
-    setOpen(false);
-    dispatch(fetchClients());
-    dispatch(fetchSales());
-  } catch (err) {
-    setFormError(err || 'Une erreur est survenue');
-    showToast(err || 'Erreur lors de l\'enregistrement', 'error');
-  }
-};
+    if (!form.telephone?.trim()) {
+      setFormError('Le numéro de téléphone est requis');
+      showToast('Le numéro de téléphone est requis', 'error');
+      return;
+    }
+
+    const iceValue = String(form.ice_client || '').trim();
+
+    const clientData = {
+      nom: form.nom.trim(),
+      telephone: form.telephone.trim(),
+      email: form.email?.trim() || null,
+      ice_client: iceValue ? parseInt(iceValue, 10) : null,
+      adresse: form.adresse?.trim() || null
+    };
+
+    try {
+      if (editing) {
+        await dispatch(updateClient({ id: editing.id, ...clientData })).unwrap();
+        showToast(`Client "${form.nom}" mis à jour avec succès`, 'success');
+      } else {
+        await dispatch(createClient(clientData)).unwrap();
+        showToast(`Client "${form.nom}" ajouté avec succès`, 'success');
+      }
+      setOpen(false);
+      dispatch(fetchClients());
+      dispatch(fetchSales());
+    } catch (err) {
+      setFormError(err || 'Une erreur est survenue');
+      showToast(err || 'Erreur lors de l\'enregistrement', 'error');
+    }
+  };
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -1995,13 +1998,10 @@ const Clients = () => {
     }
   };
 
-  // Calculate total spent including both sales and activation prices
   const calculateTotalSpent = (clientId) => {
-    // Get sales total
     const clientSales = sales?.filter(s => s.client_id === clientId || s.clientId === clientId) || [];
     const salesTotal = clientSales.reduce((sum, sale) => sum + safeNumber(sale.total), 0);
     
-    // Get activations total (activation price only, not including product sale)
     const clientActivations = allActivations.filter(a => a.client_id === clientId);
     const activationsTotal = clientActivations.reduce((sum, act) => sum + safeNumber(act.price), 0);
     
@@ -2097,7 +2097,6 @@ const Clients = () => {
     }));
   };
 
-  // Calculate installation totals: subtotal (product sale prices) + TVA
   const calculateInstallationTotals = () => {
     const subtotal = activationModal.cart.reduce((sum, item) => 
       sum + (safeNumber(item.unit_price) * safeNumber(item.quantity)), 0);
@@ -2106,7 +2105,6 @@ const Clients = () => {
     return { subtotal, tva, total };
   };
 
-  // Calculate grand total including activation prices
   const calculateGrandTotal = () => {
     const installationTotal = calculateInstallationTotals().total;
     const activationTotal = activationModal.cart.reduce((sum, item) => 
@@ -2136,7 +2134,6 @@ const Clients = () => {
         }
         showToast(`${successCount} activation(s) créée(s) avec succès`, 'success');
         dispatch(fetchActivationStats());
-        // Refresh activations list
         const token = localStorage.getItem('token');
         const response = await fetch(`${API_URL}/activations?per_page=1000`, {
           headers: { Authorization: `Bearer ${token}` }
@@ -2174,7 +2171,6 @@ const Clients = () => {
         showToast(`Installation créée avec succès (${activationsPayload.length} activation(s))`, 'success');
         dispatch(fetchSales());
         dispatch(fetchActivationStats());
-        // Refresh activations list
         const token = localStorage.getItem('token');
         const response = await fetch(`${API_URL}/activations?per_page=1000`, {
           headers: { Authorization: `Bearer ${token}` }
@@ -2346,7 +2342,7 @@ const Clients = () => {
                   <input type="email" className="clients-input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="client@example.com" />
                 </div>
                 <div className="clients-form-group">
-                  <label className="clients-label clients-label-required">ICE Client</label>
+                  <label className="clients-label">ICE Client</label>
                   <input type="number" className="clients-input" value={form.ice_client} onChange={(e) => setForm({ ...form, ice_client: e.target.value })} placeholder="Ex: 123456789012345" />
                   <small style={{ fontSize: '0.65rem', color: '#6b7280' }}>Identifiant Commun de l'Entreprise (ICE)</small>
                 </div>
@@ -2663,6 +2659,6 @@ const Clients = () => {
       )}
     </div>
   );
-}; 
+};
 
 export default Clients;
