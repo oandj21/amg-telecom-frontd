@@ -5,7 +5,8 @@ import {
   CheckCircle, Info, ChevronLeft, ChevronRight, FileSpreadsheet, 
   Eye, Edit2, Save, Printer, Calendar, Smartphone, Hash, 
   CreditCard, Clock, ExternalLink, Loader, Package, Trash,
-  User, Check, AlertCircle, Download, History, Receipt
+  User, Check, AlertCircle, Download, History, Receipt, List,
+  Filter
 } from 'lucide-react';
 import { ExportMenu } from './ExportMenu';
 import ExcelJS from 'exceljs';
@@ -26,16 +27,22 @@ import {
   fetchActivationStats
 } from './Store/store';
 
-// ==================== STYLES (Fully Responsive) ====================
+// ==================== STYLES (Fully Responsive - Mobile First) ====================
 const styles = `
   /* Base Layout - Mobile First */
   .clients-container {
     width: 100%;
     max-width: 100%;
     overflow-x: hidden;
-    padding: 0 1rem;
+    padding: 0 0.75rem;
     margin: 0 auto;
     box-sizing: border-box;
+  }
+  
+  @media (min-width: 640px) {
+    .clients-container {
+      padding: 0 1rem;
+    }
   }
   
   @media (min-width: 768px) {
@@ -54,15 +61,16 @@ const styles = `
   .clients-page-header {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
   }
   
-  @media (min-width: 768px) {
+  @media (min-width: 640px) {
     .clients-page-header {
       flex-direction: row;
       align-items: center;
       justify-content: space-between;
+      margin-bottom: 1.5rem;
     }
   }
   
@@ -87,7 +95,7 @@ const styles = `
   }
   
   .clients-subtitle {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     color: #6b7280;
     margin-top: 0.25rem;
   }
@@ -106,26 +114,33 @@ const styles = `
   
   .clients-card {
     background: white;
-    border-radius: 0.5rem;
+    border-radius: 0.75rem;
     border: 1px solid #e5e7eb;
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     width: 100%;
-    overflow-x: auto;
+    overflow: hidden;
   }
   
   .clients-search-container {
-    padding: 1rem;
+    padding: 0.75rem;
     border-bottom: 1px solid #e5e7eb;
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.5rem;
     flex-wrap: wrap;
+  }
+  
+  @media (min-width: 640px) {
+    .clients-search-container {
+      padding: 1rem;
+      gap: 0.75rem;
+    }
   }
   
   .clients-search-wrapper {
     position: relative;
     flex: 1;
-    min-width: 200px;
+    min-width: 180px;
   }
   
   @media (min-width: 640px) {
@@ -139,22 +154,23 @@ const styles = `
     left: 0.75rem;
     top: 50%;
     transform: translateY(-50%);
-    width: 1rem;
-    height: 1rem;
+    width: 0.875rem;
+    height: 0.875rem;
     color: #9ca3af;
   }
   
   .clients-search-input {
     width: 100%;
-    height: 2.5rem;
-    padding: 0.5rem 0.75rem 0.5rem 2.25rem;
+    height: 2.25rem;
+    padding: 0.5rem 0.75rem 0.5rem 2rem;
     border: 1px solid #d1d5db;
-    border-radius: 0.375rem;
-    font-size: 0.875rem;
+    border-radius: 0.5rem;
+    font-size: 0.813rem;
     background: white;
     color: #111827;
     outline: none;
     transition: all 0.2s ease;
+    -webkit-appearance: none;
   }
   
   .clients-search-input:focus {
@@ -171,38 +187,9 @@ const styles = `
   
   .clients-table {
     width: 100%;
-    min-width: 640px;
+    min-width: 580px;
     border-collapse: collapse;
     font-size: 0.75rem;
-  }
-  
-  .clients-table th:last-child,
-  .clients-table td:last-child {
-    width: 100px;
-    text-align: center;
-    white-space: nowrap;
-  }
-  
-  .clients-actions-cell {
-    display: flex;
-    gap: 0.25rem;
-    justify-content: flex-end;
-    flex-wrap: nowrap;
-  }
-  
-  @media (max-width: 480px) {
-    .clients-btn-icon {
-      width: 1.75rem;
-      height: 1.75rem;
-    }
-    .clients-btn-icon svg {
-      width: 12px;
-      height: 12px;
-    }
-    .clients-table th:last-child,
-    .clients-table td:last-child {
-      width: 80px;
-    }
   }
   
   @media (min-width: 768px) {
@@ -218,14 +205,21 @@ const styles = `
   }
   
   .clients-table th {
-    height: 2.5rem;
-    padding: 0 0.75rem;
+    height: 2.25rem;
+    padding: 0 0.5rem;
     text-align: left;
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     font-weight: 600;
     text-transform: uppercase;
     color: #6b7280;
     vertical-align: middle;
+  }
+  
+  @media (min-width: 640px) {
+    .clients-table th {
+      padding: 0 0.75rem;
+      font-size: 0.7rem;
+    }
   }
   
   @media (min-width: 768px) {
@@ -246,8 +240,14 @@ const styles = `
   }
   
   .clients-table td {
-    padding: 0.75rem;
+    padding: 0.5rem;
     vertical-align: middle;
+  }
+  
+  @media (min-width: 640px) {
+    .clients-table td {
+      padding: 0.75rem;
+    }
   }
   
   @media (min-width: 768px) {
@@ -282,10 +282,18 @@ const styles = `
     .clients-table .hide-on-mobile {
       display: none;
     }
+    .clients-table th.hide-on-mobile,
+    .clients-table td.hide-on-mobile {
+      display: none;
+    }
   }
   
   @media (max-width: 768px) {
     .clients-table .hide-on-tablet {
+      display: none;
+    }
+    .clients-table th.hide-on-tablet,
+    .clients-table td.hide-on-tablet {
       display: none;
     }
   }
@@ -293,7 +301,13 @@ const styles = `
   .clients-empty {
     text-align: center;
     color: #9ca3af;
-    padding: 2rem 0;
+    padding: 1.5rem 0;
+  }
+  
+  @media (min-width: 640px) {
+    .clients-empty {
+      padding: 2rem 0;
+    }
   }
   
   @media (min-width: 768px) {
@@ -307,26 +321,20 @@ const styles = `
     padding: 2rem 0;
   }
   
-  @media (min-width: 768px) {
-    .clients-loading {
-      padding: 3rem 0;
-    }
-  }
-  
   .clients-loading-spinner {
     display: inline-block;
-    width: 2rem;
-    height: 2rem;
+    width: 1.75rem;
+    height: 1.75rem;
     border: 3px solid #e5e7eb;
     border-top-color: #3b82f6;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
   
-  @media (min-width: 768px) {
+  @media (min-width: 640px) {
     .clients-loading-spinner {
-      width: 2.5rem;
-      height: 2.5rem;
+      width: 2rem;
+      height: 2rem;
     }
   }
   
@@ -396,16 +404,6 @@ const styles = `
     border-color: #9ca3af;
   }
   
-  .clients-btn-ghost {
-    background: transparent;
-    color: #6b7280;
-  }
-  
-  .clients-btn-ghost:hover {
-    background: #f3f4f6;
-    color: #374151;
-  }
-  
   .clients-btn-icon {
     height: 2rem;
     width: 2rem;
@@ -416,17 +414,19 @@ const styles = `
     align-items: center;
     justify-content: center;
     border-radius: 0.5rem;
+    color: #6b7280;
   }
   
   @media (min-width: 640px) {
     .clients-btn-icon {
-      height: 2.5rem;
-      width: 2.5rem;
+      height: 2.25rem;
+      width: 2.25rem;
     }
   }
   
   .clients-btn-icon:hover {
     background: #f3f4f6;
+    color: #374151;
   }
   
   .clients-btn-danger {
@@ -448,6 +448,7 @@ const styles = `
     justify-content: flex-end;
   }
   
+  /* Overlay and Dialog - Mobile Optimized */
   .clients-overlay {
     position: fixed;
     inset: 0;
@@ -469,12 +470,12 @@ const styles = `
     z-index: 51;
     display: flex;
     flex-direction: column;
-    width: 95%;
-    max-width: 95%;
+    width: 92%;
+    max-width: 92%;
     max-height: 90vh;
     transform: translate(-50%, -50%);
     background: white;
-    border-radius: 0.75rem;
+    border-radius: 1rem;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
     animation: slideIn 0.3s ease-out;
     overflow: hidden;
@@ -502,7 +503,7 @@ const styles = `
   }
   
   .clients-dialog-small {
-    max-width: 95%;
+    max-width: 92%;
   }
   
   @media (min-width: 640px) {
@@ -513,7 +514,7 @@ const styles = `
   
   @media (min-width: 768px) {
     .clients-dialog-small {
-      max-width: 600px;
+      max-width: 560px;
     }
   }
   
@@ -552,7 +553,7 @@ const styles = `
   }
   
   .clients-dialog-title {
-    font-size: 1.125rem;
+    font-size: 1rem;
     font-weight: 600;
     display: flex;
     align-items: center;
@@ -596,7 +597,7 @@ const styles = `
     border: none;
     cursor: pointer;
     padding: 0.5rem;
-    border-radius: 0.375rem;
+    border-radius: 0.5rem;
     align-self: flex-start;
   }
   
@@ -604,10 +605,13 @@ const styles = `
     background: #f3f4f6;
   }
   
+  /* Form Styles - Mobile Optimized */
   .clients-label {
     font-size: 0.75rem;
     font-weight: 500;
     color: #374151;
+    display: block;
+    margin-bottom: 0.25rem;
   }
   
   @media (min-width: 640px) {
@@ -624,19 +628,14 @@ const styles = `
   
   .clients-input {
     width: 100%;
-    height: 2.25rem;
-    padding: 0.375rem 0.5rem;
+    height: 2.5rem;
+    padding: 0.5rem 0.75rem;
     border: 1px solid #d1d5db;
-    border-radius: 0.375rem;
-    font-size: 0.75rem;
-  }
-  
-  @media (min-width: 640px) {
-    .clients-input {
-      height: 2.5rem;
-      padding: 0.5rem 0.75rem;
-      font-size: 0.875rem;
-    }
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    background: white;
+    color: #111827;
+    -webkit-appearance: none;
   }
   
   .clients-input:focus {
@@ -645,10 +644,26 @@ const styles = `
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
   
+  select.clients-input {
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+    background-position: right 0.5rem center;
+    background-repeat: no-repeat;
+    background-size: 1.25rem;
+    appearance: none;
+  }
+  
   .clients-form-group {
     display: flex;
     flex-direction: column;
-    gap: 0.375rem;
+    gap: 0.25rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  @media (min-width: 640px) {
+    .clients-form-group {
+      margin-bottom: 1rem;
+    }
   }
   
   .form-grid {
@@ -668,22 +683,23 @@ const styles = `
     grid-column: 1 / -1;
   }
   
+  /* Toast Messages */
   .clients-toast-container {
     position: fixed;
     bottom: 1rem;
-    right: 1rem;
     left: 1rem;
+    right: 1rem;
     z-index: 100;
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 0.5rem;
   }
   
   @media (min-width: 640px) {
     .clients-toast-container {
       left: auto;
       right: 1rem;
-      min-width: 320px;
+      min-width: 300px;
     }
   }
   
@@ -691,7 +707,7 @@ const styles = `
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.75rem 1rem;
+    padding: 0.75rem;
     background: white;
     border-radius: 0.5rem;
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
@@ -714,8 +730,17 @@ const styles = `
     .clients-toast-message { font-size: 0.875rem; }
   }
   
-  .clients-toast-close { background: none; border: none; cursor: pointer; }
+  .clients-toast-close { 
+    background: none; 
+    border: none; 
+    cursor: pointer;
+    padding: 0.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
   
+  /* Error Message */
   .error-message {
     background: #fef2f2;
     border: 1px solid #fecaca;
@@ -726,6 +751,7 @@ const styles = `
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    margin-bottom: 1rem;
   }
   
   @media (min-width: 640px) {
@@ -735,40 +761,42 @@ const styles = `
     }
   }
   
+  /* Pagination - Mobile Optimized */
   .clients-pagination-container {
     display: flex;
     justify-content: center;
     align-items: center;
     flex-wrap: wrap;
-    gap: 0.375rem;
-    padding: 0.75rem;
+    gap: 0.25rem;
+    padding: 0.5rem;
     border-top: 1px solid #e5e7eb;
   }
   
   @media (min-width: 640px) {
     .clients-pagination-container {
       gap: 0.5rem;
-      padding: 1rem;
+      padding: 0.75rem;
     }
   }
   
   .clients-pagination-btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
-    padding: 0.375rem 0.625rem;
+    gap: 0.125rem;
+    padding: 0.25rem 0.5rem;
     border: 1px solid #d1d5db;
     background: white;
-    border-radius: 0.5rem;
+    border-radius: 0.375rem;
     font-size: 0.7rem;
     cursor: pointer;
+    transition: all 0.2s;
   }
   
   @media (min-width: 640px) {
     .clients-pagination-btn {
       gap: 0.5rem;
-      padding: 0.5rem 1rem;
-      font-size: 0.875rem;
+      padding: 0.5rem 0.875rem;
+      font-size: 0.813rem;
     }
   }
   
@@ -789,18 +817,19 @@ const styles = `
   }
   
   .clients-pagination-info {
-    padding: 0.375rem 0.5rem;
+    padding: 0.25rem 0.375rem;
     font-size: 0.7rem;
     color: #6b7280;
   }
   
   @media (min-width: 640px) {
     .clients-pagination-info {
-      padding: 0.5rem 1rem;
-      font-size: 0.875rem;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.813rem;
     }
   }
   
+  /* Toggle Group */
   .modern-toggle-group {
     display: flex;
     gap: 0.25rem;
@@ -813,25 +842,25 @@ const styles = `
   @media (min-width: 640px) {
     .modern-toggle-group {
       width: auto;
-      margin-left: 0;
     }
   }
   
   .modern-toggle-btn {
-    padding: 0.25rem 0.625rem;
+    padding: 0.375rem 0.75rem;
     border-radius: 0.5rem;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 500;
     cursor: pointer;
     background: transparent;
     border: none;
     flex: 1;
     text-align: center;
+    transition: all 0.2s;
   }
   
   @media (min-width: 640px) {
     .modern-toggle-btn {
-      padding: 0.375rem 1rem;
+      padding: 0.5rem 1rem;
       font-size: 0.813rem;
       flex: none;
     }
@@ -843,68 +872,136 @@ const styles = `
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   }
   
-  .modern-input {
-    width: 100%;
-    padding: 0.375rem 0.5rem;
+  /* List Items for Activation Form */
+  .activation-item {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
-    border-radius: 0.5rem;
-    font-size: 0.7rem;
-  }
-  
-  @media (min-width: 640px) {
-    .modern-input {
-      padding: 0.5rem 0.75rem;
-      font-size: 0.875rem;
-    }
-  }
-  
-  .modern-input:focus {
-    outline: none;
-    border-color: #3b82f6;
-    background: white;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-  }
-  
-  .modern-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    padding: 0.375rem 0.75rem;
     border-radius: 0.75rem;
-    font-size: 0.7rem;
-    font-weight: 500;
-    cursor: pointer;
-    border: none;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  .activation-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  
+  .activation-item-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #2563eb;
   }
   
   @media (min-width: 640px) {
-    .modern-btn {
-      gap: 0.5rem;
-      padding: 0.5rem 1rem;
-      font-size: 0.875rem;
+    .activation-item-title {
+      font-size: 0.813rem;
     }
   }
   
-  .modern-btn-primary {
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
+  .remove-btn {
+    background: #fee2e2;
+    border: none;
+    border-radius: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    color: #dc2626;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.7rem;
+  }
+  
+  /* Summary Card */
+  .summary-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 0.75rem;
+    padding: 1rem;
     color: white;
   }
   
-  .modern-btn-secondary {
-    background: #f1f5f9;
-    color: #475569;
+  .price-auto {
+    background-color: #ecfdf5;
+    border-color: #10b981;
+  }
+  
+  .total-amount-cell {
+    font-weight: 700;
+    color: #059669;
+  }
+  
+  .sale-total-cell {
+    font-size: 0.6rem;
+    color: #6b7280;
+  }
+  
+  /* Status Badges */
+  .status-badge {
+    display: inline-block;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    font-size: 0.6rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  
+  @media (min-width: 640px) {
+    .status-badge {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.7rem;
+    }
+  }
+  
+  .status-active { background: #d1fae5; color: #065f46; }
+  .status-primary { background: #dbeafe; color: #1e40af; }
+  .status-pending { background: #fed7aa; color: #92400e; }
+  .status-suspended { background: #fee2e2; color: #991b1b; }
+  .status-expired { background: #e5e7eb; color: #374151; }
+  
+  /* Payment Status Badge Styles */
+  .payment-status-paid { background: #d1fae5; color: #065f46; }
+  .payment-status-partial { background: #fed7aa; color: #92400e; }
+  .payment-status-unpaid { background: #fee2e2; color: #991b1b; }
+  
+  /* Filter Checkbox Group */
+  .pdf-filter-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+    background: #f8fafc;
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
     border: 1px solid #e2e8f0;
+    margin-bottom: 1rem;
   }
   
-  .modern-btn-danger {
-    background: linear-gradient(135deg, #ef4444, #dc2626);
-    color: white;
+  .pdf-filter-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #1e293b;
+    cursor: pointer;
   }
   
-  .spinning {
-    animation: spin 1s linear infinite;
+  .pdf-filter-label input[type="checkbox"] {
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+    accent-color: #3b82f6;
   }
+  
+  /* Utilities */
+  .text-green-600 { color: #16a34a; }
+  .text-destructive { color: #ef4444; }
+  .text-blue-600 { color: #2563eb; }
+  .text-orange-600 { color: #ea580c; }
+  .text-right { text-align: right; }
   
   .activations-table-container {
     max-height: 50vh;
@@ -912,6 +1009,7 @@ const styles = `
     overflow-y: auto;
     border: 1px solid #e5e7eb;
     border-radius: 0.5rem;
+    -webkit-overflow-scrolling: touch;
   }
   
   @media (min-width: 768px) {
@@ -922,14 +1020,14 @@ const styles = `
   
   .activations-table {
     width: 100%;
-    min-width: 800px;
+    min-width: 700px;
     border-collapse: collapse;
     font-size: 0.7rem;
   }
   
   @media (min-width: 768px) {
     .activations-table {
-      font-size: 0.8125rem;
+      font-size: 0.813rem;
       min-width: auto;
     }
   }
@@ -962,67 +1060,82 @@ const styles = `
     }
   }
   
-  .text-green-600 { color: #16a34a; }
-  .text-destructive { color: #ef4444; }
-  .text-blue-600 { color: #2563eb; }
-  .text-orange-600 { color: #ea580c; }
-  
-  .status-badge {
-    display: inline-block;
-    padding: 0.125rem 0.375rem;
-    border-radius: 0.25rem;
-    font-size: 0.6rem;
-    font-weight: 600;
-    white-space: nowrap;
-  }
-  
-  @media (min-width: 640px) {
-    .status-badge {
-      padding: 0.25rem 0.5rem;
-      font-size: 0.7rem;
-    }
-  }
-  
-  .status-active { background: #d1fae5; color: #065f46; }
-  .status-primary { background: #dbeafe; color: #1e40af; }
-  .status-pending { background: #fed7aa; color: #92400e; }
-  .status-suspended { background: #fee2e2; color: #991b1b; }
-  .status-expired { background: #e5e7eb; color: #374151; }
-  
-  .summary-card {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 0.75rem;
-    padding: 1rem;
-    color: white;
-  }
-  
-  .price-auto {
-    background-color: #ecfdf5;
-    border-color: #10b981;
-  }
-  
-  .total-amount-cell {
-    font-weight: 700;
-    color: #059669;
-  }
-  
-  .sale-total-cell {
-    font-size: 0.6rem;
-    color: #6b7280;
-  }
-  
-  @media (min-width: 640px) {
-    .sale-total-cell {
-      font-size: 0.7rem;
-    }
-  }
-  
+  /* Scrollbar for mobile */
   @media (max-width: 640px) {
-    .clients-table-container::-webkit-scrollbar {
-      height: 4px;
-    }
+    .clients-table-container::-webkit-scrollbar,
     .activations-table-container::-webkit-scrollbar {
-      height: 4px;
+      height: 3px;
+    }
+    .clients-table-container::-webkit-scrollbar-track,
+    .activations-table-container::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 3px;
+    }
+    .clients-table-container::-webkit-scrollbar-thumb,
+    .activations-table-container::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 3px;
+    }
+  }
+  
+  .modern-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border: none;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    color: white;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+
+  .modern-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px rgba(0,0,0,0.12);
+  }
+
+  .modern-btn:active {
+    transform: scale(0.98);
+  }
+
+  .modern-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .modern-btn-secondary {
+    background: linear-gradient(135deg, #64748b, #475569);
+  }
+
+  .modern-btn-secondary:nth-child(2) {
+    background: linear-gradient(135deg, #16a34a, #15803d);
+  }
+
+  .modern-btn-success {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  }
+
+  .modern-btn-warning {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+  }
+  
+  .filter-btn {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  }
+
+  .spinning {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
     }
   }
 `;
@@ -1031,6 +1144,12 @@ const styles = `
 const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
 const safeNumber = (value) => { const n = Number(value); return isNaN(n) ? 0 : n; };
 const safeToFixed = (value, decimals = 2) => safeNumber(value).toFixed(decimals);
+const TVA_RATE = 0.20;
+
+// Helper function to calculate TTC price from HT price
+const calculateTTC = (htPrice) => {
+  return safeNumber(htPrice) * (1 + TVA_RATE);
+};
 
 // Helper function to get display IMEI (prefers imei, falls back to client_imei)
 const getDisplayImei = (activation) => {
@@ -1203,16 +1322,40 @@ const exportClientActivationsToExcel = async (client, activationsData) => {
     worksheet.addRow(['Adresse:', client.adresse || '-']); 
     worksheet.addRow([]);
     
-    const headers = ['Date', 'Type', 'Matricule', 'IMEI / Client IMEI', 'Opérateur', 'Expiration', 'Plan', 'Prix Total (MAD)', 'Statut'];
+    const headers = ['Date', 'Type', 'Matricule', 'IMEI / Client IMEI', 'Opérateur', 'Expiration', 'Plan', 'Prix HT (MAD)', 'Prix TTC (MAD)', 'Statut', 'Statut Paiement', 'Montant Payé (MAD)', 'Reste (MAD)'];
     const headerRow = worksheet.addRow(headers);
     headerRow.eachCell(cell => { 
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } }; 
       cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; 
     });
     
-    let grandTotal = 0;
+    let grandTotalHT = 0;
+    let grandTotalTTC = 0;
     for (const act of activationsData) {
-      grandTotal += act.displayPrice;
+      const htPrice = act.activationPriceHT;
+      const ttcPrice = calculateTTC(htPrice);
+      grandTotalHT += htPrice;
+      grandTotalTTC += ttcPrice;
+      
+      // Determine payment status and amounts
+      let paymentStatus = 'Non payé';
+      let amountPaid = 0;
+      let remaining = ttcPrice;
+      
+      if (act.paymentStatus === 'paid') {
+        paymentStatus = 'Payé';
+        amountPaid = ttcPrice;
+        remaining = 0;
+      } else if (act.paymentStatus === 'partial') {
+        paymentStatus = 'Partiel';
+        amountPaid = act.amountPaid || 0;
+        remaining = ttcPrice - amountPaid;
+      } else {
+        paymentStatus = 'Non payé';
+        amountPaid = 0;
+        remaining = ttcPrice;
+      }
+      
       worksheet.addRow([
         act.date ? new Date(act.date).toLocaleDateString('fr-FR') : '-',
         act.type,
@@ -1221,13 +1364,18 @@ const exportClientActivationsToExcel = async (client, activationsData) => {
         act.operator || '-',
         act.expirationDate ? new Date(act.expirationDate).toLocaleDateString('fr-FR') : '-',
         PLAN_LABEL[act.plan] || act.plan || '-',
-        safeToFixed(act.displayPrice),
+        safeToFixed(htPrice),
+        safeToFixed(ttcPrice),
         act.status === 'active' ? 'Actif' : act.status === 'suspended' ? 'Suspendu' : 'Expiré',
+        paymentStatus,
+        safeToFixed(amountPaid),
+        safeToFixed(remaining),
       ]);
     }
     
     worksheet.addRow([]);
-    worksheet.addRow([`Total général: ${safeToFixed(grandTotal)} MAD`]);
+    worksheet.addRow([`Total HT: ${safeToFixed(grandTotalHT)} MAD`]);
+    worksheet.addRow([`Total TTC (TVA 20%): ${safeToFixed(grandTotalTTC)} MAD`]);
     
     worksheet.columns.forEach(col => { 
       let max = 0; 
@@ -1251,11 +1399,16 @@ const exportClientActivationsToExcel = async (client, activationsData) => {
 const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   const [activationsData, setActivationsData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [generatingPdfTTC, setGeneratingPdfTTC] = useState(false);
+  const [generatingPdfHT, setGeneratingPdfHT] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
   const [editingPrice, setEditingPrice] = useState(null);
   const [tempPrice, setTempPrice] = useState('');
   const [salesData, setSalesData] = useState([]);
+  // PDF Filter States
+  const [showPaid, setShowPaid] = useState(true);
+  const [showPartial, setShowPartial] = useState(true);
+  const [showUnpaid, setShowUnpaid] = useState(true);
 
   useEffect(() => {
     const loadClientActivations = async () => {
@@ -1285,26 +1438,53 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
           setSalesData(clientSales);
         }
         
+        // Fetch payment details for each activation
         const processedActions = [];
         const processedKeys = new Set();
         
         for (const activation of allActivations) {
           const associatedSale = clientSales.find(s => s.id === activation.vente_id);
           
-          let totalActivationPrice = safeNumber(activation.price);
-          let saleTotalPrice = 0;
+          // Fetch payment history for this activation
+          let paymentHistory = [];
+          let activationPaymentStatus = 'unpaid';
+          let activationAmountPaid = 0;
+          let renewalAmountPaid = 0;
+          let activationOriginalPrice = safeNumber(activation.price);
+          let renewalTotal = 0;
+          
+          try {
+            const paymentResponse = await fetch(`${API_URL}/activations/${activation.id}/payments`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (paymentResponse.ok) {
+              const paymentData = await paymentResponse.json();
+              paymentHistory = paymentData.payment_history || [];
+              activationPaymentStatus = paymentData.payment_status || 'unpaid';
+              activationAmountPaid = safeNumber(paymentData.amount_paid);
+              activationOriginalPrice = safeNumber(paymentData.original_price || activation.price);
+              renewalTotal = safeNumber(paymentData.renewal_total);
+              renewalAmountPaid = safeNumber(paymentData.renewal_paid);
+            }
+          } catch (err) {
+            console.error('Error fetching payment history for activation', activation.id, err);
+          }
+          
+          let totalActivationPriceHT = activationOriginalPrice;
+          let saleTotalPriceHT = 0;
           
           if (associatedSale) {
             const saleProduct = associatedSale.produits?.find(p => p.id === activation.produit_id);
             if (saleProduct) {
               const productQuantity = saleProduct.pivot?.quantite || 1;
               const productUnitPrice = saleProduct.pivot?.prix || saleProduct.prix_vente || 0;
-              saleTotalPrice = safeNumber(productUnitPrice) * productQuantity;
-              saleTotalPrice = saleTotalPrice * 1.20;
+              saleTotalPriceHT = safeNumber(productUnitPrice) * productQuantity;
             }
           }
           
-          const grandTotalPrice = totalActivationPrice + saleTotalPrice;
+          const activationPriceTTC = calculateTTC(totalActivationPriceHT);
+          const saleTotalPriceTTC = calculateTTC(saleTotalPriceHT);
+          const grandTotalTTC = activationPriceTTC + saleTotalPriceTTC;
           
           const activationKey = `activation_${activation.id}`;
           if (!processedKeys.has(activationKey) && activation.activated_at) {
@@ -1315,6 +1495,22 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
               activationType = associatedSale ? 'Installation + Activation' : 'Activation (Vente)';
             } else {
               activationType = 'Activation Simple';
+            }
+            
+            // Calculate payment status for this activation item
+            let itemPaymentStatus = 'unpaid';
+            let itemAmountPaid = 0;
+            if (activationPaymentStatus === 'paid') {
+              itemPaymentStatus = 'paid';
+              itemAmountPaid = activationPriceTTC;
+            } else if (activationPaymentStatus === 'partial') {
+              if (activationAmountPaid >= activationPriceTTC) {
+                itemPaymentStatus = 'paid';
+                itemAmountPaid = activationPriceTTC;
+              } else if (activationAmountPaid > 0) {
+                itemPaymentStatus = 'partial';
+                itemAmountPaid = activationAmountPaid;
+              }
             }
             
             processedActions.push({
@@ -1328,13 +1524,19 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
               operator: activation.operateur || '-',
               expirationDate: activation.expires_at,
               plan: activation.plan_abonnement,
-              originalPrice: safeNumber(activation.price),
-              activationPrice: safeNumber(activation.price),
-              saleTotalPrice: saleTotalPrice,
-              displayPrice: grandTotalPrice,
+              originalPriceHT: totalActivationPriceHT,
+              activationPriceHT: totalActivationPriceHT,
+              activationPriceTTC: activationPriceTTC,
+              saleTotalPriceHT: saleTotalPriceHT,
+              saleTotalPriceTTC: saleTotalPriceTTC,
+              displayPriceTTC: grandTotalTTC,
               status: activation.status,
               venteId: activation.vente_id,
               saleReference: associatedSale ? `Vente #${associatedSale.id}` : null,
+              paymentStatus: itemPaymentStatus,
+              amountPaid: itemAmountPaid,
+              remainingAmount: activationPriceTTC - itemAmountPaid,
+              paymentHistory: paymentHistory
             });
           }
           
@@ -1344,6 +1546,24 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                 const renewalKey = `renewal_${activation.id}_${entry.date}_${entry.price}`;
                 if (!processedKeys.has(renewalKey)) {
                   processedKeys.add(renewalKey);
+                  const renewalPriceHT = safeNumber(entry.price);
+                  
+                  // Calculate payment status for renewal
+                  let renewalPaymentStatus = 'unpaid';
+                  let renewalItemAmountPaid = 0;
+                  if (activationPaymentStatus === 'paid') {
+                    renewalPaymentStatus = 'paid';
+                    renewalItemAmountPaid = calculateTTC(renewalPriceHT);
+                  } else if (activationPaymentStatus === 'partial' && renewalAmountPaid > 0) {
+                    if (renewalAmountPaid >= calculateTTC(renewalPriceHT)) {
+                      renewalPaymentStatus = 'paid';
+                      renewalItemAmountPaid = calculateTTC(renewalPriceHT);
+                    } else if (renewalAmountPaid > 0) {
+                      renewalPaymentStatus = 'partial';
+                      renewalItemAmountPaid = renewalAmountPaid;
+                    }
+                  }
+                  
                   processedActions.push({
                     id: `${activation.id}_renewal_${idx}`,
                     type: 'Renouvellement',
@@ -1355,13 +1575,19 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                     operator: activation.operateur || '-',
                     expirationDate: entry.new_expires_at || activation.expires_at,
                     plan: entry.new_plan,
-                    originalPrice: safeNumber(entry.price),
-                    activationPrice: safeNumber(entry.price),
-                    saleTotalPrice: 0,
-                    displayPrice: safeNumber(entry.price),
+                    originalPriceHT: renewalPriceHT,
+                    activationPriceHT: renewalPriceHT,
+                    activationPriceTTC: calculateTTC(renewalPriceHT),
+                    saleTotalPriceHT: 0,
+                    saleTotalPriceTTC: 0,
+                    displayPriceTTC: calculateTTC(renewalPriceHT),
                     status: activation.status,
                     venteId: activation.vente_id,
                     saleReference: associatedSale ? `Vente #${associatedSale.id}` : null,
+                    paymentStatus: renewalPaymentStatus,
+                    amountPaid: renewalItemAmountPaid,
+                    remainingAmount: calculateTTC(renewalPriceHT) - renewalItemAmountPaid,
+                    paymentHistory: paymentHistory
                   });
                 }
               }
@@ -1385,16 +1611,16 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
     }
   }, [client, showToast]);
 
-  const startEditPrice = (idx, currentPrice) => {
+  const startEditPrice = (idx, currentPriceTTC) => {
     setEditingPrice(idx);
-    setTempPrice(currentPrice.toString());
+    setTempPrice(currentPriceTTC.toString());
   };
   
   const saveTempPrice = (idx) => {
-    const newPrice = parseFloat(tempPrice);
-    if (!isNaN(newPrice)) {
+    const newPriceTTC = parseFloat(tempPrice);
+    if (!isNaN(newPriceTTC)) {
       const updated = [...activationsData];
-      updated[idx].displayPrice = safeNumber(newPrice);
+      updated[idx].displayPriceTTC = safeNumber(newPriceTTC);
       setActivationsData(updated);
       showToast(`Prix modifié temporairement`, 'success');
     } else {
@@ -1410,7 +1636,10 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   };
   
   const resetAllPrices = () => {
-    const reset = activationsData.map(item => ({ ...item, displayPrice: item.originalPrice + (item.saleTotalPrice || 0) }));
+    const reset = activationsData.map(item => ({ 
+      ...item, 
+      displayPriceTTC: item.activationPriceTTC + (item.saleTotalPriceTTC || 0)
+    }));
     setActivationsData(reset);
     showToast('Tous les prix ont été réinitialisés', 'info');
   };
@@ -1427,202 +1656,199 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
     }
   };
   
-  const generatePDF = async () => {
-    try {
-      setGeneratingPdf(true);
-
-      const { jsPDF } = await import('jspdf');
-      const autoTable = (await import('jspdf-autotable')).default;
-
-      const doc = new jsPDF('p', 'mm', 'a4');
-
-      const companyInfo = getCompanyInfo();
-
-      let logoBase64 = null;
-
-      try {
-        const response = await fetch('/logo.png');
-        const blob = await response.blob();
-
-        logoBase64 = await new Promise(resolve => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result);
-          reader.readAsDataURL(blob);
-        });
-      } catch (e) {}
-
-      // Logo
-      if (logoBase64) {
-        doc.addImage(logoBase64, 'PNG', 87.5, 10, 35, 30);
-      }
-
-      // Company Info
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.text("VOTRE ENTREPRISE", 12, 50);
-
-      doc.setFont('times', 'normal');
-      doc.setFontSize(9.5);
-      doc.text(companyInfo.address, 12, 56);
-      doc.text(`Tél: ${companyInfo.phone}`, 12, 61);
-      doc.text(`Email: ${companyInfo.email}`, 12, 66);
-
-      // Client Info
-      doc.setFont('helvetica', 'bold');
-      doc.text('RELEVÉ POUR :', 130, 50);
-
-      doc.setFont('times', 'bold');
-      doc.setFontSize(13);
-      doc.text(client.nom.toUpperCase(), 130, 57);
-
-      doc.setFont('times', 'normal');
-      doc.setFontSize(10);
-
-      let y = 63;
-
-      if (client.adresse) {
-        doc.text(client.adresse, 130, y);
-        y += 5;
-      }
-
-      if (client.telephone) {
-        doc.text(`Tél: ${client.telephone}`, 130, y);
-        y += 5;
-      }
-
-      doc.text(`DATE : ${new Date().toLocaleDateString('fr-FR')}`, 130, y + 5);
-
-      const formatMoney = (val) =>
-        `${Number(val || 0).toFixed(2)} DH`;
-
-      // TABLE ROWS
-      const rows = activationsData.map(item => [
-        item.date
-          ? new Date(item.date).toLocaleDateString('fr-FR')
-          : '-',
-
-        item.type || '-',
-
-        item.matricule || '-',
-
-        PLAN_LABEL[item.plan] || item.plan || '-',
-
-        formatMoney(item.displayPrice)
-      ]);
-
-      // TITLE
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(14);
-
-      doc.text(
-        'DÉTAIL DES ACTIVATIONS',
-        105,
-        108,
-        { align: 'center' }
-      );
-
-      // TABLE
-      autoTable(doc, {
-        startY: 116,
-
-        head: [[
-          {
-            content: "Date d'activation",
-            styles: { textColor: [59, 130, 246] }
-          },
-          {
-            content: 'Type',
-            styles: { textColor: [139, 92, 246] }
-          },
-          {
-            content: 'Matricule',
-            styles: { textColor: [16, 185, 129] }
-          },
-          {
-            content: 'Plan',
-            styles: { textColor: [245, 158, 11] }
-          },
-          {
-            content: 'Prix Total',
-            styles: { textColor: [239, 68, 68] }
-          }
-        ]],
-
-        body: rows,
-
-        theme: 'grid',
-
-        styles: {
-          font: 'times',
-          fontSize: 10,
-          cellPadding: 4,
-          valign: 'middle'
-        },
-
-        headStyles: {
-          fillColor: [248, 250, 252],
-          textColor: [0, 0, 0],
-          fontStyle: 'bold',
-          halign: 'center',
-          lineWidth: 0.3
-        },
-
-        columnStyles: {
-          0: { halign: 'center', cellWidth: 42 },
-          1: { halign: 'center', cellWidth: 45 },
-          2: { halign: 'center', cellWidth: 40 },
-          3: { halign: 'center', cellWidth: 32 },
-          4: { halign: 'right', cellWidth: 30 }
-        },
-
-        didDrawPage: () => {
-          doc.setDrawColor(200);
-          doc.rect(5, 5, 200, 287);
-        }
-      });
-
-      // TOTAL
-     // TOTAL
-const total = activationsData.reduce(
-  (s, i) => s + safeNumber(i.displayPrice),
-  0
-);
-
-const finalY = doc.lastAutoTable.finalY + 15;
-
-// Smaller width box
-doc.setFillColor(248, 250, 252);
-doc.roundedRect(145, finalY - 9, 50, 14, 3, 3, 'FD');
-
-doc.setFont('helvetica', 'bold');
-doc.setFontSize(11);
-
-doc.text('TOTAL :', 155, finalY);
-
-doc.setFont('times', 'bold');
-
-doc.text(
-  formatMoney(total),
-  190,
-  finalY,
-  { align: 'right' }
-);
-
-      // SAVE
-      doc.save(
-        `Releve_${client.nom.replace(/\s+/g, '_')}.pdf`
-      );
-
-    } catch (err) {
-      console.error(err);
-      showToast('Erreur PDF', 'error');
-    } finally {
-      setGeneratingPdf(false);
+  // Get payment status color for display
+  const getPaymentStatusColor = (paymentStatus) => {
+    switch (paymentStatus) {
+      case 'paid': return { color: '#059669', bg: '#d1fae5', label: 'Payé' };
+      case 'partial': return { color: '#d97706', bg: '#fed7aa', label: 'Partiel' };
+      default: return { color: '#dc2626', bg: '#fee2e2', label: 'Non payé' };
     }
   };
+  
+  // Filter data based on selected payment statuses
+  const getFilteredDataForPDF = () => {
+    return activationsData.filter(item => {
+      if (item.paymentStatus === 'paid' && showPaid) return true;
+      if (item.paymentStatus === 'partial' && showPartial) return true;
+      if (item.paymentStatus === 'unpaid' && showUnpaid) return true;
+      return false;
+    });
+  };
+  
+  const generatePDF = async (includeTVA = true) => {
+  try {
+    if (includeTVA) {
+      setGeneratingPdfTTC(true);
+    } else {
+      setGeneratingPdfHT(true);
+    }
 
-  const totalAmount = activationsData.reduce((s, act) => s + safeNumber(act.displayPrice), 0);
-  const hasModifiedPrices = activationsData.some(act => act.displayPrice !== (act.originalPrice + (act.saleTotalPrice || 0)));
+    const { jsPDF } = await import('jspdf');
+    const autoTable = (await import('jspdf-autotable')).default;
+
+    const doc = new jsPDF('p', 'mm', 'a4');
+
+    const companyInfo = getCompanyInfo();
+
+    let logoBase64 = null;
+
+    try {
+      const response = await fetch('/logo.png');
+      const blob = await response.blob();
+      logoBase64 = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) {}
+
+    if (logoBase64) {
+      doc.addImage(logoBase64, 'PNG', 87.5, 10, 35, 30);
+    }
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text(companyInfo.name.toUpperCase(), 12, 50);
+    doc.setFont('times', 'normal');
+    doc.setFontSize(9.5);
+    const addressLines = doc.splitTextToSize(companyInfo.address, 70);
+    doc.text(addressLines, 12, 56);     
+    doc.text(`Tél: ${companyInfo.phone}`, 12, 68);
+    doc.text(`Email: ${companyInfo.email}`, 12, 73);
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('RELEVÉ POUR :', 130, 50);
+    doc.setFont('times', 'bold');
+    doc.setFontSize(13);
+    doc.text(client.nom.toUpperCase(), 130, 57);
+    doc.setFont('times', 'normal');
+    doc.setFontSize(10);
+
+    let y = 63;
+    if (client.adresse) {
+      doc.text(client.adresse, 130, y);
+      y += 5;
+    }
+    if (client.telephone) {
+      doc.text(`Tél: ${client.telephone}`, 130, y);
+      y += 5;
+    }
+    doc.text(`DATE : ${new Date().toLocaleDateString('fr-FR')}`, 130, y + 5);
+
+    const formatMoney = (val) => `${Number(val || 0).toFixed(2)} DH`;
+
+    // Get filtered data based on selected payment statuses
+    const filteredData = getFilteredDataForPDF();
+    
+    const processedData = filteredData.map(item => {
+      let displayPrice;
+      if (includeTVA) {
+        displayPrice = item.displayPriceTTC;
+      } else {
+        displayPrice = item.activationPriceHT + (item.saleTotalPriceHT || 0);
+      }
+      return { ...item, displayPriceForPdf: displayPrice };
+    });
+
+    // Define color based on payment status
+    const getPriceColor = (paymentStatus) => {
+      switch (paymentStatus) {
+        case 'paid': return [5, 150, 105];     // Green
+        case 'partial': return [217, 119, 6];  // Orange
+        default: return [220, 38, 38];         // Red
+      }
+    };
+
+    const rows = processedData.map(item => {
+      const priceColor = getPriceColor(item.paymentStatus);
+      return [
+        item.date ? new Date(item.date).toLocaleDateString('fr-FR') : '-',
+        item.type || '-',
+        item.matricule || '-',
+        PLAN_LABEL[item.plan] || item.plan || '-',
+        { content: formatMoney(item.displayPriceForPdf), styles: { textColor: priceColor, fontStyle: 'bold' } }
+      ];
+    });
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    const titleText = includeTVA 
+      ? 'DÉTAIL DES ACTIVATIONS (Prix TTC - TVA incluse)'
+      : 'DÉTAIL DES ACTIVATIONS (Prix HT - TVA exclue)';
+    doc.text(titleText, 105, 108, { align: 'center' });
+
+    autoTable(doc, {
+      startY: 116,
+      head: [[
+        { content: "Date", styles: { textColor: [59, 130, 246] } },
+        { content: "Type", styles: { textColor: [139, 92, 246] } },
+        { content: "Matricule", styles: { textColor: [16, 185, 129] } },
+        { content: "Plan", styles: { textColor: [245, 158, 11] } },
+        { content: includeTVA ? "Prix TTC" : "Prix HT", styles: { textColor: [239, 68, 68] } }
+      ]],
+      body: rows,
+      theme: 'grid',
+      styles: { font: 'times', fontSize: 9, cellPadding: 3, valign: 'middle' },
+      headStyles: { fillColor: [248, 250, 252], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', lineWidth: 0.3 },
+      columnStyles: {
+        0: { halign: 'center', cellWidth: 35 },
+        1: { halign: 'center', cellWidth: 40 },
+        2: { halign: 'center', cellWidth: 55 },
+        3: { halign: 'center', cellWidth: 30 },
+        4: { halign: 'right', cellWidth: 35 }
+      },
+      margin: { left: 10, right: 10 },
+      didDrawPage: () => {
+        doc.setDrawColor(200);
+        doc.rect(5, 5, 200, 287);
+      }
+    });
+
+    const total = processedData.reduce((s, i) => s + safeNumber(i.displayPriceForPdf), 0);
+    const finalY = doc.lastAutoTable.finalY + 15;
+
+    // Draw total box
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(145, finalY - 9, 55, 14, 3, 3, 'FD');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    const totalLabel = includeTVA ? 'TOTAL TTC :' : 'TOTAL HT :';
+    doc.text(totalLabel, 150, finalY);
+    doc.setFont('times', 'bold');
+    doc.text(formatMoney(total), 192, finalY, { align: 'right' });
+
+    if (!includeTVA) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      doc.text('* TVA (20%) non incluse dans ce relevé', 14, finalY + 10);
+      doc.setTextColor(0, 0, 0);
+    } else {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`* TVA (20%) incluse - Taux applicable: ${TVA_RATE * 100}%`, 14, finalY + 10);
+      doc.setTextColor(0, 0, 0);
+    }
+
+    const fileNameSuffix = includeTVA ? 'TTC' : 'HT';
+    doc.save(`Releve_${client.nom.replace(/\s+/g, '_')}_${fileNameSuffix}.pdf`);
+    showToast(`PDF généré avec succès (${includeTVA ? 'TTC - TVA incluse' : 'HT - TVA exclue'})`, 'success');
+
+  } catch (err) {
+    console.error(err);
+    showToast('Erreur lors de la génération du PDF', 'error');
+  } finally {
+    if (includeTVA) {
+      setGeneratingPdfTTC(false);
+    } else {
+      setGeneratingPdfHT(false);
+    }
+  }
+};
+
+  const totalAmountTTC = activationsData.reduce((s, act) => s + safeNumber(act.displayPriceTTC), 0);
+  const hasModifiedPrices = activationsData.some(act => act.displayPriceTTC !== (act.activationPriceTTC + (act.saleTotalPriceTTC || 0)));
   const activationsCount = activationsData.filter(a => a.type !== 'Renouvellement').length;
   const renewalsCount = activationsData.filter(a => a.type === 'Renouvellement').length;
   
@@ -1681,11 +1907,54 @@ doc.text(
                     {exportingExcel ? <Loader size={14} className="spinning" /> : <FileSpreadsheet size={14} />}
                     {exportingExcel ? 'Export...' : 'Excel'}
                   </button>
-                  <button onClick={generatePDF} disabled={generatingPdf} className="modern-btn modern-btn-primary">
-                    {generatingPdf ? <Loader size={14} className="spinning" /> : <Printer size={14} />}
-                    {generatingPdf ? 'Génération...' : 'PDF'}
+                  <button 
+                    onClick={() => generatePDF(true)} 
+                    disabled={generatingPdfTTC} 
+                    className="modern-btn modern-btn-success"
+                  >
+                    {generatingPdfTTC ? <Loader size={14} className="spinning" /> : <Printer size={14} />}
+                    {generatingPdfTTC ? 'Génération...' : 'PDF TTC'}
+                  </button>
+                  <button 
+                    onClick={() => generatePDF(false)} 
+                    disabled={generatingPdfHT} 
+                    className="modern-btn modern-btn-warning"
+                  >
+                    {generatingPdfHT ? <Loader size={14} className="spinning" /> : <Printer size={14} />}
+                    {generatingPdfHT ? 'Génération...' : 'PDF HT'}
                   </button>
                 </div>
+              </div>
+              
+              {/* PDF Filter Checkboxes */}
+              <div className="pdf-filter-group">
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Filter size={14} /> Filtrer par statut de paiement pour PDF:
+                </span>
+                <label className="pdf-filter-label">
+                  <input 
+                    type="checkbox" 
+                    checked={showPaid} 
+                    onChange={(e) => setShowPaid(e.target.checked)} 
+                  />
+                  <span style={{ color: '#059669' }}>Payé</span>
+                </label>
+                <label className="pdf-filter-label">
+                  <input 
+                    type="checkbox" 
+                    checked={showPartial} 
+                    onChange={(e) => setShowPartial(e.target.checked)} 
+                  />
+                  <span style={{ color: '#d97706' }}>Partiel</span>
+                </label>
+                <label className="pdf-filter-label">
+                  <input 
+                    type="checkbox" 
+                    checked={showUnpaid} 
+                    onChange={(e) => setShowUnpaid(e.target.checked)} 
+                  />
+                  <span style={{ color: '#dc2626' }}>Non payé</span>
+                </label>
               </div>
 
               <div className="activations-table-container">
@@ -1699,88 +1968,105 @@ doc.text(
                       <th className="hide-on-mobile">Opérateur</th>
                       <th className="hide-on-tablet">Expiration</th>
                       <th>Plan</th>
-                      <th className="hide-on-mobile">Prix Act.</th>
-                      <th className="hide-on-mobile">Prix Vente</th>
+                      <th className="hide-on-mobile">Prix HT</th>
+                      <th className="hide-on-mobile">Prix Vente HT</th>
                       <th>Total TTC</th>
+                      <th>Statut Paiement</th>
+                      <th>Montant Payé</th>
+                      <th>Reste</th>
                       <th>Statut</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {activationsData.map((act, idx) => (
-                      <tr key={act.id}>
-                        <td style={{ whiteSpace: 'nowrap' }}>{act.date ? new Date(act.date).toLocaleDateString('fr-FR') : '-'}</td>
-                        <td>
-                          <span className={`status-badge ${
-                            act.type === 'Activation Simple' ? 'status-active' :
-                            act.type === 'Installation + Activation' ? 'status-primary' :
-                            act.type === 'Renouvellement' ? 'status-pending' : 'status-expired'
-                          }`}>
-                            {act.type === 'Activation Simple' ? 'Simple' : 
-                             act.type === 'Installation + Activation' ? 'Install+' : 
-                             act.type === 'Renouvellement' ? 'Renouv.' : act.type}
-                          </span>
-                        </td>
-                        <td style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{act.matricule}</td>
-                        <td className="hide-on-tablet" style={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>
-                          {act.displayImei}
-                          {act.clientImei && act.imei && (
-                            <span style={{ fontSize: '0.6rem', color: '#6b7280', marginLeft: '4px' }}>(IMEI)</span>
-                          )}
-                          {act.clientImei && !act.imei && (
-                            <span style={{ fontSize: '0.6rem', color: '#f59e0b', marginLeft: '4px' }}>(client)</span>
-                          )}
-                        </td>
-                        <td className="hide-on-mobile">{act.operator || '-'}</td>
-                        <td className="hide-on-tablet">{act.expirationDate ? new Date(act.expirationDate).toLocaleDateString('fr-FR') : '-'}</td>
-                        <td>{PLAN_LABEL[act.plan] || act.plan || '-'}</td>
-                        <td className="hide-on-mobile text-right">{safeToFixed(act.activationPrice)} MAD</td>
-                        <td className="hide-on-mobile text-right">
-                          {act.saleTotalPrice > 0 ? (
-                            <span className="sale-total-cell">{safeToFixed(act.saleTotalPrice)} MAD</span>
-                          ) : '-'}
-                        </td>
-                        <td className="text-right total-amount-cell">
-                          {editingPrice === idx ? (
-                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-                              <input
-                                type="number"
-                                step="0.01"
-                                value={tempPrice}
-                                onChange={e => setTempPrice(e.target.value)}
-                                style={{ width: '80px', padding: '4px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '0.7rem' }}
-                                autoFocus
-                              />
-                              <button onClick={() => saveTempPrice(idx)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer' }}>✓</button>
-                              <button onClick={cancelEdit} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer' }}>✗</button>
-                            </div>
-                          ) : (
-                            <span 
-                              onClick={() => startEditPrice(idx, act.displayPrice)} 
-                              style={{ 
-                                cursor: 'pointer', 
-                                backgroundColor: act.displayPrice !== (act.originalPrice + act.saleTotalPrice) ? '#fef3c7' : 'transparent', 
-                                padding: '2px 4px', 
-                                borderRadius: '4px', 
-                                display: 'inline-block',
-                                fontWeight: 'bold',
-                                color: '#059669',
-                                fontSize: '0.8rem'
-                              }}
-                            >
-                              {safeToFixed(act.displayPrice)} MAD
+                    {activationsData.map((act, idx) => {
+                      const paymentColor = getPaymentStatusColor(act.paymentStatus);
+                      return (
+                        <tr key={act.id}>
+                          <td style={{ whiteSpace: 'nowrap' }}>{act.date ? new Date(act.date).toLocaleDateString('fr-FR') : '-'}</td>
+                          <td>
+                            <span className={`status-badge ${
+                              act.type === 'Activation Simple' ? 'status-active' :
+                              act.type === 'Installation + Activation' ? 'status-primary' :
+                              act.type === 'Renouvellement' ? 'status-pending' : 'status-expired'
+                            }`}>
+                              {act.type === 'Activation Simple' ? 'Simple' : 
+                               act.type === 'Installation + Activation' ? 'Install+' : 
+                               act.type === 'Renouvellement' ? 'Renouv.' : act.type}
                             </span>
-                          )}
-                        </td>
-                        <td>
-                          <span className={`status-badge ${
-                            act.status === 'active' ? 'status-active' :
-                            act.status === 'suspended' ? 'status-suspended' : 'status-expired'
-                          }`}>
-                            {act.status === 'active' ? 'Actif' : act.status === 'suspended' ? 'Suspendu' : 'Expiré'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{act.matricule}</td>
+                          <td className="hide-on-tablet" style={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>
+                            {act.displayImei}
+                            {act.clientImei && act.imei && (
+                              <span style={{ fontSize: '0.6rem', color: '#6b7280', marginLeft: '4px' }}>(IMEI)</span>
+                            )}
+                            {act.clientImei && !act.imei && (
+                              <span style={{ fontSize: '0.6rem', color: '#f59e0b', marginLeft: '4px' }}>(client)</span>
+                            )}
+                          </td>
+                          <td className="hide-on-mobile">{act.operator || '-'}</td>
+                          <td className="hide-on-tablet">{act.expirationDate ? new Date(act.expirationDate).toLocaleDateString('fr-FR') : '-'}</td>
+                          <td>{PLAN_LABEL[act.plan] || act.plan || '-'}</td>
+                          <td className="hide-on-mobile text-right">{safeToFixed(act.activationPriceHT)} MAD</td>
+                          <td className="hide-on-mobile text-right">
+                            {act.saleTotalPriceHT > 0 ? (
+                              <span className="sale-total-cell">{safeToFixed(act.saleTotalPriceHT)} MAD</span>
+                            ) : '-'}
+                          </td>
+                          <td className="text-right total-amount-cell">
+                            {editingPrice === idx ? (
+                              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={tempPrice}
+                                  onChange={e => setTempPrice(e.target.value)}
+                                  style={{ width: '80px', padding: '4px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '0.7rem' }}
+                                  autoFocus
+                                />
+                                <button onClick={() => saveTempPrice(idx)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer' }}>✓</button>
+                                <button onClick={cancelEdit} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer' }}>✗</button>
+                              </div>
+                            ) : (
+                              <span 
+                                onClick={() => startEditPrice(idx, act.displayPriceTTC)} 
+                                style={{ 
+                                  cursor: 'pointer', 
+                                  backgroundColor: act.displayPriceTTC !== (act.activationPriceTTC + act.saleTotalPriceTTC) ? '#fef3c7' : 'transparent', 
+                                  padding: '2px 4px', 
+                                  borderRadius: '4px', 
+                                  display: 'inline-block',
+                                  fontWeight: 'bold',
+                                  color: '#059669',
+                                  fontSize: '0.8rem'
+                                }}
+                              >
+                                {safeToFixed(act.displayPriceTTC)} MAD
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            <span className={`status-badge ${paymentColor.bg}`} style={{ color: paymentColor.color, fontWeight: 600 }}>
+                              {paymentColor.label}
+                            </span>
+                          </td>
+                          <td className="text-right" style={{ color: '#059669' }}>
+                            {safeToFixed(act.amountPaid)} MAD
+                          </td>
+                          <td className="text-right" style={{ color: '#dc2626' }}>
+                            {safeToFixed(act.remainingAmount)} MAD
+                          </td>
+                          <td>
+                            <span className={`status-badge ${
+                              act.status === 'active' ? 'status-active' :
+                              act.status === 'suspended' ? 'status-suspended' : 'status-expired'
+                            }`}>
+                              {act.status === 'active' ? 'Actif' : act.status === 'suspended' ? 'Suspendu' : 'Expiré'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1806,7 +2092,7 @@ doc.text(
                 <div>
                   <strong>Montant total TTC:</strong>
                   <span style={{ color: '#059669', fontWeight: 'bold', marginLeft: '0.5rem', fontSize: '0.9rem' }}>
-                    {safeToFixed(totalAmount)} MAD
+                    {safeToFixed(totalAmountTTC)} MAD
                   </span>
                 </div>
               </div>
@@ -1848,7 +2134,8 @@ const Clients = () => {
     mode: 'simple',
     rows: [],
     cart: [],
-    loading: false
+    loading: false,
+    formError: ''
   });
   const [activationProducts, setActivationProducts] = useState([]);
   const [productPrices, setProductPrices] = useState({});
@@ -2029,7 +2316,8 @@ const Clients = () => {
         plan_abonnement: ''
       }],
       cart: [],
-      loading: false
+      loading: false,
+      formError: ''
     });
   };
 
@@ -2054,9 +2342,14 @@ const Clients = () => {
   };
 
   const removeActivationRow = (id) => {
+    if (activationModal.rows.length === 1) {
+      setActivationModal(prev => ({ ...prev, formError: 'Vous devez garder au moins une ligne d\'activation' }));
+      return;
+    }
     setActivationModal(prev => ({
       ...prev,
-      rows: prev.rows.filter(row => row.id !== id)
+      rows: prev.rows.filter(row => row.id !== id),
+      formError: ''
     }));
   };
 
@@ -2093,9 +2386,14 @@ const Clients = () => {
   };
 
   const removeInstallationProduct = (id) => {
+    if (activationModal.cart.length === 1) {
+      setActivationModal(prev => ({ ...prev, formError: 'Vous devez garder au moins un produit' }));
+      return;
+    }
     setActivationModal(prev => ({
       ...prev,
-      cart: prev.cart.filter(item => item.id !== id)
+      cart: prev.cart.filter(item => item.id !== id),
+      formError: ''
     }));
   };
 
@@ -2114,20 +2412,57 @@ const Clients = () => {
     return installationTotal + activationTotal;
   };
 
+  const validateActivationForm = () => {
+    if (activationModal.mode === 'simple') {
+      for (const row of activationModal.rows) {
+        if (!row.matricule || !row.matricule.trim()) {
+          setActivationModal(prev => ({ ...prev, formError: 'Veuillez remplir le matricule pour toutes les lignes' }));
+          return false;
+        }
+        if (row.price <= 0) {
+          setActivationModal(prev => ({ ...prev, formError: 'Le prix HT doit être supérieur à 0' }));
+          return false;
+        }
+      }
+    } else {
+      if (activationModal.cart.length === 0) {
+        setActivationModal(prev => ({ ...prev, formError: 'Ajoutez au moins un produit' }));
+        return false;
+      }
+      for (const item of activationModal.cart) {
+        if (!item.produit_id) {
+          setActivationModal(prev => ({ ...prev, formError: 'Veuillez sélectionner un produit' }));
+          return false;
+        }
+        if (item.quantity <= 0) {
+          setActivationModal(prev => ({ ...prev, formError: 'La quantité doit être supérieure à 0' }));
+          return false;
+        }
+        if (item.unit_price <= 0) {
+          setActivationModal(prev => ({ ...prev, formError: 'Le prix unitaire HT doit être supérieur à 0' }));
+          return false;
+        }
+        if (!item.matricule || !item.matricule.trim()) {
+          setActivationModal(prev => ({ ...prev, formError: 'Veuillez remplir le matricule pour tous les produits' }));
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
   const submitActivationModal = async () => {
     if (!activationModal.client) return;
-    setActivationModal(prev => ({ ...prev, loading: true }));
+    if (!validateActivationForm()) return;
+    
+    setActivationModal(prev => ({ ...prev, loading: true, formError: '' }));
     try {
       if (activationModal.mode === 'simple') {
         let successCount = 0;
         for (const row of activationModal.rows) {
-          if (!row.matricule || row.price <= 0) {
-            showToast('Veuillez remplir tous les champs (matricule, prix)', 'error');
-            continue;
-          }
           await dispatch(createStandaloneActivation({
             client_id: activationModal.client.id,
-            matricule: row.matricule,
+            matricule: row.matricule.trim(),
             price: row.price,
             date_activation: row.date,
             plan_abonnement: row.plan_abonnement || null
@@ -2145,23 +2480,11 @@ const Clients = () => {
           setAllActivations(data.data || data.activations || []);
         }
       } else {
-        if (activationModal.cart.length === 0) {
-          showToast('Ajoutez au moins un produit', 'error');
-          setActivationModal(prev => ({ ...prev, loading: false }));
-          return;
-        }
-        for (const item of activationModal.cart) {
-          if (!item.produit_id || item.quantity <= 0 || item.unit_price <= 0 || !item.matricule) {
-            showToast('Vérifiez les champs : produit, quantité, prix unitaire, matricule', 'error');
-            setActivationModal(prev => ({ ...prev, loading: false }));
-            return;
-          }
-        }
         const activationsPayload = activationModal.cart.map(item => ({
           produit_id: item.produit_id,
           quantity: item.quantity,
           unit_price: item.unit_price,
-          matricule: item.matricule,
+          matricule: item.matricule.trim(),
           date_activation: item.date_activation,
           price: item.price || 0,
           plan_abonnement: item.plan_abonnement || null
@@ -2182,8 +2505,9 @@ const Clients = () => {
           setAllActivations(data.data || data.activations || []);
         }
       }
-      setActivationModal({ isOpen: false, client: null, mode: 'simple', rows: [], cart: [], loading: false });
+      setActivationModal({ isOpen: false, client: null, mode: 'simple', rows: [], cart: [], loading: false, formError: '' });
     } catch (err) {
+      setActivationModal(prev => ({ ...prev, formError: err || 'Erreur lors de la création' }));
       showToast(err || 'Erreur lors de la création', 'error');
       setActivationModal(prev => ({ ...prev, loading: false }));
     }
@@ -2315,6 +2639,7 @@ const Clients = () => {
         <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
       </div>
 
+      {/* Client Form Modal */}
       {open && (
         <>
           <div className="clients-overlay" onClick={() => setOpen(false)} />
@@ -2333,24 +2658,52 @@ const Clients = () => {
               <div className="form-grid">
                 <div className="clients-form-group">
                   <label className="clients-label clients-label-required">Nom complet</label>
-                  <input className="clients-input" value={form.nom} onChange={(e) => setForm({ ...form, nom: e.target.value })} placeholder="Ex: Jean Dupont" autoFocus />
+                  <input 
+                    className="clients-input" 
+                    value={form.nom} 
+                    onChange={(e) => setForm({ ...form, nom: e.target.value })} 
+                    placeholder="Ex: Jean Dupont" 
+                    autoFocus 
+                  />
                 </div>
                 <div className="clients-form-group">
                   <label className="clients-label clients-label-required">Numéro de téléphone</label>
-                  <input className="clients-input" value={form.telephone} onChange={(e) => setForm({ ...form, telephone: e.target.value })} placeholder="Ex: 06 12 34 56 78" />
+                  <input 
+                    className="clients-input" 
+                    value={form.telephone} 
+                    onChange={(e) => setForm({ ...form, telephone: e.target.value })} 
+                    placeholder="Ex: 06 12 34 56 78" 
+                  />
                 </div>
                 <div className="clients-form-group">
                   <label className="clients-label">Adresse email</label>
-                  <input type="email" className="clients-input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="client@example.com" />
+                  <input 
+                    type="email" 
+                    className="clients-input" 
+                    value={form.email} 
+                    onChange={(e) => setForm({ ...form, email: e.target.value })} 
+                    placeholder="client@example.com" 
+                  />
                 </div>
                 <div className="clients-form-group">
                   <label className="clients-label">ICE Client</label>
-                  <input type="number" className="clients-input" value={form.ice_client} onChange={(e) => setForm({ ...form, ice_client: e.target.value })} placeholder="Ex: 123456789012345" />
+                  <input 
+                    type="number" 
+                    className="clients-input" 
+                    value={form.ice_client} 
+                    onChange={(e) => setForm({ ...form, ice_client: e.target.value })} 
+                    placeholder="Ex: 123456789012345" 
+                  />
                   <small style={{ fontSize: '0.65rem', color: '#6b7280' }}>Identifiant Commun de l'Entreprise (ICE)</small>
                 </div>
                 <div className="clients-form-group form-full-width">
                   <label className="clients-label">Adresse</label>
-                  <input className="clients-input" value={form.adresse} onChange={(e) => setForm({ ...form, adresse: e.target.value })} placeholder="Ex: 123 Rue Example, Casablanca" />
+                  <input 
+                    className="clients-input" 
+                    value={form.adresse} 
+                    onChange={(e) => setForm({ ...form, adresse: e.target.value })} 
+                    placeholder="Ex: 123 Rue Example, Casablanca" 
+                  />
                 </div>
               </div>
             </div>
@@ -2390,26 +2743,34 @@ const Clients = () => {
         />
       )}
 
+      {/* Activation Modal - Redesigned like Ajouter client form */}
       {activationModal.isOpen && (
         <>
           <div className="clients-overlay" onClick={() => setActivationModal(prev => ({ ...prev, isOpen: false }))} />
-          <div className="clients-dialog" style={{ maxWidth: '1000px' }} onClick={e => e.stopPropagation()}>
+          <div className="clients-dialog" style={{ maxWidth: '700px' }} onClick={e => e.stopPropagation()}>
             <div className="clients-dialog-header">
               <h2 className="clients-dialog-title">
                 <Smartphone size={20} className="text-blue-600" />
-                {activationModal.mode === 'simple' ? 'Activation' : 'Installation'} – {activationModal.client?.nom}
+                {activationModal.mode === 'simple' ? '➕ Nouvelle Activation' : '🔧 Nouvelle Installation'} – {activationModal.client?.nom}
               </h2>
-              <div className="modern-toggle-group">
+              <button className="clients-dialog-close" onClick={() => setActivationModal(prev => ({ ...prev, isOpen: false }))}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="clients-dialog-body">
+              {/* Mode Toggle */}
+              <div className="modern-toggle-group" style={{ marginBottom: '1rem' }}>
                 <button 
                   className={`modern-toggle-btn ${activationModal.mode === 'simple' ? 'modern-toggle-btn-active' : ''}`} 
                   onClick={() => setActivationModal(prev => ({ 
                     ...prev, 
                     mode: 'simple', 
                     rows: [{ id: Date.now(), date: new Date().toISOString().slice(0,10), matricule: '', price: 0, plan_abonnement: '' }], 
-                    cart: [] 
+                    cart: [],
+                    formError: ''
                   }))}
                 >
-                  Simple
+                  Activation Simple
                 </button>
                 <button 
                   className={`modern-toggle-btn ${activationModal.mode === 'installation' ? 'modern-toggle-btn-active' : ''}`} 
@@ -2417,223 +2778,229 @@ const Clients = () => {
                     ...prev, 
                     mode: 'installation', 
                     cart: [{ id: Date.now(), produit_id: '', quantity: 1, unit_price: 0, matricule: '', date_activation: new Date().toISOString().slice(0,10), price: 0, plan_abonnement: '' }], 
-                    rows: [] 
+                    rows: [],
+                    formError: ''
                   }))}
                 >
-                  Installation
+                  Installation + Activation
                 </button>
               </div>
-              <button className="clients-dialog-close" onClick={() => setActivationModal(prev => ({ ...prev, isOpen: false }))}>
-                <X size={18} />
-              </button>
-            </div>
-            <div className="clients-dialog-body">
+
+              {activationModal.formError && (
+                <div className="error-message">
+                  <AlertTriangle size={14} />
+                  {activationModal.formError}
+                </div>
+              )}
+
               {activationModal.mode === 'simple' ? (
                 <>
-                  <div className="activations-table-container">
-                    <table className="activations-table">
-                      <thead>
-                        <tr>
-                          <th>Date</th>
-                          <th>Matricule</th>
-                          <th>Prix (MAD)</th>
-                          <th>Plan</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {activationModal.rows.map(row => (
-                          <tr key={row.id}>
-                            <td>
-                              <input 
-                                type="date" 
-                                value={row.date} 
-                                onChange={e => updateActivationRow(row.id, 'date', e.target.value)} 
-                                className="modern-input" 
-                                style={{ fontSize: '0.7rem' }}
-                              />
-                            </td>
-                            <td>
-                              <input 
-                                type="text" 
-                                value={row.matricule} 
-                                onChange={e => updateActivationRow(row.id, 'matricule', e.target.value)} 
-                                className="modern-input" 
-                                placeholder="Matricule" 
-                                style={{ fontSize: '0.7rem' }}
-                              />
-                            </td>
-                            <td>
-                              <input 
-                                type="number" 
-                                step="0.01" 
-                                value={row.price} 
-                                onChange={e => updateActivationRow(row.id, 'price', parseFloat(e.target.value) || 0)} 
-                                className="modern-input" 
-                                placeholder="Prix" 
-                                style={{ fontSize: '0.7rem' }}
-                              />
-                            </td>
-                            <td>
-                              <select 
-                                value={row.plan_abonnement} 
-                                onChange={e => updateActivationRow(row.id, 'plan_abonnement', e.target.value)} 
-                                className="modern-input"
-                                style={{ fontSize: '0.7rem' }}
-                              >
-                                <option value="">-- Plan --</option>
-                                {PLAN_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                              </select>
-                            </td>
-                            <td>
-                              <button onClick={() => removeActivationRow(row.id)} className="modern-btn-danger" style={{ padding: '0.25rem' }}>
-                                <Trash2 size={12} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div style={{ marginBottom: '1rem' }}>
+                    <p style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.5rem' }}>
+                      Ajoutez une ou plusieurs activations pour ce client
+                    </p>
                   </div>
-                  <div style={{ marginTop: '1rem' }}>
-                    <button onClick={addActivationRow} className="modern-btn modern-btn-secondary">
-                      <Plus size={12} /> Ajouter ligne
-                    </button>
-                  </div>
+                  
+                  {activationModal.rows.map((row, index) => (
+                    <div key={row.id} className="activation-item">
+                      <div className="activation-item-header">
+                        <span className="activation-item-title">Activation #{index + 1}</span>
+                        <button 
+                          type="button"
+                          onClick={() => removeActivationRow(row.id)} 
+                          className="remove-btn"
+                        >
+                          <Trash2 size={12} /> Supprimer
+                        </button>
+                      </div>
+                      <div className="form-grid">
+                        <div className="clients-form-group">
+                          <label className="clients-label clients-label-required">Date d'activation</label>
+                          <input 
+                            type="date" 
+                            value={row.date} 
+                            onChange={e => updateActivationRow(row.id, 'date', e.target.value)} 
+                            className="clients-input" 
+                          />
+                        </div>
+                        <div className="clients-form-group">
+                          <label className="clients-label clients-label-required">Matricule</label>
+                          <input 
+                            type="text" 
+                            value={row.matricule} 
+                            onChange={e => updateActivationRow(row.id, 'matricule', e.target.value)} 
+                            className="clients-input" 
+                            placeholder="Ex: ABC-123"
+                          />
+                        </div>
+                        <div className="clients-form-group">
+                          <label className="clients-label clients-label-required">Prix HT (MAD)</label>
+                          <input 
+                            type="number" 
+                            step="0.01" 
+                            value={row.price || ""} 
+                            onChange={e => updateActivationRow(row.id, 'price', parseFloat(e.target.value) || 0)} 
+                            className="clients-input" 
+                            placeholder="0.00"
+                          />
+                          <small style={{ fontSize: '0.65rem', color: '#6b7280' }}>TVA 20% sera ajoutée automatiquement</small>
+                        </div>
+                        <div className="clients-form-group">
+                          <label className="clients-label">Plan d'abonnement</label>
+                          <select 
+                            value={row.plan_abonnement} 
+                            onChange={e => updateActivationRow(row.id, 'plan_abonnement', e.target.value)} 
+                            className="clients-input"
+                          >
+                            <option value="">-- Sélectionner un plan --</option>
+                            {PLAN_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  <button onClick={addActivationRow} className="modern-btn modern-btn-secondary" style={{ width: '100%', marginTop: '0.5rem' }}>
+                    <Plus size={14} /> Ajouter une activation
+                  </button>
                 </>
               ) : (
                 <>
-                  <div className="activations-table-container">
-                    <table className="activations-table">
-                      <thead>
-                        <tr>
-                          <th>Produit</th>
-                          <th>Qté</th>
-                          <th>Prix unit.</th>
-                          <th>Plan</th>
-                          <th>Matricule</th>
-                          <th>Date act.</th>
-                          <th>Prix act.</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {activationModal.cart.map(item => (
-                          <tr key={item.id}>
-                            <td>
-                              <select 
-                                value={item.produit_id} 
-                                onChange={e => updateInstallationProduct(item.id, 'produit_id', e.target.value)} 
-                                className="modern-input"
-                                style={{ fontSize: '0.7rem' }}
-                              >
-                                <option value="">-- Produit --</option>
-                                {activationProducts.map(p => (
-                                  <option key={p.id} value={p.id}>{p.nom} - {p.marque}</option>
-                                ))}
-                              </select>
-                            </td>
-                            <td>
-                              <input 
-                                type="number" 
-                                min="1" 
-                                value={item.quantity} 
-                                onChange={e => updateInstallationProduct(item.id, 'quantity', parseInt(e.target.value) || 1)} 
-                                className="modern-input" 
-                                style={{ width: '60px', fontSize: '0.7rem' }}
-                              />
-                            </td>
-                            <td>
-                              <input 
-                                type="number" 
-                                step="0.01" 
-                                value={item.unit_price} 
-                                onChange={e => updateInstallationProduct(item.id, 'unit_price', parseFloat(e.target.value) || 0)} 
-                                className={`modern-input ${item.produit_id && item.unit_price === productPrices[item.produit_id] ? 'price-auto' : ''}`} 
-                                placeholder="Prix" 
-                                style={{ width: '80px', fontSize: '0.7rem' }}
-                              />
-                            </td>
-                            <td>
-                              <select 
-                                value={item.plan_abonnement} 
-                                onChange={e => updateInstallationProduct(item.id, 'plan_abonnement', e.target.value)} 
-                                className="modern-input"
-                                style={{ fontSize: '0.7rem' }}
-                              >
-                                <option value="">-- Plan --</option>
-                                {PLAN_OPTIONS.map(opt => (
-                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                ))}
-                              </select>
-                            </td>
-                            <td>
-                              <input 
-                                type="text" 
-                                value={item.matricule} 
-                                onChange={e => updateInstallationProduct(item.id, 'matricule', e.target.value)} 
-                                className="modern-input" 
-                                placeholder="Matricule" 
-                                style={{ fontSize: '0.7rem' }}
-                              />
-                            </td>
-                            <td>
-                              <input 
-                                type="date" 
-                                value={item.date_activation} 
-                                onChange={e => updateInstallationProduct(item.id, 'date_activation', e.target.value)} 
-                                className="modern-input" 
-                                style={{ fontSize: '0.7rem' }}
-                              />
-                            </td>
-                            <td>
-                              <input 
-                                type="number" 
-                                step="0.01" 
-                                value={item.price} 
-                                onChange={e => updateInstallationProduct(item.id, 'price', parseFloat(e.target.value) || 0)} 
-                                className="modern-input" 
-                                placeholder="Prix act." 
-                                style={{ width: '80px', fontSize: '0.7rem' }}
-                              />
-                            </td>
-                            <td>
-                              <button onClick={() => removeInstallationProduct(item.id)} className="modern-btn-danger" style={{ padding: '0.25rem' }}>
-                                <Trash2 size={12} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div style={{ marginBottom: '1rem' }}>
+                    <p style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.5rem' }}>
+                      Ajoutez des produits avec leurs activations associées
+                    </p>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
-                    <button onClick={addInstallationProduct} className="modern-btn modern-btn-secondary">
-                      <Plus size={12} /> Ajouter produit
-                    </button>
-                    <div style={{ background: '#f8fafc', padding: '0.5rem 1rem', borderRadius: '0.75rem', minWidth: '240px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', fontSize: '0.7rem' }}>
-                        <span>Sous-total HT:</span>
-                        <strong>{safeToFixed(calculateInstallationTotals().subtotal)} MAD</strong>
+                  
+                  {activationModal.cart.map((item, index) => (
+                    <div key={item.id} className="activation-item">
+                      <div className="activation-item-header">
+                        <span className="activation-item-title">Produit #{index + 1}</span>
+                        <button 
+                          type="button"
+                          onClick={() => removeInstallationProduct(item.id)} 
+                          className="remove-btn"
+                        >
+                          <Trash2 size={12} /> Supprimer
+                        </button>
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: '#6b7280', fontSize: '0.7rem' }}>
-                        <span>TVA 20%:</span>
-                        <span>{safeToFixed(calculateInstallationTotals().tva)} MAD</span>
+                      <div className="form-grid">
+                        <div className="clients-form-group">
+                          <label className="clients-label clients-label-required">Produit</label>
+                          <select 
+                            value={item.produit_id} 
+                            onChange={e => updateInstallationProduct(item.id, 'produit_id', e.target.value)} 
+                            className="clients-input"
+                          >
+                            <option value="">-- Sélectionner un produit --</option>
+                            {activationProducts.map(p => (
+                              <option key={p.id} value={p.id}>{p.nom} {p.marque ? `- ${p.marque}` : ''}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="clients-form-group">
+                          <label className="clients-label clients-label-required">Quantité</label>
+                          <input 
+                            type="number" 
+                            min="1" 
+                            value={item.quantity} 
+                            onChange={e => updateInstallationProduct(item.id, 'quantity', parseInt(e.target.value) || 1)} 
+                            className="clients-input" 
+                          />
+                        </div>
+                        <div className="clients-form-group">
+                          <label className="clients-label clients-label-required">Prix unitaire HT (MAD)</label>
+                          <input 
+                            type="number" 
+                            step="0.01" 
+                            value={item.unit_price || ""} 
+                            onChange={e => updateInstallationProduct(item.id, 'unit_price', parseFloat(e.target.value) || 0)} 
+                            className={`clients-input ${item.produit_id && item.unit_price === productPrices[item.produit_id] ? 'price-auto' : ''}`} 
+                            placeholder="0.00"
+                          />
+                        </div>
+                        <div className="clients-form-group">
+                          <label className="clients-label">Plan d'abonnement</label>
+                          <select 
+                            value={item.plan_abonnement} 
+                            onChange={e => updateInstallationProduct(item.id, 'plan_abonnement', e.target.value)} 
+                            className="clients-input"
+                          >
+                            <option value="">-- Sélectionner un plan --</option>
+                            {PLAN_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                          </select>
+                        </div>
+                        <div className="clients-form-group">
+                          <label className="clients-label clients-label-required">Matricule</label>
+                          <input 
+                            type="text" 
+                            value={item.matricule} 
+                            onChange={e => updateInstallationProduct(item.id, 'matricule', e.target.value)} 
+                            className="clients-input" 
+                            placeholder="Ex: ABC-123"
+                          />
+                        </div>
+                        <div className="clients-form-group">
+                          <label className="clients-label">Date d'activation</label>
+                          <input 
+                            type="date" 
+                            value={item.date_activation} 
+                            onChange={e => updateInstallationProduct(item.id, 'date_activation', e.target.value)} 
+                            className="clients-input" 
+                          />
+                        </div>
+                        <div className="clients-form-group">
+                          <label className="clients-label">Prix d'activation HT (MAD)</label>
+                          <input 
+                            type="number" 
+                            step="0.01" 
+                            value={item.price || ""} 
+                            onChange={e => updateInstallationProduct(item.id, 'price', parseFloat(e.target.value) || 0)} 
+                            className="clients-input" 
+                            placeholder="0.00"
+                          />
+                          <small style={{ fontSize: '0.65rem', color: '#6b7280' }}>Optionnel - frais d'activation supplémentaires</small>
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', borderTop: '1px dashed #e2e8f0', paddingTop: '0.25rem' }}>
-                        <span>Total vente TTC:</span>
-                        <strong style={{ color: '#059669' }}>{safeToFixed(calculateInstallationTotals().total)} MAD</strong>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', fontSize: '0.7rem' }}>
-                        <span>Total activation(s):</span>
-                        <strong>{safeToFixed(activationModal.cart.reduce((sum, item) => sum + safeNumber(item.price), 0))} MAD</strong>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #cbd5e1', paddingTop: '0.5rem', marginTop: '0.25rem' }}>
-                        <span className="text-green-600 font-bold">GRAND TOTAL TTC:</span>
-                        <span className="text-green-600 font-bold" style={{ fontSize: '0.9rem' }}>
-                          {safeToFixed(calculateGrandTotal())} MAD
-                        </span>
-                      </div>
+                    </div>
+                  ))}
+                  
+                  <button onClick={addInstallationProduct} className="modern-btn modern-btn-secondary" style={{ width: '100%', marginTop: '0.5rem' }}>
+                    <Plus size={14} /> Ajouter un produit
+                  </button>
+
+                  {/* Summary Section */}
+                  <div style={{ 
+                    marginTop: '1.5rem', 
+                    background: '#f8fafc', 
+                    padding: '1rem', 
+                    borderRadius: '0.75rem',
+                    border: '1px solid #e2e8f0'
+                  }}>
+                    <h3 style={{ fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.75rem', color: '#1e293b' }}>
+                      Récapitulatif
+                    </h3>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.75rem' }}>
+                      <span>Sous-total produits HT:</span>
+                      <strong>{safeToFixed(calculateInstallationTotals().subtotal)} MAD</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', color: '#6b7280', fontSize: '0.75rem' }}>
+                      <span>TVA 20%:</span>
+                      <span>{safeToFixed(calculateInstallationTotals().tva)} MAD</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', paddingBottom: '0.5rem', borderBottom: '1px dashed #cbd5e1' }}>
+                      <span>Total vente TTC:</span>
+                      <strong style={{ color: '#059669' }}>{safeToFixed(calculateInstallationTotals().total)} MAD</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.75rem' }}>
+                      <span>Total activation(s) HT:</span>
+                      <strong>{safeToFixed(activationModal.cart.reduce((sum, item) => sum + safeNumber(item.price), 0))} MAD</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '2px solid #cbd5e1' }}>
+                      <span className="text-green-600 font-bold" style={{ fontSize: '0.875rem' }}>GRAND TOTAL TTC:</span>
+                      <span className="text-green-600 font-bold" style={{ fontSize: '0.875rem' }}>
+                        {safeToFixed(calculateGrandTotal())} MAD
+                      </span>
                     </div>
                   </div>
                 </>
@@ -2642,14 +3009,14 @@ const Clients = () => {
             <div className="clients-dialog-footer">
               <button 
                 onClick={() => setActivationModal(prev => ({ ...prev, isOpen: false }))} 
-                className="modern-btn modern-btn-secondary" 
+                className="clients-btn clients-btn-outline" 
                 disabled={activationModal.loading}
               >
                 Annuler
               </button>
               <button 
                 onClick={submitActivationModal} 
-                className="modern-btn modern-btn-primary" 
+                className="clients-btn clients-btn-primary" 
                 disabled={activationModal.loading}
               >
                 {activationModal.loading ? <Loader size={14} className="spinning" /> : <Save size={14} />}

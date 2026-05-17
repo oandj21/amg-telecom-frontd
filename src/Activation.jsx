@@ -5,7 +5,7 @@ import {
   Search, Eye, Edit, Trash2, X, Calendar, Wifi, Car,
   Smartphone, Ban, Power, DollarSign, Save, RotateCcw, ChevronDown, ChevronUp,
   FileSpreadsheet, Download, History, ChevronLeft, ChevronRight,
-  TrendingUp, Check, AlertCircle
+  TrendingUp, Check, AlertCircle, CreditCard, Receipt, Loader,Info
 } from 'lucide-react';
 import { ExportMenu } from './ExportMenu';
 import ExcelJS from 'exceljs';
@@ -688,6 +688,8 @@ const styles = `
   .history-icon-suspension { background: #fefce8; color: #ca8a04; }
   .history-icon-reactivation { background: #e0f2fe; color: #0284c7; }
   .history-icon-deletion { background: #fef2f2; color: #dc2626; }
+  .history-icon-payment { background: #e0f2fe; color: #0284c7; }
+  .history-icon-cheque { background: #fef3c7; color: #d97706; }
   
   .history-content {
     flex: 1;
@@ -1259,6 +1261,301 @@ const styles = `
     margin-left: 6px;
     font-weight: normal;
   }
+
+  /* Payment Badge Styles */
+  .payment-badge-cash { background: #dbeafe; color: #1e40af; padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.7rem; display: inline-block; }
+  .payment-badge-card { background: #e0e7ff; color: #3730a3; padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.7rem; display: inline-block; }
+  .payment-badge-check { background: #fef3c7; color: #92400e; padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.7rem; display: inline-block; }
+  .payment-badge-bank_transfer { background: #e0f2fe; color: #075985; padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.7rem; display: inline-block; }
+  .payment-badge-other { background: #f3e8ff; color: #6b21a5; padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.7rem; display: inline-block; }
+  
+  .btn-update-payment {
+    background: #3b82f6;
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border: none;
+    border-radius: 0.5rem;
+    font-size: 0.7rem;
+    cursor: pointer;
+  }
+  
+  .btn-delete-payment {
+    background: #ef4444;
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border: none;
+    border-radius: 0.5rem;
+    font-size: 0.7rem;
+    cursor: pointer;
+  }
+  
+  .btn-add-payment {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    padding: 0.5rem 1rem;
+    height: 2.5rem;
+    border: none;
+    border-radius: 0.875rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+  }
+  
+  .add-payment-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+    background: white;
+    padding: 0.875rem;
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+  }
+  
+  .add-payment-input {
+    flex: 1;
+    min-width: 120px;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+  }
+  
+  .add-payment-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  }
+  
+  .payment-method-select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    background: white;
+    cursor: pointer;
+  }
+  
+  .payment-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+  }
+  
+  @media (max-width: 640px) {
+    .payment-summary-grid {
+      gap: 0.5rem;
+    }
+    .payment-summary-card {
+      padding: 0.5rem;
+    }
+    .payment-summary-label {
+      font-size: 0.6rem;
+    }
+    .payment-summary-value {
+      font-size: 0.9rem;
+    }
+  }
+  
+  .payment-summary-card {
+    background: white;
+    border-radius: 1rem;
+    padding: 1rem;
+    text-align: center;
+    border: 1px solid #e2e8f0;
+    transition: all 0.2s ease;
+  }
+  
+  .payment-summary-card:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  }
+  
+  .payment-summary-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    margin-bottom: 0.5rem;
+  }
+  
+  .payment-summary-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1e293b;
+  }
+  
+  .payment-summary-value.paid {
+    color: #059669;
+  }
+  
+  .payment-summary-value.remaining {
+    color: #d97706;
+  }
+  
+  .payment-history-table {
+    width: 100%;
+    font-size: 0.75rem;
+    border-collapse: collapse;
+  }
+  
+  @media (max-width: 640px) {
+    .payment-history-table {
+      display: block;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    
+    .payment-history-table thead,
+    .payment-history-table tbody,
+    .payment-history-table tr {
+      min-width: 500px;
+    }
+  }
+  
+  .payment-history-table th {
+    text-align: left;
+    padding: 0.5rem;
+    background: #f3f4f6;
+    font-weight: 600;
+  }
+  
+  .payment-history-table td {
+    padding: 0.5rem;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  
+  .sales-loading {
+    text-align: center;
+    padding: 3rem 0;
+  }
+  
+  .sales-loading-spinner {
+    display: inline-block;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 3px solid #e5e7eb;
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  
+  .spinning {
+    animation: spin 1s linear infinite;
+  }
+  
+  .sales-empty {
+    text-align: center;
+    color: #9ca3af;
+    padding: 3rem 0;
+  }
+    /* ========================================
+   FIX: Z-Index Layering for Modals & Dialogs
+   ======================================== */
+
+/* Base overlay for all modals (dimmed background) */
+.activation-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 1000; /* Increased base z-index */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+/* Main modal dialog (Gestion des paiements, Détails, etc.) */
+.activation-dialog {
+  background: white;
+  border-radius: 0.75rem;
+  width: 100%;
+  max-width: 80rem;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  animation: dialogFadeIn 0.2s ease;
+  z-index: 1010; /* Above its own overlay */
+  position: relative;
+}
+
+/* Confirmation dialog (smaller modal that pops over the payment modal) */
+.confirmation-dialog {
+  max-width: 28rem;
+  z-index: 1100 !important; /* Ensures confirmation dialog is on top of everything */
+  position: relative;
+}
+
+/* When confirmation dialog is open inside payment modal overlay,
+   we need to ensure the confirmation overlay is on top */
+.activation-overlay:has(.confirmation-dialog) {
+  z-index: 2000; /* Higher z-index when confirmation dialog is present */
+}
+
+/* Ensure the confirmation dialog's overlay background is also layered correctly */
+.confirmation-dialog .activation-overlay {
+  z-index: 2001;
+}
+
+/* For any nested modals within dialogs */
+.activation-dialog .confirmation-dialog {
+  z-index: 2100;
+  position: relative;
+}
+
+/* Ensure payment modal body scroll doesn't affect confirmation */
+.activation-dialog-body {
+  position: relative;
+  z-index: 1;
+}
+
+/* Confirmation dialog within payment modal */
+#activation-payment-modal .confirmation-dialog,
+.activation-dialog .confirmation-dialog {
+  position: relative;
+  z-index: 9999;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+/* Fix for any inline confirmation dialogs */
+.confirmation-dialog {
+  animation: dialogFadeIn 0.2s ease;
+}
+
+/* Ensure proper stacking context for modals */
+.activation-overlay,
+.activation-dialog,
+.confirmation-dialog {
+  isolation: isolate;
+}
+
+/* Animation */
+@keyframes dialogFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .confirmation-dialog {
+    margin: 1rem;
+    width: calc(100% - 2rem);
+  }
+}
 `;
 
 // ==================== STAT CARD COMPONENT ====================
@@ -1434,25 +1731,16 @@ const HistoryModal = ({ isOpen, onClose, activation, history }) => {
   if (!isOpen || !activation) return null;
   
   const getActionIcon = (action) => {
-    const iconClass = `history-icon ${getIconClass(action)}`;
+    let iconClass = "history-icon ";
     switch (action) {
-      case 'activation': return <div className={iconClass}><CheckCircle2 size={16} /></div>;
-      case 'renewal': return <div className={iconClass}><RefreshCw size={16} /></div>;
-      case 'suspension': return <div className={iconClass}><Ban size={16} /></div>;
-      case 'reactivation': return <div className={iconClass}><Power size={16} /></div>;
-      case 'deletion': return <div className={iconClass}><Trash2 size={16} /></div>;
-      default: return <div className={iconClass}><History size={16} /></div>;
-    }
-  };
-  
-  const getIconClass = (action) => {
-    switch (action) {
-      case 'activation': return 'history-icon-activation';
-      case 'renewal': return 'history-icon-renewal';
-      case 'suspension': return 'history-icon-suspension';
-      case 'reactivation': return 'history-icon-reactivation';
-      case 'deletion': return 'history-icon-deletion';
-      default: return 'history-icon-activation';
+      case 'activation': iconClass += 'history-icon-activation'; return <div className={iconClass}><CheckCircle2 size={16} /></div>;
+      case 'renewal': iconClass += 'history-icon-renewal'; return <div className={iconClass}><RefreshCw size={16} /></div>;
+      case 'suspension': iconClass += 'history-icon-suspension'; return <div className={iconClass}><Ban size={16} /></div>;
+      case 'reactivation': iconClass += 'history-icon-reactivation'; return <div className={iconClass}><Power size={16} /></div>;
+      case 'deletion': iconClass += 'history-icon-deletion'; return <div className={iconClass}><Trash2 size={16} /></div>;
+      case 'payment': iconClass += 'history-icon-payment'; return <div className={iconClass}><CreditCard size={16} /></div>;
+      case 'cheque_payment': iconClass += 'history-icon-cheque'; return <div className={iconClass}><Receipt size={16} /></div>;
+      default: iconClass += 'history-icon-activation'; return <div className={iconClass}><History size={16} /></div>;
     }
   };
   
@@ -1462,7 +1750,13 @@ const HistoryModal = ({ isOpen, onClose, activation, history }) => {
       'renewal': '🔄 Renouvellement',
       'suspension': '⛔ Suspension',
       'reactivation': '▶️ Réactivation',
-      'deletion': '🗑️ Suppression'
+      'deletion': '🗑️ Suppression',
+      'payment': '💰 Paiement',
+      'cheque_payment': '📝 Paiement par chèque',
+      'cheque_remis': '🏦 Remis en banque',
+      'cheque_encaisse': '✅ Chèque encaissé',
+      'payment_updated': '✏️ Paiement modifié',
+      'payment_removed': '🗑️ Paiement supprimé'
     };
     return labels[action] || action;
   };
@@ -1470,15 +1764,17 @@ const HistoryModal = ({ isOpen, onClose, activation, history }) => {
   const getActionDetails = (entry) => {
     switch (entry.action) {
       case 'renewal':
-        return `${entry.old_plan || entry.details?.old_plan || ''} → ${entry.new_plan || entry.details?.new_plan || ''} | Prix: ${entry.price || entry.details?.price || 0} MAD`;
+        return `${entry.details?.old_plan || ''} → ${entry.details?.new_plan || ''} | Prix: ${entry.details?.price || 0} MAD`;
       case 'activation':
-        return `Activé avec plan ${entry.plan || entry.details?.plan || ''} | Prix activation: ${entry.price || entry.details?.price || 0} MAD`;
-      case 'suspension':
-        return 'Service suspendu';
-      case 'reactivation':
-        return 'Service réactivé';
+        return `Activé avec plan ${entry.details?.plan || ''} | Prix activation: ${entry.details?.price || 0} MAD`;
+      case 'payment':
+        return `${entry.details?.amount || 0} MAD par ${entry.details?.method || ''}${entry.details?.reference ? ` - Réf: ${entry.details.reference}` : ''}`;
+      case 'cheque_payment':
+        return `${entry.details?.amount || 0} MAD - N° Chèque: ${entry.details?.cheque_number || 'N/A'}`;
+      case 'cheque_encaisse':
+        return `Chèque encaissé - ${entry.details?.amount || 0} MAD`;
       default:
-        return '';
+        return entry.details ? (typeof entry.details === 'object' ? JSON.stringify(entry.details) : entry.details) : '';
     }
   };
   
@@ -1519,7 +1815,6 @@ const HistoryModal = ({ isOpen, onClose, activation, history }) => {
                       </span>
                     </div>
                     {getActionDetails(entry) && <div className="history-details">{getActionDetails(entry)}</div>}
-                    {entry.user_name && <div className="history-user">Par: {entry.user_name}</div>}
                     {entry.user && <div className="history-user">Par: {entry.user}</div>}
                   </div>
                 </div>
@@ -1534,6 +1829,639 @@ const HistoryModal = ({ isOpen, onClose, activation, history }) => {
         </div>
         <div className="activation-dialog-footer">
           <button onClick={onClose} className="activation-btn activation-btn-secondary">Fermer</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Activation.jsx - Updated ActivationPaymentHistoryModal component
+
+const ActivationPaymentHistoryModal = ({ 
+  isOpen, 
+  activation, 
+  onClose,
+  onPaymentChange,
+  showToast,
+  showConfirm
+}) => {
+  const [editPaymentId, setEditPaymentId] = useState(null);
+  const [editPaymentAmount, setEditPaymentAmount] = useState('');
+  const [editPaymentMethod, setEditPaymentMethod] = useState('');
+  const [editPaymentType, setEditPaymentType] = useState('activation');
+  const [editPaymentReference, setEditPaymentReference] = useState('');
+  const [updatingPayment, setUpdatingPayment] = useState(null);
+  const [deletingPayment, setDeletingPayment] = useState(null);
+  
+  const [localPaymentAmount, setLocalPaymentAmount] = useState('');
+  const [localPaymentMethod, setLocalPaymentMethod] = useState('cash');
+  const [localPaymentType, setLocalPaymentType] = useState('activation');
+  const [localPaymentReference, setLocalPaymentReference] = useState('');
+  const [localAddingPayment, setLocalAddingPayment] = useState(false);
+  const [localPayments, setLocalPayments] = useState([]);
+  const [localTotal, setLocalTotal] = useState(0);
+  const [localOriginalPrice, setLocalOriginalPrice] = useState(0);
+  const [localRenewalTotal, setLocalRenewalTotal] = useState(0);
+  const [localAmountPaid, setLocalAmountPaid] = useState(0);
+  const [localRemaining, setLocalRemaining] = useState(0);
+  const [localOriginalPaid, setLocalOriginalPaid] = useState(0);
+  const [localRenewalPaid, setLocalRenewalPaid] = useState(0);
+  const [localOriginalRemaining, setLocalOriginalRemaining] = useState(0);
+  const [localRenewalRemaining, setLocalRenewalRemaining] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
+
+  const loadPayments = async () => {
+    if (isLoading) return;
+    
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/activations/${activation.id}/payments`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        
+        setLocalPayments(data.payment_history || []);
+        setLocalTotal(data.total_price || activation.total_price_paid || 0);
+        setLocalOriginalPrice(data.original_price || activation.price || 0);
+        setLocalRenewalTotal(data.renewal_total || (data.total_price - data.original_price) || 0);
+        setLocalAmountPaid(data.amount_paid || 0);
+        setLocalRemaining(data.remaining_amount || 0);
+        setLocalOriginalPaid(data.original_paid || 0);
+        setLocalRenewalPaid(data.renewal_paid || 0);
+        setLocalOriginalRemaining(data.original_remaining || activation.price || 0);
+        setLocalRenewalRemaining(data.renewal_remaining || 0);
+        setHasLoaded(true);
+      } else {
+        const error = await response.json();
+        if (showToast) showToast(error.message || 'Erreur de chargement', 'error');
+      }
+    } catch (err) {
+      console.error('Error loading payments:', err);
+      if (showToast) showToast('Erreur lors du chargement des paiements', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && activation?.id && !hasLoaded) {
+      loadPayments();
+    }
+    if (!isOpen) {
+      setHasLoaded(false);
+    }
+  }, [isOpen, activation?.id]);
+
+  // Get max amount based on selected payment type
+  const getMaxAmountByType = () => {
+    if (localPaymentType === 'activation') {
+      return localOriginalRemaining;
+    } else {
+      return localRenewalRemaining;
+    }
+  };
+
+  const getRemainingLabel = () => {
+    if (localPaymentType === 'activation') {
+      return `Reste à payer (Activation): ${safeFormatPrice(localOriginalRemaining)} MAD`;
+    } else {
+      return `Reste à payer (Renouvellements): ${safeFormatPrice(localRenewalRemaining)} MAD`;
+    }
+  };
+
+  const handleAddPayment = async () => {
+    if (!localPaymentAmount || parseFloat(localPaymentAmount) <= 0) {
+      if (showToast) showToast('Montant invalide', 'error');
+      return;
+    }
+    
+    const amount = parseFloat(localPaymentAmount);
+    const maxAmount = getMaxAmountByType();
+    
+    if (amount > maxAmount) {
+      if (showToast) showToast(`Le montant ne peut pas dépasser ${safeFormatPrice(maxAmount)} MAD (${localPaymentType === 'activation' ? 'Activation' : 'Renouvellements'})`, 'error');
+      return;
+    }
+    
+    setLocalAddingPayment(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/activations/${activation.id}/payments`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          amount: amount,
+          method: localPaymentMethod,
+          payment_type: localPaymentType,
+          reference: localPaymentReference,
+          notes: ''
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Erreur lors de l'ajout");
+      }
+      
+      setHasLoaded(false);
+      await loadPayments();
+      
+      setLocalPaymentAmount('');
+      setLocalPaymentReference('');
+      
+      if (showToast) showToast('Paiement ajouté avec succès', 'success');
+      
+      if (onPaymentChange) onPaymentChange();
+      
+    } catch (err) {
+      if (showToast) showToast(err.message, 'error');
+    } finally {
+      setLocalAddingPayment(false);
+    }
+  };
+
+  const handleAddChequePayment = async () => {
+    if (!localPaymentAmount || parseFloat(localPaymentAmount) <= 0) {
+      if (showToast) showToast('Montant invalide', 'error');
+      return;
+    }
+    
+    const amount = parseFloat(localPaymentAmount);
+    const maxAmount = getMaxAmountByType();
+    
+    if (amount > maxAmount) {
+      if (showToast) showToast(`Le montant ne peut pas dépasser ${safeFormatPrice(maxAmount)} MAD (${localPaymentType === 'activation' ? 'Activation' : 'Renouvellements'})`, 'error');
+      return;
+    }
+    
+    setLocalAddingPayment(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/activations/${activation.id}/cheque-payment`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          amount: amount,
+          payment_type: localPaymentType,
+          cheque_number: localPaymentReference,
+          bank_name: 'Autre',
+          notes: `Paiement par chèque - ${localPaymentReference || 'sans référence'} (${localPaymentType === 'activation' ? 'Activation' : 'Renouvellement'})`
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Erreur lors de l'ajout");
+      }
+      
+      setHasLoaded(false);
+      await loadPayments();
+      
+      setLocalPaymentAmount('');
+      setLocalPaymentReference('');
+      
+      if (showToast) showToast('Chèque enregistré. En attente de remise.', 'info');
+      
+      if (onPaymentChange) onPaymentChange();
+      
+    } catch (err) {
+      if (showToast) showToast(err.message, 'error');
+    } finally {
+      setLocalAddingPayment(false);
+    }
+  };
+
+  const handleUpdatePayment = async (paymentId, amount, method, paymentType, reference) => {
+    if (!amount || parseFloat(amount) <= 0) {
+      if (showToast) showToast('Montant invalide', 'error');
+      return;
+    }
+    
+    setUpdatingPayment(paymentId);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/activations/${activation.id}/payments/${paymentId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          amount: parseFloat(amount), 
+          method, 
+          payment_type: paymentType,
+          reference 
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Erreur de mise à jour');
+      }
+      
+      setHasLoaded(false);
+      await loadPayments();
+      
+      if (showToast) showToast('Paiement mis à jour', 'success');
+      
+      if (onPaymentChange) onPaymentChange();
+      
+      setEditPaymentId(null);
+      setEditPaymentAmount('');
+      setEditPaymentMethod('');
+      setEditPaymentType('activation');
+      setEditPaymentReference('');
+      
+    } catch (err) {
+      if (showToast) showToast(err.message, 'error');
+    } finally {
+      setUpdatingPayment(null);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId) => {
+    showConfirm(
+      'Supprimer le paiement',
+      'Êtes-vous sûr de vouloir supprimer ce paiement ? Cette action est irréversible.',
+      async () => {
+        setDeletingPayment(paymentId);
+        try {
+          const token = localStorage.getItem('token');
+          const response = await fetch(`${API_URL}/activations/${activation.id}/payments/${paymentId}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Erreur de suppression');
+          }
+
+          setHasLoaded(false);
+          await loadPayments();
+          
+          if (showToast) showToast('Paiement supprimé', 'success');
+          if (onPaymentChange) onPaymentChange();
+        } catch (err) {
+          if (showToast) showToast(err.message, 'error');
+        } finally {
+          setDeletingPayment(null);
+        }
+      },
+      'destructive',
+      'Supprimer',
+      'Annuler'
+    );
+  };
+
+  const startEditPayment = (payment) => {
+    setEditPaymentId(payment.id);
+    setEditPaymentAmount(payment.amount.toString());
+    setEditPaymentMethod(payment.method);
+    setEditPaymentType(payment.payment_type || 'activation');
+    setEditPaymentReference(payment.reference || '');
+  };
+
+  const cancelEditPayment = () => {
+    setEditPaymentId(null);
+    setEditPaymentAmount('');
+    setEditPaymentMethod('');
+    setEditPaymentType('activation');
+    setEditPaymentReference('');
+  };
+
+  const PaymentBadge = ({ method }) => {
+    const methodClasses = {
+      cash: 'payment-badge-cash',
+      card: 'payment-badge-card',
+      check: 'payment-badge-check',
+      bank_transfer: 'payment-badge-bank_transfer',
+      other: 'payment-badge-other'
+    };
+    const methodLabels = {
+      cash: 'Espèces',
+      card: 'Carte',
+      check: 'Chèque',
+      bank_transfer: 'Virement',
+      other: 'Autre'
+    };
+    return (
+      <span className={`payment-badge ${methodClasses[method] || 'payment-badge-other'}`} style={{ padding: '0.25rem 0.5rem', borderRadius: '0.375rem', fontSize: '0.7rem' }}>
+        {methodLabels[method] || method}
+      </span>
+    );
+  };
+
+  const PaymentTypeBadge = ({ paymentType }) => {
+    if (paymentType === 'renewal') {
+      return <span style={{ fontSize: '0.65rem', background: '#dbeafe', color: '#1e40af', padding: '2px 8px', borderRadius: '12px' }}>🔄 Renouvellement</span>;
+    }
+    return <span style={{ fontSize: '0.65rem', background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '12px' }}>✅ Activation</span>;
+  };
+
+  const getChequeStatusBadge = (remiseStatus) => {
+    if (!remiseStatus || remiseStatus === 'pending') {
+      return <span style={{ fontSize: '0.65rem', color: '#d97706', background: '#fef3c7', padding: '2px 6px', borderRadius: '12px' }}>⏳ En attente remise</span>;
+    } else if (remiseStatus === 'remis') {
+      return <span style={{ fontSize: '0.65rem', color: '#2563eb', background: '#dbeafe', padding: '2px 6px', borderRadius: '12px' }}>📝 Remis en banque</span>;
+    } else if (remiseStatus === 'encaisse') {
+      return <span style={{ fontSize: '0.65rem', color: '#059669', background: '#d1fae5', padding: '2px 6px', borderRadius: '12px' }}>✅ Encaissé</span>;
+    }
+    return null;
+  };
+
+  if (!isOpen || !activation) return null;
+
+  return (
+    <div className="activation-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="activation-dialog" style={{ maxWidth: '750px' }}>
+        <div className="activation-dialog-header" style={{ justifyContent: 'space-between' }}>
+          <h2 className="activation-dialog-title">
+            Gestion des paiements - IMEI: {activation.imei || activation.client_imei}
+          </h2>
+          <button onClick={onClose} className="activation-btn-icon">
+            <X size={20} />
+          </button>
+        </div>
+        
+        <div className="activation-dialog-body">
+          {isLoading && !hasLoaded ? (
+            <div className="activation-loading">
+              <div className="activation-spinner"></div>
+              <p>Chargement des paiements...</p>
+            </div>
+          ) : (
+            <>
+              {/* Payment Summary - Enhanced with breakdown */}
+              <div className="payment-summary-grid" style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
+                gap: '0.75rem',
+                marginBottom: '1rem'
+              }}>
+                <div className="payment-summary-card">
+                  <div className="payment-summary-label">Total à payer</div>
+                  <div className="payment-summary-value">{safeFormatPrice(localTotal)} MAD</div>
+                  <div style={{ fontSize: '0.65rem', color: '#6b7280', marginTop: '4px' }}>
+                    Activation: {safeFormatPrice(localOriginalPrice)} MAD
+                    {localRenewalTotal > 0 && ` + ${safeFormatPrice(localRenewalTotal)} MAD (renouvellements)`}
+                  </div>
+                </div>
+                <div className="payment-summary-card">
+                  <div className="payment-summary-label">Déjà payé</div>
+                  <div className="payment-summary-value paid">{safeFormatPrice(localAmountPaid)} MAD</div>
+                  <div style={{ fontSize: '0.65rem', color: '#6b7280', marginTop: '4px' }}>
+                    Activation: {safeFormatPrice(localOriginalPaid)} MAD
+                    {localRenewalPaid > 0 && ` / Renouv: ${safeFormatPrice(localRenewalPaid)} MAD`}
+                  </div>
+                </div>
+                <div className="payment-summary-card">
+                  <div className="payment-summary-label">Reste à payer</div>
+                  <div className="payment-summary-value remaining">{safeFormatPrice(localRemaining)} MAD</div>
+                  <div style={{ fontSize: '0.65rem', color: '#6b7280', marginTop: '4px' }}>
+                    Activation: {safeFormatPrice(localOriginalRemaining)} MAD
+                    {localRenewalRemaining > 0 && ` / Renouv: ${safeFormatPrice(localRenewalRemaining)} MAD`}
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment History Table */}
+              {localPayments && localPayments.length > 0 ? (
+                <table className="payment-history-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Type</th>
+                      <th>Montant</th>
+                      <th>Méthode</th>
+                      <th>Référence</th>
+                      <th>Statut Chèque</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {localPayments.map((payment, idx) => (
+                      <tr key={payment.id || idx}>
+                        <td>{new Date(payment.date || payment.created_at).toLocaleString('fr-FR')}</td>
+                        <td><PaymentTypeBadge paymentType={payment.payment_type || 'activation'} /></td>
+                        <td>
+                          {editPaymentId === payment.id ? (
+                            <input 
+                              type="number" 
+                              step="0.01" 
+                              value={editPaymentAmount} 
+                              onChange={(e) => setEditPaymentAmount(e.target.value)} 
+                              style={{ width: '100px', padding: '0.25rem', borderRadius: '0.375rem', border: '1px solid #d1d5db' }} 
+                            />
+                          ) : (
+                            `${safeFormatPrice(payment.amount)} MAD`
+                          )}
+                        </td>
+                        <td>
+                          {editPaymentId === payment.id ? (
+                            <select 
+                              value={editPaymentMethod} 
+                              onChange={(e) => setEditPaymentMethod(e.target.value)}
+                              style={{ padding: '0.25rem', borderRadius: '0.375rem', border: '1px solid #d1d5db' }}
+                            >
+                              <option value="cash">Espèces</option>
+                              <option value="card">Carte</option>
+                              <option value="check">Chèque</option>
+                              <option value="bank_transfer">Virement</option>
+                              <option value="other">Autre</option>
+                            </select>
+                          ) : (
+                            <PaymentBadge method={payment.method} />
+                          )}
+                        </td>
+                        <td>
+                          {editPaymentId === payment.id ? (
+                            <input 
+                              type="text" 
+                              value={editPaymentReference} 
+                              onChange={(e) => setEditPaymentReference(e.target.value)} 
+                              style={{ width: '100px', padding: '0.25rem', borderRadius: '0.375rem', border: '1px solid #d1d5db' }} 
+                            />
+                          ) : (
+                            payment.reference || '-'
+                          )}
+                        </td>
+                        <td>
+                          {(payment.method === 'check' || payment.method === 'cheque') && (
+                            getChequeStatusBadge(payment.remise_status)
+                          )}
+                        </td>
+                        <td>
+                          {editPaymentId === payment.id ? (
+                            <div style={{ display: 'flex', gap: '0.25rem' }}>
+                              <button 
+                                onClick={() => handleUpdatePayment(payment.id, editPaymentAmount, editPaymentMethod, editPaymentType, editPaymentReference)}
+                                className="btn-update-payment"
+                                disabled={updatingPayment !== null}
+                              >
+                                Sauver
+                              </button>
+                              <button onClick={cancelEditPayment} className="activation-btn-outline" style={{ padding: '0.25rem', fontSize: '0.7rem' }}>
+                                Annuler
+                              </button>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', gap: '0.25rem' }}>
+                              <button onClick={() => startEditPayment(payment)} className="btn-update-payment">
+                                Modifier
+                              </button>
+                              <button 
+                                onClick={() => handleDeletePayment(payment.id)} 
+                                className="btn-delete-payment"
+                                disabled={deletingPayment !== null}
+                              >
+                                {deletingPayment === payment.id ? '...' : 'Supprimer'}
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="activation-empty">
+                  <CreditCard size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
+                  <p>Aucun paiement enregistré</p>
+                </div>
+              )}
+
+              {/* Add Payment Form with Payment Type Selection */}
+              <div style={{ marginTop: '1.5rem', borderTop: '1px solid #e5e7eb', paddingTop: '1rem' }}>
+                <div style={{ marginBottom: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <CreditCard size={16} />
+                  Ajouter un nouveau paiement
+                </div>
+                
+                {/* Payment Type Selection Toggle */}
+                <div style={{ 
+                  display: 'flex', 
+                  gap: '0.5rem', 
+                  marginBottom: '1rem',
+                  background: '#f3f4f6',
+                  padding: '0.25rem',
+                  borderRadius: '0.75rem'
+                }}>
+                  <button
+                    onClick={() => setLocalPaymentType('activation')}
+                    style={{
+                      flex: 1,
+                      padding: '0.5rem',
+                      borderRadius: '0.5rem',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontWeight: 500,
+                      background: localPaymentType === 'activation' ? 'linear-gradient(135deg, #10b981, #059669)' : 'transparent',
+                      color: localPaymentType === 'activation' ? 'white' : '#4b5563',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    ✅ Paiement Activation
+                    <span style={{ fontSize: '0.7rem', display: 'block', opacity: 0.8 }}>
+                      Restant: {safeFormatPrice(localOriginalRemaining)} MAD
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setLocalPaymentType('renewal')}
+                    disabled={localRenewalRemaining <= 0}
+                    style={{
+                      flex: 1,
+                      padding: '0.5rem',
+                      borderRadius: '0.5rem',
+                      border: 'none',
+                      cursor: localRenewalRemaining <= 0 ? 'not-allowed' : 'pointer',
+                      fontWeight: 500,
+                      background: localPaymentType === 'renewal' ? 'linear-gradient(135deg, #3b82f6, #2563eb)' : 'transparent',
+                      color: localPaymentType === 'renewal' ? 'white' : localRenewalRemaining <= 0 ? '#9ca3af' : '#4b5563',
+                      transition: 'all 0.2s',
+                      opacity: localRenewalRemaining <= 0 ? 0.6 : 1
+                    }}
+                  >
+                    🔄 Paiement Renouvellement
+                    <span style={{ fontSize: '0.7rem', display: 'block', opacity: 0.8 }}>
+                      Restant: {safeFormatPrice(localRenewalRemaining)} MAD
+                    </span>
+                  </button>
+                </div>
+                
+                <div className="add-payment-row">
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    placeholder="Montant" 
+                    value={localPaymentAmount} 
+                    onChange={(e) => setLocalPaymentAmount(e.target.value)} 
+                    className="add-payment-input" 
+                  />
+                  <select 
+                    value={localPaymentMethod} 
+                    onChange={(e) => setLocalPaymentMethod(e.target.value)} 
+                    className="payment-method-select"
+                  >
+                    <option value="cash">Espèces</option>
+                    <option value="card">Carte Bancaire</option>
+                    <option value="check">Chèque</option>
+                    <option value="bank_transfer">Virement</option>
+                    <option value="other">Autre</option>
+                  </select>
+                  <input 
+                    type="text" 
+                    placeholder="Référence (optionnel)" 
+                    value={localPaymentReference} 
+                    onChange={(e) => setLocalPaymentReference(e.target.value)} 
+                    className="add-payment-input" 
+                  />
+                  <button 
+                    onClick={localPaymentMethod === 'check' || localPaymentMethod === 'cheque' ? handleAddChequePayment : handleAddPayment} 
+                    disabled={localAddingPayment || !localPaymentAmount || parseFloat(localPaymentAmount) <= 0} 
+                    className="btn-add-payment"
+                  >
+                    {localAddingPayment ? <div className="activation-spinner" style={{ width: '1rem', height: '1rem' }} /> : <><Plus size={14} /> Ajouter</>}
+                  </button>
+                </div>
+                
+                {localPaymentAmount && parseFloat(localPaymentAmount) > getMaxAmountByType() && getMaxAmountByType() > 0 && (
+                  <div style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+                    Le montant dépasse le reste à payer ({safeFormatPrice(getMaxAmountByType())} MAD)
+                  </div>
+                )}
+                
+                {(localPaymentMethod === 'check' || localPaymentMethod === 'cheque') && (
+                  <div style={{ fontSize: '0.7rem', color: '#d97706', marginTop: '0.5rem', background: '#fef3c7', padding: '0.5rem', borderRadius: '0.5rem' }}>
+                    ⚠️ Les paiements par chèque ne sont pas comptabilisés immédiatement. Vous devrez créer une remise pour finaliser le paiement.
+                  </div>
+                )}
+                
+                {localRenewalRemaining <= 0 && localPaymentType === 'renewal' && (
+                  <div style={{ fontSize: '0.7rem', color: '#059669', marginTop: '0.5rem', background: '#d1fae5', padding: '0.5rem', borderRadius: '0.5rem' }}>
+                    ✅ Tous les renouvellements sont déjà payés !
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+        
+        <div className="activation-dialog-footer">
+          <button onClick={onClose} className="activation-btn activation-btn-secondary">
+            Fermer
+          </button>
         </div>
       </div>
     </div>
@@ -1593,6 +2521,8 @@ const Activation = () => {
   const [alertDismissed, setAlertDismissed] = useState(false);
   const [showExpiringOnly, setShowExpiringOnly] = useState(false);
   const [showIncompleteOnly, setShowIncompleteOnly] = useState(false);
+  const [showActivationPaymentHistory, setShowActivationPaymentHistory] = useState(false);
+  const [selectedActivationForPayment, setSelectedActivationForPayment] = useState(null);
   
   // Inline editing states
   const [editingCell, setEditingCell] = useState({ id: null, field: null });
@@ -1618,6 +2548,36 @@ const Activation = () => {
   });
   
   const [actionHistory, setActionHistory] = useState({});
+  
+  // Toast state
+  const [toasts, setToasts] = useState([]);
+  
+  const showToast = (message, type = 'success') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(toast => toast.id !== id));
+    }, 5000);
+  };
+  
+  const removeToast = (id) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
+  
+  const showConfirm = (title, message, onConfirm, variant = 'primary', confirmText = 'Confirmer', cancelText = 'Annuler') => {
+    setConfirmationState({
+      isOpen: true,
+      title,
+      message,
+      details: null,
+      type: variant === 'destructive' ? 'danger' : (variant === 'warning' ? 'warning' : 'info'),
+      confirmText,
+      onConfirm: async () => {
+        setConfirmationState(prev => ({ ...prev, isOpen: false }));
+        await onConfirm();
+      }
+    });
+  };
   
   // Fetch available IMEIs and products on mount
   useEffect(() => {
@@ -1647,45 +2607,31 @@ const Activation = () => {
             action: 'activation',
             plan: activation.plan_abonnement,
             price: activation.price,
-            user_name: activation.created_by_user_name || 'System'
+            user: activation.created_by_user_name || 'System'
           });
         }
         
         if (activation.renewal_history && Array.isArray(activation.renewal_history)) {
           activation.renewal_history.forEach((entry, idx) => {
-            if (entry.action === 'renewal') {
-              history.push({
-                id: `renewal_${activation.id}_${idx}`,
-                date: entry.date,
-                action: entry.action,
-                old_plan: entry.old_plan,
-                new_plan: entry.new_plan,
-                price: entry.price,
-                user_name: entry.user_name || 'System'
-              });
-            } else if (entry.action === 'suspension') {
-              history.push({
-                id: `suspension_${activation.id}_${idx}`,
-                date: entry.date,
-                action: entry.action,
-                reason: entry.reason,
-                user_name: entry.user_name || 'System'
-              });
-            } else if (entry.action === 'reactivation') {
-              history.push({
-                id: `reactivation_${activation.id}_${idx}`,
-                date: entry.date,
-                action: entry.action,
-                user_name: entry.user_name || 'System'
-              });
-            } else if (entry.action === 'deletion') {
-              history.push({
-                id: `deletion_${activation.id}_${idx}`,
-                date: entry.date,
-                action: entry.action,
-                user_name: entry.user_name || 'System'
-              });
-            }
+            history.push({
+              id: `${entry.action}_${activation.id}_${idx}`,
+              date: entry.date,
+              action: entry.action,
+              details: entry,
+              user: entry.user_name || 'System'
+            });
+          });
+        }
+        
+        if (activation.payment_history && Array.isArray(activation.payment_history)) {
+          activation.payment_history.forEach((entry, idx) => {
+            history.push({
+              id: `payment_${activation.id}_${idx}`,
+              date: entry.date,
+              action: entry.method === 'cheque' ? 'cheque_payment' : 'payment',
+              details: entry,
+              user: entry.user || 'System'
+            });
           });
         }
         
@@ -1852,9 +2798,8 @@ const Activation = () => {
       }
       
       await dispatch(updateActivation({ id: activationId, ...updateData })).unwrap();
-      setSuccessMessage(`${getFieldLabel(field)} mis à jour avec succès`);
+      showToast(`${getFieldLabel(field)} mis à jour avec succès`, 'success');
       loadData();
-      setTimeout(() => setSuccessMessage(null), 2000);
     } catch (err) {
       setErrorMessage(err || `Erreur lors de la mise à jour de ${getFieldLabel(field)}`);
       setTimeout(() => setErrorMessage(null), 3000);
@@ -1941,7 +2886,6 @@ const Activation = () => {
         );
       } else if (type === 'select') {
         const options = field === 'operateur' ? OPERATORS : PLAN_OPTIONS;
-        // Add an empty option for operator field
         const selectOptions = field === 'operateur' 
           ? [{ value: '', label: '-- Sélectionner --' }, ...options.map(opt => ({ value: opt, label: opt }))]
           : options;
@@ -2063,16 +3007,14 @@ const Activation = () => {
     setSuccessMessage(null);
     
     try {
-      // Send renew: true - this will NOT overwrite the original price field
       await dispatch(updateActivation({ 
         id: activation.id, 
         plan_abonnement: selectedPlan, 
         renew: true,
-        price: price  // This goes into renewal_history, NOT the main price field
+        price: price
       })).unwrap();
-      setSuccessMessage(`Abonnement renouvelé avec +${PLAN_LABEL[selectedPlan]} pour ${safeFormatPrice(price)} MAD (IMEI ${activation.imei || activation.client_imei})`);
+      showToast(`Abonnement renouvelé avec +${PLAN_LABEL[selectedPlan]} pour ${safeFormatPrice(price)} MAD`, 'success');
       loadData();
-      setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
       setErrorMessage(err || 'Erreur lors du renouvellement');
       setTimeout(() => setErrorMessage(null), 3000);
@@ -2084,14 +3026,12 @@ const Activation = () => {
   const handleToggleStatus = async (activation, newStatus) => {
     setLoadingAction(true);
     setErrorMessage(null);
-    setSuccessMessage(null);
     
     try {
       const statusText = newStatus === 'suspended' ? 'suspendue' : 'réactivée';
       await dispatch(updateActivation({ id: activation.id, status: newStatus })).unwrap();
-      setSuccessMessage(`Activation ${statusText} avec succès`);
+      showToast(`Activation ${statusText} avec succès`, 'success');
       loadData();
-      setTimeout(() => setSuccessMessage(null), 1500);
     } catch (err) {
       setErrorMessage(err || 'Erreur lors du changement de statut');
       setTimeout(() => setErrorMessage(null), 3000);
@@ -2131,6 +3071,11 @@ const Activation = () => {
     setHistoryState({ isOpen: true, activation, history });
   };
   
+  const showPaymentModal = (activation) => {
+    setSelectedActivationForPayment(activation);
+    setShowActivationPaymentHistory(true);
+  };
+  
   const showStatusConfirmation = (activation, newStatus) => {
     const isSuspending = newStatus === 'suspended';
     setConfirmationState({
@@ -2159,13 +3104,11 @@ const Activation = () => {
   const handleDeleteActivation = async (activation) => {
     setLoadingAction(true);
     setErrorMessage(null);
-    setSuccessMessage(null);
     
     try {
       await dispatch(deleteActivation(activation.id)).unwrap();
-      setSuccessMessage('Activation supprimée avec succès');
+      showToast('Activation supprimée avec succès', 'success');
       loadData();
-      setTimeout(() => setSuccessMessage(null), 1500);
     } catch (err) {
       setErrorMessage(err || 'Erreur lors de la suppression');
       setTimeout(() => setErrorMessage(null), 3000);
@@ -2273,29 +3216,29 @@ const Activation = () => {
       
       let rowOffset = logoAdded ? 3 : 0;
       
-      worksheet.mergeCells(`A${1 + rowOffset}:K${1 + rowOffset}`);
+      worksheet.mergeCells(`A${1 + rowOffset}:O${1 + rowOffset}`);
       worksheet.getCell(`A${1 + rowOffset}`).value = companyName;
       worksheet.getCell(`A${1 + rowOffset}`).font = { bold: true, size: 16 };
       worksheet.getCell(`A${1 + rowOffset}`).alignment = { horizontal: 'center' };
       
-      worksheet.mergeCells(`A${2 + rowOffset}:K${2 + rowOffset}`);
+      worksheet.mergeCells(`A${2 + rowOffset}:O${2 + rowOffset}`);
       worksheet.getCell(`A${2 + rowOffset}`).value = companyAddress;
       worksheet.getCell(`A${2 + rowOffset}`).font = { size: 10 };
       worksheet.getCell(`A${2 + rowOffset}`).alignment = { horizontal: 'center' };
       
-      worksheet.mergeCells(`A${3 + rowOffset}:K${3 + rowOffset}`);
+      worksheet.mergeCells(`A${3 + rowOffset}:O${3 + rowOffset}`);
       worksheet.getCell(`A${3 + rowOffset}`).value = `TEL: ${companyPhone} | EMAIL: ${companyEmail}`;
       worksheet.getCell(`A${3 + rowOffset}`).font = { size: 10 };
       worksheet.getCell(`A${3 + rowOffset}`).alignment = { horizontal: 'center' };
       
-      worksheet.mergeCells(`A${4 + rowOffset}:K${4 + rowOffset}`);
+      worksheet.mergeCells(`A${4 + rowOffset}:O${4 + rowOffset}`);
       worksheet.getCell(`A${4 + rowOffset}`).value = `ICE: ${companyIce} | RC: ${companyRc} | Patente: ${companyPatente}`;
       worksheet.getCell(`A${4 + rowOffset}`).font = { size: 9 };
       worksheet.getCell(`A${4 + rowOffset}`).alignment = { horizontal: 'center' };
       
       worksheet.addRow([]);
       
-      worksheet.mergeCells(`A${6 + rowOffset}:K${6 + rowOffset}`);
+      worksheet.mergeCells(`A${6 + rowOffset}:O${6 + rowOffset}`);
       worksheet.getCell(`A${6 + rowOffset}`).value = 'LISTE DES ACTIVATIONS GPS';
       worksheet.getCell(`A${6 + rowOffset}`).font = { bold: true, size: 14 };
       worksheet.getCell(`A${6 + rowOffset}`).alignment = { horizontal: 'center' };
@@ -2306,7 +3249,8 @@ const Activation = () => {
       
       const headers = [
         'Client', 'Type IMEI', 'IMEI', 'IMEI Client', 'N° SIM', 'Opérateur', 'Plan',
-        'Prix Activation', 'Total Payé', 'Nb Renouv.', 'Matricule', 'Date Activation', 'Expiration', 'Statut', 'Champs manquants'
+        'Prix Activation', 'Total Payé', 'Nb Renouv.', 'Montant Payé', 'Reste à Payer', 'Statut Paiement',
+        'Matricule', 'Date Activation', 'Expiration', 'Statut', 'Champs manquants'
       ];
       const headerRow = worksheet.addRow(headers);
       headerRow.eachCell((cell) => {
@@ -2334,6 +3278,9 @@ const Activation = () => {
           safeFormatPrice(activation.price),
           safeFormatPrice(totalPaid),
           renewalCount,
+          safeFormatPrice(activation.amount_paid || 0),
+          safeFormatPrice(activation.remaining_amount || 0),
+          activation.payment_status === 'paid' ? 'Payé' : activation.payment_status === 'partial' ? 'Partiel' : 'Impayé',
           activation.matricule || '-',
           formatDate(activation.activated_at),
           formatDate(activation.expires_at),
@@ -2374,6 +3321,19 @@ const Activation = () => {
   return (
     <>
       <style>{styles}</style>
+      
+      {/* Toast Container */}
+      {toasts.length > 0 && (
+        <div style={{ position: 'fixed', bottom: '1rem', right: '1rem', zIndex: 100, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {toasts.map(toast => (
+            <div key={toast.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', background: 'white', borderRadius: '0.5rem', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', borderLeft: `4px solid ${toast.type === 'success' ? '#10b981' : toast.type === 'error' ? '#ef4444' : '#3b82f6'}` }}>
+              {toast.type === 'success' ? <CheckCircle2 size={20} color="#10b981" /> : toast.type === 'error' ? <AlertTriangle size={20} color="#ef4444" /> : <Info size={20} color="#3b82f6" />}
+              <span>{toast.message}</span>
+              <button onClick={() => removeToast(toast.id)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}><X size={16} /></button>
+            </div>
+          ))}
+        </div>
+      )}
       
       <ConfirmationDialog
         isOpen={confirmationState.isOpen}
@@ -2423,7 +3383,7 @@ const Activation = () => {
                       type="number" 
                       className="activation-input price-input" 
                       placeholder="0.00"
-                      value={renewSelectionState.price}
+                      value={renewSelectionState.price ||""}
                       onChange={(e) => setRenewSelectionState(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
                       step="0.01"
                       min="0"
@@ -2452,6 +3412,18 @@ const Activation = () => {
       
       <HistoryModal isOpen={historyState.isOpen} onClose={() => setHistoryState(prev => ({ ...prev, isOpen: false }))} activation={historyState.activation} history={historyState.history} />
       
+      <ActivationPaymentHistoryModal 
+        isOpen={showActivationPaymentHistory}
+        activation={selectedActivationForPayment}
+        onClose={() => {
+          setShowActivationPaymentHistory(false);
+          setSelectedActivationForPayment(null);
+        }}
+        onPaymentChange={loadData}
+        showToast={showToast}
+        showConfirm={showConfirm}
+      />
+      
       <div className="activation-container">
         <div className="activation-page-header">
           <div>
@@ -2475,17 +3447,18 @@ const Activation = () => {
         
         <div className="activation-stats-grid">
           <StatCard icon={Satellite} label="Total Activations" value={stats?.total_activations || 0} color="primary" />
-<StatCard 
-  icon={DollarSign} 
-  label="Chiffre d'affaires" 
-  value={`${safeFormatPrice(
-    (activations || []).reduce(
-      (sum, act) => sum + (act.total_price_paid || act.price || 0), 
-      0
-    )
-  )} MAD`} 
-  color="success" 
-/>          <StatCard icon={CheckCircle2} label="Actives" value={stats?.active_activations || 0} color="success" />
+          <StatCard 
+            icon={DollarSign} 
+            label="Chiffre d'affaires" 
+            value={`${safeFormatPrice(
+              (activations || []).reduce(
+                (sum, act) => sum + (act.amount_paid || 0), 
+                0
+              )
+            )} MAD`} 
+            color="success" 
+          />
+          <StatCard icon={CheckCircle2} label="Actives" value={stats?.active_activations || 0} color="success" />
           <StatCard icon={Clock} label="Expirent bientôt" value={stats?.expiring_soon || 0} color="warning" />
           <StatCard icon={AlertTriangle} label="Expirées" value={stats?.expired_activations || 0} color="danger" />
         </div>
@@ -2570,10 +3543,12 @@ const Activation = () => {
                   <th>Plan</th>
                   <th>Prix Activation</th>
                   <th>Total Payé</th>
+                  <th>Montant Payé</th>
+                  <th>Reste</th>
                   <th>Matricule</th>
                   <th>Expiration</th>
                   <th>Statut</th>
-                  <th style={{ width: '160px' }}>Actions</th>
+                  <th style={{ width: '180px' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -2619,12 +3594,18 @@ const Activation = () => {
                           </span>
                         )}
                       </td>
+                      <td className={activation.payment_status === 'paid' ? 'text-green-600 font-medium' : activation.payment_status === 'partial' ? 'text-orange-500' : 'text-red-500'}>
+                        {safeFormatPrice(activation.amount_paid || 0)} MAD
+                      </td>
+                      <td className="text-red-500 font-medium">
+                        {safeFormatPrice(activation.remaining_amount || (totalPaid - (activation.amount_paid || 0)))}
+                      </td>
                       <td>{renderEditableCell(activation, 'matricule', activation.matricule, 'text')}</td>
                       <td className={daysRemaining <= 30 && daysRemaining > 0 ? 'text-red-600' : ''}>
                         {formatDate(activation.expires_at)}
                         {daysRemaining > 0 && daysRemaining < 999 && <span className="text-xs ml-2">({daysRemaining}j{isExpiringSoon && ' ⚠️'})</span>}
                       </td>
-                      <td>{getStatusBadge(activation)}</td>
+                                            <td>{getStatusBadge(activation)}</td>
                       <td>
                         <div className="action-buttons">
                           <button onClick={() => setShowDetailModal(activation)} className="activation-icon-btn" title="Détails">
@@ -2632,6 +3613,9 @@ const Activation = () => {
                           </button>
                           <button onClick={() => showHistoryModal(activation)} className="activation-icon-btn" title="Historique">
                             <History size={16} className="text-purple-600" />
+                          </button>
+                          <button onClick={() => showPaymentModal(activation)} className="activation-icon-btn" title="Gérer les paiements">
+                            <CreditCard size={16} className="text-green-600" />
                           </button>
                           <button onClick={() => openRenewSelectionModal(activation)} className="activation-icon-btn" title="Renouveler">
                             <RotateCcw size={16} style={{ color: '#16a34a' }} />
@@ -2656,7 +3640,7 @@ const Activation = () => {
                 })}
                 {filteredActivations.length === 0 && (
                   <tr>
-                    <td colSpan={12} className="activation-empty">
+                    <td colSpan={14} className="activation-empty">
                       <Satellite size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
                       {showIncompleteOnly ? 'Aucune activation incomplète trouvée' : 'Aucune activation trouvée'}
                     </td>
@@ -2726,6 +3710,17 @@ const Activation = () => {
                 <div><strong>Statut:</strong> {getStatusBadge(showDetailModal)}</div>
                 <div><strong>Prix Activation Original:</strong> <span className="text-blue-600 font-medium">{safeFormatPrice(showDetailModal.price)} MAD</span></div>
                 <div><strong>Total payé (avec renouvellements):</strong> <span className="text-green-600 font-bold">{safeFormatPrice(showDetailModal.total_price_paid || showDetailModal.price)} MAD</span></div>
+                <div><strong>Montant payé:</strong> <span className="text-green-600">{safeFormatPrice(showDetailModal.amount_paid || 0)} MAD</span></div>
+                <div><strong>Reste à payer:</strong> <span className="text-red-600">{safeFormatPrice(showDetailModal.remaining_amount || 0)} MAD</span></div>
+                <div><strong>Statut paiement:</strong> 
+                  <span className={`ml-2 px-2 py-0.5 rounded text-xs ${
+                    showDetailModal.payment_status === 'paid' ? 'bg-green-100 text-green-800' : 
+                    showDetailModal.payment_status === 'partial' ? 'bg-yellow-100 text-yellow-800' : 
+                    'bg-red-100 text-red-800'
+                  }`}>
+                    {showDetailModal.payment_status === 'paid' ? 'Payé' : showDetailModal.payment_status === 'partial' ? 'Partiel' : 'Impayé'}
+                  </span>
+                </div>
                 <div><strong>Nombre de renouvellements:</strong> {showDetailModal.renewal_count || 0}</div>
               </div>
               {showDetailModal.renewal_history && showDetailModal.renewal_history.length > 0 && (
@@ -2735,6 +3730,18 @@ const Activation = () => {
                     {showDetailModal.renewal_history.filter(entry => entry.action === 'renewal').map((renewal, idx) => (
                       <li key={idx} className="text-sm text-gray-600">
                         {formatDate(renewal.date)}: {PLAN_LABEL[renewal.old_plan]} → {PLAN_LABEL[renewal.new_plan]} - {safeFormatPrice(renewal.price)} MAD
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {showDetailModal.payment_history && showDetailModal.payment_history.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-gray-200">
+                  <strong>Historique des paiements:</strong>
+                  <ul className="mt-2 space-y-1">
+                    {showDetailModal.payment_history.map((payment, idx) => (
+                      <li key={idx} className="text-sm text-gray-600">
+                        {formatDate(payment.date)}: {safeFormatPrice(payment.amount)} MAD - {payment.method} {payment.reference ? `(Réf: ${payment.reference})` : ''}
                       </li>
                     ))}
                   </ul>

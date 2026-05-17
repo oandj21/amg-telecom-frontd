@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Navigate } from 'react-router-dom';
 import { 
@@ -6,17 +6,58 @@ import {
   AlertTriangle, CheckCircle, Info, ChevronLeft, ChevronRight, 
   Users as UsersIcon, UserCheck, UserX, Filter, Eye, EyeOff,
   ShieldCheck, UserCog, UserCircle, Calendar, Mail, Key,
-  Sparkles, TrendingUp, Award, Star, Zap, Crown
+  Sparkles, TrendingUp, Award, Star, Zap, Crown, Wrench, HardDrive,
+  DollarSign, CreditCard, History, BarChart3, TrendingDown, CalendarDays,
+  Receipt, FileText, Printer, Download, Activity, Package, Smartphone,
+  RefreshCcw
 } from 'lucide-react';
-import { ExportMenu } from './ExportMenu';
 import {
   fetchUsers,
   createUser,
   updateUser,
   deleteUser,
   toggleUserStatus,
-  clearUserError
+  clearUserError,
+  getAdminPayments,
+  addAdminPayment,
+  deleteAdminPayment,
+  getAllAdminPayments,
+  getTechnicianPayments,
+  addTechnicianPayment,
+  deleteTechnicianPayment,
+  getAllTechnicianPayments,
+  clearAdminPaymentsError,
+  clearTechnicianPaymentsError
 } from './Store/store';
+import axios from 'axios';
+
+// Helper function to safely get error message
+const getErrorMessage = (err) => {
+  if (typeof err === 'string') return err;
+  if (err && typeof err === 'object' && err.message) return err.message;
+  if (err && typeof err === 'object') return JSON.stringify(err);
+  return 'Une erreur est survenue';
+};
+
+// API configuration
+const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
+
+const api = axios.create({
+  baseURL: API_URL,
+  withCredentials: true,
+  headers: {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+  }
+});
+
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 // ==================== STYLES ====================
 const styles = `
@@ -98,6 +139,7 @@ const styles = `
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
     transition: all 0.3s ease;
     overflow: hidden;
+    margin-bottom: 1.5rem;
   }
   
   .users-card:hover {
@@ -120,7 +162,7 @@ const styles = `
   
   @media (min-width: 1024px) {
     .users-stats-grid {
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
     }
   }
   
@@ -160,6 +202,10 @@ const styles = `
     background: linear-gradient(90deg, #8b5cf6, #a78bfa);
   }
   
+  .users-stat-card-technician::before {
+    background: linear-gradient(90deg, #06b6d4, #22d3ee);
+  }
+  
   .users-stat-icon-wrapper {
     width: 3rem;
     height: 3rem;
@@ -180,6 +226,7 @@ const styles = `
   .users-stat-icon-success svg { color: #10b981; }
   .users-stat-icon-warning svg { color: #f59e0b; }
   .users-stat-icon-info svg { color: #8b5cf6; }
+  .users-stat-icon-technician svg { color: #06b6d4; }
   
   .users-stat-content {
     display: flex;
@@ -304,33 +351,6 @@ const styles = `
   .users-select-filter:focus {
     border-color: #3b82f6;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-  }
-  
-  .users-filter-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.375rem 0.875rem;
-    background: #f1f5f9;
-    border-radius: 2rem;
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: #475569;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-  
-  .users-filter-badge:hover {
-    background: #e2e8f0;
-  }
-  
-  .users-filter-badge-active {
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-    color: white;
-  }
-  
-  .users-filter-badge-active svg {
-    color: white;
   }
   
   .users-clear-filters {
@@ -511,16 +531,6 @@ const styles = `
     border-color: #cbd5e1;
   }
   
-  .users-btn-ghost {
-    background: transparent;
-    color: #64748b;
-  }
-  
-  .users-btn-ghost:hover {
-    background: #f1f5f9;
-    color: #0f172a;
-  }
-  
   .users-btn-danger {
     background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
     color: white;
@@ -604,6 +614,16 @@ const styles = `
     border: 1px solid #fde68a;
   }
   
+  .users-badge-cyan {
+    background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+    color: white;
+  }
+  
+  .users-badge-purple {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    color: white;
+  }
+  
   /* Modal/Dialog Styles */
   .users-overlay {
     position: fixed;
@@ -633,6 +653,10 @@ const styles = `
     border-radius: 1rem;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
     animation: slideIn 0.3s ease-out;
+  }
+  
+  .users-dialog-large {
+    max-width: 48rem;
   }
   
   @keyframes slideIn {
@@ -754,13 +778,6 @@ const styles = `
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
   
-  .users-select:disabled {
-    background-color: #f8fafc;
-    cursor: not-allowed;
-    opacity: 0.7;
-  }
-  
-  /* Toggle Switch */
   .users-toggle-container {
     display: flex;
     align-items: center;
@@ -972,32 +989,157 @@ const styles = `
     border-color: #3b82f6;
   }
   
-  .users-text-destructive {
-    color: #ef4444;
+  /* Payment Summary Cards */
+  .users-payment-summary {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    padding: 1.5rem;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
   }
   
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border-width: 0;
+  @media (min-width: 768px) {
+    .users-payment-summary {
+      grid-template-columns: repeat(3, 1fr);
+    }
   }
   
-  /* Animations */
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+  .users-payment-summary-card {
+    background: white;
+    border-radius: 0.75rem;
+    padding: 1rem;
+    border: 1px solid #e2e8f0;
   }
   
-  .deleting {
-    animation: pulse 1s ease-in-out infinite;
-    pointer-events: none;
-    opacity: 0.6;
+  .users-payment-summary-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-bottom: 0.5rem;
+  }
+  
+  .users-payment-summary-amount {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #0f172a;
+  }
+  
+  .users-payment-summary-count {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin-top: 0.25rem;
+  }
+  
+  /* Payment Table */
+  .users-payment-table-container {
+    overflow-x: auto;
+  }
+  
+  .users-payment-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+  
+  .users-payment-table thead tr {
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  
+  .users-payment-table th {
+    padding: 0.875rem 1rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+  }
+  
+  .users-payment-table td {
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  
+  .users-payment-table tbody tr:hover {
+    background-color: #f8fafc;
+  }
+  
+  .users-amount-positive {
+    color: #10b981;
+    font-weight: 600;
+  }
+  
+  .users-payment-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: 2rem;
+    font-size: 0.7rem;
+    font-weight: 500;
+  }
+  
+  .users-payment-type-activation {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+  
+  .users-payment-type-vente {
+    background: #dcfce7;
+    color: #166534;
+  }
+  
+  /* Count Display Box */
+  .users-count-box {
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    border: 1px solid #86efac;
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  
+  .users-count-box-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #166534;
+  }
+  
+  .users-count-box-value {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #15803d;
+  }
+  
+  .users-refresh-count {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0.25rem;
+    color: #15803d;
+    transition: all 0.2s ease;
+  }
+  
+  .users-refresh-count:hover {
+    transform: rotate(180deg);
+  }
+  
+  .users-info-box {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.75rem;
+    color: #1e40af;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
 `;
 
@@ -1009,11 +1151,12 @@ const Toast = ({ message, type = 'success', onClose }) => {
   }, [onClose]);
   
   const Icon = type === 'success' ? CheckCircle : type === 'error' ? AlertTriangle : Info;
+  const displayMessage = typeof message === 'string' ? message : getErrorMessage(message);
   
   return (
     <div className={`users-toast users-toast-${type}`}>
       <Icon size={20} />
-      <span className="users-toast-message">{message}</span>
+      <span className="users-toast-message">{displayMessage}</span>
       <button className="users-toast-close" onClick={onClose}>
         <X size={16} />
       </button>
@@ -1030,7 +1173,7 @@ const StatCard = ({ icon: Icon, label, value, trend, color = 'primary' }) => (
     <div className="users-stat-content">
       <div>
         <div className="users-stat-label">{label}</div>
-        <div className="users-stat-value">{value}</div>
+        <div className="users-stat-value">{value !== undefined && value !== null ? value : 0}</div>
       </div>
       {trend && (
         <div className="users-stat-trend">
@@ -1109,15 +1252,768 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
   );
 };
 
+// ==================== ADMIN PAYMENT MODAL ====================
+const AdminPaymentModal = ({ user, onClose, onSuccess }) => {
+  const dispatch = useDispatch();
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async () => {
+    if (!amount || parseFloat(amount) <= 0) {
+      setError('Montant invalide');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await dispatch(addAdminPayment({
+        userId: user.id,
+        amount: parseFloat(amount),
+        description: description || null,
+        date: date
+      })).unwrap();
+      onSuccess(`Paiement de ${parseFloat(amount).toLocaleString('fr-FR')} DH ajouté avec succès`);
+      onClose();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="users-overlay" onClick={onClose} />
+      <div className="users-dialog">
+        <div className="users-dialog-header">
+          <h2 className="users-dialog-title">
+            <DollarSign size={20} />
+            Ajouter un paiement - {user?.name || 'Utilisateur'}
+          </h2>
+          <p className="users-dialog-description">
+            Ajouter un paiement à l'historique de l'administrateur
+          </p>
+        </div>
+        <div className="users-dialog-body">
+          {error && (
+            <div className="users-error-message">
+              <AlertTriangle size={16} />
+              <span>{error}</span>
+            </div>
+          )}
+          
+          <div className="users-form-group">
+            <label className="users-label users-label-required">Montant (DH)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="users-input"
+              placeholder="0.00"
+              autoFocus
+            />
+          </div>
+          
+          <div className="users-form-group">
+            <label className="users-label">Date</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="users-input"
+            />
+          </div>
+          
+          <div className="users-form-group">
+            <label className="users-label">Description (optionnel)</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="users-input"
+              rows="3"
+              placeholder="Ex: Commission mensuelle, Prime, etc."
+            />
+          </div>
+        </div>
+        <div className="users-dialog-footer">
+          <button onClick={onClose} className="users-btn users-btn-outline" disabled={loading}>
+            Annuler
+          </button>
+          <button onClick={handleSubmit} className="users-btn users-btn-primary" disabled={loading}>
+            {loading ? (
+              <>
+                <div className="users-loading-spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} />
+                Ajout en cours...
+              </>
+            ) : (
+              <>
+                <Plus size={16} />
+                Ajouter le paiement
+              </>
+            )}
+          </button>
+        </div>
+        <button className="users-dialog-close" onClick={onClose}>
+          <X size={18} />
+        </button>
+      </div>
+    </>
+  );
+};
+
+// ==================== TECHNICIAN PAYMENT MODAL (ENHANCED) ====================
+const TechnicianPaymentModal = ({ user, onClose, onSuccess }) => {
+  const dispatch = useDispatch();
+  const [type, setType] = useState('activation');
+  const [amount, setAmount] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [count, setCount] = useState(0);
+  const [loadingCount, setLoadingCount] = useState(false);
+  const [countDetails, setCountDetails] = useState(null);
+
+  // Fetch count based on type
+  const fetchCount = useCallback(async () => {
+    if (!user?.id) return;
+    
+    setLoadingCount(true);
+    try {
+      let endpoint = '';
+      if (type === 'activation') {
+        endpoint = `/technician-stats/${user.id}/activations-count`;
+      } else {
+        endpoint = `/technician-stats/${user.id}/sales-count`;
+      }
+      
+      const response = await api.get(endpoint);
+      
+      if (type === 'activation') {
+        const data = response.data;
+        setCount(data.count || 0);
+        setCountDetails({
+          total: data.total || 0,
+          items: data.activations || [],
+          message: data.message || ''
+        });
+      } else {
+        const data = response.data;
+        setCount(data.count || 0);
+        setCountDetails({
+          total: data.total_amount || 0,
+          items: data.sales || [],
+          message: data.message || ''
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching count:', err);
+      setCount(0);
+      setCountDetails(null);
+    } finally {
+      setLoadingCount(false);
+    }
+  }, [user?.id, type]);
+
+  // Fetch count when type changes or user changes
+  useEffect(() => {
+    if (user?.id) {
+      fetchCount();
+    }
+  }, [user?.id, type, fetchCount]);
+
+  const handleSubmit = async () => {
+    if (!amount || parseFloat(amount) <= 0) {
+      setError('Montant invalide');
+      return;
+    }
+    
+    if (count === 0) {
+      setError(`Aucun(e) ${type === 'activation' ? 'activation' : 'vente'} trouvé(e) pour ce technicien`);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await dispatch(addTechnicianPayment({
+        userId: user.id,
+        type: type,
+        amount: parseFloat(amount),
+        count: count,
+        date: date
+      })).unwrap();
+      
+      const totalAmount = parseFloat(amount) * count;
+      onSuccess(`${type === 'activation' ? 'Activation' : 'Vente'} de ${count} unité(s) à ${parseFloat(amount).toLocaleString('fr-FR')} DH ajoutée (Total: ${totalAmount.toLocaleString('fr-FR')} DH)`);
+      onClose();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleDateString('fr-FR');
+  };
+
+  const getTypeLabel = () => {
+    return type === 'activation' ? 'Activations GPS' : 'Ventes GPS';
+  };
+
+  const getIcon = () => {
+    return type === 'activation' ? <Smartphone size={16} /> : <Package size={16} />;
+  };
+
+  return (
+    <>
+      <div className="users-overlay" onClick={onClose} />
+      <div className="users-dialog users-dialog-large">
+        <div className="users-dialog-header">
+          <h2 className="users-dialog-title">
+            <DollarSign size={20} />
+            Ajouter un paiement - {user?.name || 'Utilisateur'}
+          </h2>
+          <p className="users-dialog-description">
+            Ajouter une activation ou une vente au technicien
+          </p>
+        </div>
+        <div className="users-dialog-body">
+          {error && (
+            <div className="users-error-message">
+              <AlertTriangle size={16} />
+              <span>{error}</span>
+            </div>
+          )}
+          
+          <div className="users-info-box">
+            <Info size={14} />
+            <span>Les quantités sont automatiquement récupérées du système. Aucune saisie manuelle requise.</span>
+          </div>
+          
+          <div className="users-form-group">
+            <label className="users-label users-label-required">Type de paiement</label>
+            <select 
+              value={type} 
+              onChange={(e) => setType(e.target.value)} 
+              className="users-select"
+              disabled={loadingCount}
+            >
+              <option value="activation">Activation GPS</option>
+              <option value="vente">Vente GPS</option>
+            </select>
+          </div>
+          
+          {/* Automatic Count Display */}
+          <div className="users-count-box">
+            <div className="users-count-box-label">
+              {getIcon()}
+              <span style={{ marginLeft: '0.5rem' }}>
+                {getTypeLabel()} trouvés pour ce technicien:
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div className="users-count-box-value">
+                {loadingCount ? (
+                  <div className="users-loading-spinner" style={{ width: '20px', height: '20px' }} />
+                ) : (
+                  count
+                )}
+              </div>
+              <button 
+                onClick={fetchCount} 
+                className="users-refresh-count" 
+                title="Rafraîchir le compteur"
+                disabled={loadingCount}
+              >
+                <RefreshCcw size={16} />
+              </button>
+            </div>
+          </div>
+          
+          {/* Show details if available */}
+          {countDetails && countDetails.items && countDetails.items.length > 0 && (
+            <div style={{ marginBottom: '1rem', maxHeight: '200px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '0.5rem' }}>
+              <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse' }}>
+                <thead style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
+                  <tr>
+                    <th style={{ padding: '0.5rem', textAlign: 'left' }}>ID</th>
+                    <th style={{ padding: '0.5rem', textAlign: 'left' }}>Client</th>
+                    <th style={{ padding: '0.5rem', textAlign: 'left' }}>Date</th>
+                    {type === 'vente' && <th style={{ padding: '0.5rem', textAlign: 'left' }}>Total</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {countDetails.items.slice(0, 10).map((item, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '0.5rem' }}>#{item.id}</td>
+                      <td style={{ padding: '0.5rem' }}>{item.client_name || item.client?.nom || '-'}</td>
+                      <td style={{ padding: '0.5rem' }}>{formatDate(item.created_at || item.date_activation)}</td>
+                      {type === 'vente' && (
+                        <td style={{ padding: '0.5rem' }}>{item.total?.toLocaleString('fr-FR')} DH</td>
+                      )}
+                    </tr>
+                  ))}
+                  {countDetails.items.length > 10 && (
+                    <tr>
+                      <td colSpan={type === 'vente' ? 4 : 3} style={{ padding: '0.5rem', textAlign: 'center', color: '#64748b' }}>
+                        + {countDetails.items.length - 10} autre(s)
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+          
+          <div className="users-form-group">
+            <label className="users-label users-label-required">Prix unitaire (DH)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="users-input"
+              placeholder="0.00"
+              autoFocus
+            />
+          </div>
+          
+          {amount && count > 0 && (
+            <div className="users-info-box" style={{ background: '#f0fdf4', borderColor: '#86efac', color: '#166534' }}>
+              <CheckCircle size={14} />
+              <span>
+                Total à payer: <strong>{(parseFloat(amount) * count).toLocaleString('fr-FR')} DH</strong>
+                {' '}({count} × {parseFloat(amount).toLocaleString('fr-FR')} DH)
+              </span>
+            </div>
+          )}
+          
+          <div className="users-form-group">
+            <label className="users-label">Date</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="users-input"
+            />
+          </div>
+          
+          <div className="users-info-box" style={{ background: '#fef3c7', borderColor: '#fde68a', color: '#92400e' }}>
+            <AlertTriangle size={14} />
+            <span>
+              Cette opération va payer {count} {type === 'activation' ? 'activation(s)' : 'vente(s)'} 
+              {' '}à {amount ? parseFloat(amount).toLocaleString('fr-FR') : '0'} DH l'unité.
+            </span>
+          </div>
+        </div>
+        <div className="users-dialog-footer">
+          <button onClick={onClose} className="users-btn users-btn-outline" disabled={loading}>
+            Annuler
+          </button>
+          <button 
+            onClick={handleSubmit} 
+            className="users-btn users-btn-primary" 
+            disabled={loading || loadingCount || count === 0}
+          >
+            {loading ? (
+              <>
+                <div className="users-loading-spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} />
+                Ajout en cours...
+              </>
+            ) : (
+              <>
+                <Plus size={16} />
+                Ajouter le paiement ({count} unité{count > 1 ? 's' : ''})
+              </>
+            )}
+          </button>
+        </div>
+        <button className="users-dialog-close" onClick={onClose}>
+          <X size={18} />
+        </button>
+      </div>
+    </>
+  );
+};
+
+// ==================== ADMIN PAYMENT HISTORY MODAL ====================
+const AdminPaymentHistoryModal = ({ user, onClose }) => {
+  const dispatch = useDispatch();
+  const { currentAdminPayments, loading } = useSelector((state) => state.adminPayments);
+  const { user: currentUser } = useSelector((state) => state.auth);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const isSuperAdmin = currentUser?.role === 'superadmin';
+
+  useEffect(() => {
+    if (user) {
+      dispatch(getAdminPayments(user.id));
+    }
+  }, [dispatch, user]);
+
+  const handleDelete = async (paymentIndex) => {
+    setDeleting(true);
+    try {
+      await dispatch(deleteAdminPayment({ userId: user.id, paymentIndex })).unwrap();
+      setDeleteConfirm(null);
+      dispatch(getAdminPayments(user.id));
+    } catch (err) {
+      console.error('Delete error:', err);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const payments = currentAdminPayments?.summary?.payments || [];
+  const total = currentAdminPayments?.summary?.total || 0;
+
+  return (
+    <>
+      <div className="users-overlay" onClick={onClose} />
+      <div className="users-dialog users-dialog-large">
+        <div className="users-dialog-header">
+          <h2 className="users-dialog-title">
+            <History size={20} />
+            Historique des paiements - {user?.name || 'Utilisateur'}
+          </h2>
+          <p className="users-dialog-description">
+            Total des paiements: <strong>{total.toLocaleString('fr-FR')} DH</strong>
+          </p>
+        </div>
+        <div className="users-dialog-body">
+          {loading ? (
+            <div className="users-loading">
+              <div className="users-loading-spinner" />
+            </div>
+          ) : payments.length === 0 ? (
+            <div className="users-empty">
+              <div className="users-empty-icon">
+                <Receipt size={48} />
+              </div>
+              <div className="users-empty-text">
+                Aucun paiement enregistré pour cet administrateur
+              </div>
+            </div>
+          ) : (
+            <div className="users-payment-table-container">
+              <table className="users-payment-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Montant</th>
+                    <th>Description</th>
+                    <th>Ajouté par</th>
+                    {isSuperAdmin && <th>Actions</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((payment, index) => (
+                    <tr key={index}>
+                      <td>{payment?.date ? new Date(payment.date).toLocaleDateString('fr-FR') : '-'}</td>
+                      <td className="users-amount-positive">
+                        {payment?.amount ? payment.amount.toLocaleString('fr-FR') : 0} DH
+                      </td>
+                      <td>{payment?.description || '-'}</td>
+                      <td className="users-text-muted">
+                        {payment?.created_by_name || '-'}
+                        {payment?.created_at && (
+                          <div style={{ fontSize: '0.7rem' }}>
+                            {new Date(payment.created_at).toLocaleDateString('fr-FR')}
+                          </div>
+                        )}
+                      </td>
+                      {isSuperAdmin && (
+                        <td>
+                          <button
+                            onClick={() => setDeleteConfirm(index)}
+                            className="users-btn-icon users-btn-icon-danger"
+                            disabled={deleting}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <div className="users-dialog-footer">
+          <button onClick={onClose} className="users-btn users-btn-outline">
+            Fermer
+          </button>
+        </div>
+        <button className="users-dialog-close" onClick={onClose}>
+          <X size={18} />
+        </button>
+      </div>
+
+      {/* Delete Confirmation */}
+      {deleteConfirm !== null && payments[deleteConfirm] && (
+        <>
+          <div className="users-overlay" onClick={() => setDeleteConfirm(null)} />
+          <div className="users-dialog">
+            <div className="users-dialog-header">
+              <h2 className="users-dialog-title" style={{ color: '#dc2626' }}>
+                <AlertTriangle size={20} />
+                Confirmer la suppression
+              </h2>
+            </div>
+            <div className="users-dialog-body">
+              <div className="delete-warning">
+                <div className="delete-warning-title">
+                  Supprimer ce paiement ?
+                </div>
+                <div className="delete-warning-text">
+                  Montant: {payments[deleteConfirm]?.amount?.toLocaleString('fr-FR') || 0} DH<br />
+                  Date: {payments[deleteConfirm]?.date ? new Date(payments[deleteConfirm].date).toLocaleDateString('fr-FR') : '-'}
+                </div>
+              </div>
+            </div>
+            <div className="users-dialog-footer">
+              <button onClick={() => setDeleteConfirm(null)} className="users-btn users-btn-outline">
+                Annuler
+              </button>
+              <button onClick={() => handleDelete(deleteConfirm)} className="users-btn users-btn-danger">
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  );
+};
+
+// ==================== TECHNICIAN PAYMENT HISTORY MODAL ====================
+const TechnicianPaymentHistoryModal = ({ user, onClose }) => {
+  const dispatch = useDispatch();
+  const { currentTechnicianPayments, loading } = useSelector((state) => state.technicianPayments);
+  const { user: currentUser } = useSelector((state) => state.auth);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const isSuperAdmin = currentUser?.role === 'superadmin';
+
+  useEffect(() => {
+    if (user) {
+      dispatch(getTechnicianPayments(user.id));
+    }
+  }, [dispatch, user]);
+
+  const handleDelete = async (paymentIndex) => {
+    setDeleting(true);
+    try {
+      await dispatch(deleteTechnicianPayment({ userId: user.id, paymentIndex })).unwrap();
+      setDeleteConfirm(null);
+      dispatch(getTechnicianPayments(user.id));
+    } catch (err) {
+      console.error('Delete error:', err);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const summary = currentTechnicianPayments?.summary;
+  const activationTotal = summary?.activation?.total || 0;
+  const venteTotal = summary?.vente?.total || 0;
+  const activationCount = summary?.activation?.count || 0;
+  const venteCount = summary?.vente?.count || 0;
+  const payments = summary?.all_payments || [];
+
+  return (
+    <>
+      <div className="users-overlay" onClick={onClose} />
+      <div className="users-dialog users-dialog-large">
+        <div className="users-dialog-header">
+          <h2 className="users-dialog-title">
+            <History size={20} />
+            Historique des paiements - {user?.name || 'Utilisateur'}
+          </h2>
+          <p className="users-dialog-description">
+            Total général: <strong>{(activationTotal + venteTotal).toLocaleString('fr-FR')} DH</strong>
+          </p>
+        </div>
+        
+        {/* Payment Summary Cards */}
+        <div className="users-payment-summary">
+          <div className="users-payment-summary-card">
+            <div className="users-payment-summary-title">
+              <Smartphone size={14} style={{ display: 'inline', marginRight: '0.25rem' }} />
+              Activations
+            </div>
+            <div className="users-payment-summary-amount">
+              {activationTotal.toLocaleString('fr-FR')} DH
+            </div>
+            <div className="users-payment-summary-count">
+              {activationCount} activation(s)
+            </div>
+          </div>
+          <div className="users-payment-summary-card">
+            <div className="users-payment-summary-title">
+              <Package size={14} style={{ display: 'inline', marginRight: '0.25rem' }} />
+              Ventes
+            </div>
+            <div className="users-payment-summary-amount">
+              {venteTotal.toLocaleString('fr-FR')} DH
+            </div>
+            <div className="users-payment-summary-count">
+              {venteCount} vente(s)
+            </div>
+          </div>
+          <div className="users-payment-summary-card">
+            <div className="users-payment-summary-title">
+              <BarChart3 size={14} style={{ display: 'inline', marginRight: '0.25rem' }} />
+              Total Général
+            </div>
+            <div className="users-payment-summary-amount">
+              {(activationTotal + venteTotal).toLocaleString('fr-FR')} DH
+            </div>
+            <div className="users-payment-summary-count">
+              {activationCount + venteCount} opération(s)
+            </div>
+          </div>
+        </div>
+        
+        <div className="users-dialog-body">
+          {loading ? (
+            <div className="users-loading">
+              <div className="users-loading-spinner" />
+            </div>
+          ) : payments.length === 0 ? (
+            <div className="users-empty">
+              <div className="users-empty-icon">
+                <Receipt size={48} />
+              </div>
+              <div className="users-empty-text">
+                Aucun paiement enregistré pour ce technicien
+              </div>
+            </div>
+          ) : (
+            <div className="users-payment-table-container">
+              <table className="users-payment-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Prix unitaire</th>
+                    <th>Quantité</th>
+                    <th>Total</th>
+                    <th>Ajouté par</th>
+                    {isSuperAdmin && <th>Actions</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((payment, index) => (
+                    <tr key={index}>
+                      <td>{payment?.date ? new Date(payment.date).toLocaleDateString('fr-FR') : '-'}</td>
+                      <td>
+                        <span className={`users-payment-type-badge ${
+                          payment?.type === 'activation' ? 'users-payment-type-activation' : 'users-payment-type-vente'
+                        }`}>
+                          {payment?.type === 'activation' ? <Smartphone size={12} /> : <Package size={12} />}
+                          {payment?.type === 'activation' ? 'Activation' : 'Vente'}
+                        </span>
+                      </td>
+                      <td>{payment?.amount ? payment.amount.toLocaleString('fr-FR') : 0} DH</td>
+                      <td>{payment?.count || 0}</td>
+                      <td className="users-amount-positive">
+                        {payment?.amount && payment?.count ? (payment.amount * payment.count).toLocaleString('fr-FR') : 0} DH
+                      </td>
+                      <td className="users-text-muted">
+                        {payment?.created_by_name || '-'}
+                        {payment?.created_at && (
+                          <div style={{ fontSize: '0.7rem' }}>
+                            {new Date(payment.created_at).toLocaleDateString('fr-FR')}
+                          </div>
+                        )}
+                      </td>
+                      {isSuperAdmin && (
+                        <td>
+                          <button
+                            onClick={() => setDeleteConfirm(index)}
+                            className="users-btn-icon users-btn-icon-danger"
+                            disabled={deleting}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <div className="users-dialog-footer">
+          <button onClick={onClose} className="users-btn users-btn-outline">
+            Fermer
+          </button>
+        </div>
+        <button className="users-dialog-close" onClick={onClose}>
+          <X size={18} />
+        </button>
+      </div>
+
+      {/* Delete Confirmation */}
+      {deleteConfirm !== null && payments[deleteConfirm] && (
+        <>
+          <div className="users-overlay" onClick={() => setDeleteConfirm(null)} />
+          <div className="users-dialog">
+            <div className="users-dialog-header">
+              <h2 className="users-dialog-title" style={{ color: '#dc2626' }}>
+                <AlertTriangle size={20} />
+                Confirmer la suppression
+              </h2>
+            </div>
+            <div className="users-dialog-body">
+              <div className="delete-warning">
+                <div className="delete-warning-title">
+                  Supprimer ce paiement ?
+                </div>
+                <div className="delete-warning-text">
+                  Type: {payments[deleteConfirm]?.type === 'activation' ? 'Activation' : 'Vente'}<br />
+                  Total: {payments[deleteConfirm]?.amount && payments[deleteConfirm]?.count 
+                    ? (payments[deleteConfirm].amount * payments[deleteConfirm].count).toLocaleString('fr-FR') 
+                    : 0} DH
+                </div>
+              </div>
+            </div>
+            <div className="users-dialog-footer">
+              <button onClick={() => setDeleteConfirm(null)} className="users-btn users-btn-outline">
+                Annuler
+              </button>
+              <button onClick={() => handleDelete(deleteConfirm)} className="users-btn users-btn-danger">
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  );
+};
+
 // ==================== MAIN COMPONENT ====================
 const Users = () => {
   const dispatch = useDispatch();
   const { user: currentUser } = useSelector((state) => state.auth);
   const { list: users, loading, error } = useSelector((state) => state.users);
   
+  // Track if initial load has been attempted
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all'); // all, actif, inactif
-  const [roleFilter, setRoleFilter] = useState('all'); // all, user, admin, superadmin
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [roleFilter, setRoleFilter] = useState('all');
   const [open, setOpen] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -1132,69 +2028,71 @@ const Users = () => {
   const [toasts, setToasts] = useState([]);
   const [deleting, setDeleting] = useState(false);
   
+  // Payment modal states
+  const [paymentModal, setPaymentModal] = useState({ open: false, user: null, type: null });
+  const [historyModal, setHistoryModal] = useState({ open: false, user: null, type: null });
+  
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
-  // Check if current user is admin or superadmin
+  // Check if current user is admin or superadmin or technician
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'superadmin';
   const isSuperAdmin = currentUser?.role === 'superadmin';
   const isAdminOnly = currentUser?.role === 'admin';
+  const isTechnician = currentUser?.role === 'technician';
   
-  if (!isAdmin) {
+  // Redirect non-authorized users
+  if (!isAdmin && !isTechnician) {
     return <Navigate to="/dashboard" replace />;
   }
 
   // Permission checking functions
   const canModifyUser = (user) => {
-    // Superadmin can modify anyone
     if (isSuperAdmin) return true;
-    
-    // Admin cannot modify superadmins
     if (isAdminOnly && user?.role === 'superadmin') return false;
-    
-    // Cannot modify yourself
+    if (isTechnician) return false;
     if (user?.id === currentUser?.id) return false;
-    
     return true;
   };
 
   const canDeleteUser = (user) => {
-    // Superadmin can delete anyone
     if (isSuperAdmin) return true;
-    
-    // Admin cannot delete superadmins
     if (isAdminOnly && user?.role === 'superadmin') return false;
-    
-    // Cannot delete yourself
+    if (isTechnician) return false;
     if (user?.id === currentUser?.id) return false;
-    
-    // Cannot delete system users
     if (user?.is_system) return false;
-    
     return true;
   };
 
   const canToggleStatus = (user) => {
-    // Superadmin can toggle anyone
     if (isSuperAdmin) return true;
-    
-    // Admin cannot toggle superadmins
     if (isAdminOnly && user?.role === 'superadmin') return false;
-    
-    // Cannot toggle your own status
+    if (isTechnician) return false;
     if (user?.id === currentUser?.id) return false;
-    
-    // Cannot toggle system users
     if (user?.is_system) return false;
-    
     return true;
+  };
+
+  const canViewPayments = (user) => {
+    if (isSuperAdmin) return true;
+    if (isAdminOnly && (user?.role === 'admin' || user?.role === 'technician')) return true;
+    if (isTechnician && user?.id === currentUser?.id) return true;
+    return false;
+  };
+
+  const canAddPayments = (user) => {
+    if (isSuperAdmin && (user?.role === 'admin' || user?.role === 'technician')) return true;
+    if (isAdminOnly && user?.role === 'technician') return true;
+    if (isAdminOnly && user?.role === 'admin' && user?.id === currentUser?.id) return true;
+    return false;
   };
 
   const getAvailableRoles = () => {
     if (isSuperAdmin) {
       return [
         { value: 'user', label: 'Utilisateur standard' },
+        { value: 'technician', label: 'Technicien' },
         { value: 'admin', label: 'Administrateur' },
         { value: 'superadmin', label: 'Super Administrateur' }
       ];
@@ -1202,16 +2100,45 @@ const Users = () => {
     if (isAdminOnly) {
       return [
         { value: 'user', label: 'Utilisateur standard' },
+        { value: 'technician', label: 'Technicien' },
         { value: 'admin', label: 'Administrateur' }
+      ];
+    }
+    if (isTechnician) {
+      return [
+        { value: 'user', label: 'Utilisateur standard' }
       ];
     }
     return [];
   };
 
-  // Fetch users on mount
+  // Fetch users on mount - FIXED: Proper async loading
   useEffect(() => {
-    dispatch(fetchUsers());
-  }, [dispatch]);
+    let isMounted = true;
+    
+    const loadUsers = async () => {
+      if (!initialLoadDone) {
+        try {
+          await dispatch(fetchUsers()).unwrap();
+          if (isMounted) {
+            setInitialLoadDone(true);
+          }
+        } catch (err) {
+          console.error('Failed to load users:', err);
+          if (isMounted) {
+            showToast(getErrorMessage(err), 'error');
+            setInitialLoadDone(true);
+          }
+        }
+      }
+    };
+    
+    loadUsers();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [dispatch, initialLoadDone]);
 
   // Reset to first page when filters change
   useEffect(() => {
@@ -1229,7 +2156,8 @@ const Users = () => {
   // Toast management
   const showToast = (message, type = 'success') => {
     const id = Date.now();
-    setToasts(prev => [...prev, { id, message, type }]);
+    const displayMessage = getErrorMessage(message);
+    setToasts(prev => [...prev, { id, message: displayMessage, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(toast => toast.id !== id));
     }, 3000);
@@ -1255,14 +2183,29 @@ const Users = () => {
     return filtered.slice(start, start + itemsPerPage);
   }, [filtered, currentPage, itemsPerPage]);
 
-  // Statistics
-  const adminCount = users.filter(u => u.role === 'admin').length;
-  const superAdminCount = users.filter(u => u.role === 'superadmin').length;
-  const userCount = users.filter(u => u.role === 'user').length;
-  const activeCount = users.filter(u => u.statut === 'actif').length;
-  const inactiveCount = users.filter(u => u.statut === 'inactif').length;
+  // Statistics - useMemo to avoid recalculating on every render
+  const stats = useMemo(() => {
+    const adminCount = users.filter(u => u.role === 'admin').length;
+    const superAdminCount = users.filter(u => u.role === 'superadmin').length;
+    const technicianCount = users.filter(u => u.role === 'technician').length;
+    const userCount = users.filter(u => u.role === 'user').length;
+    const activeCount = users.filter(u => u.statut === 'actif').length;
+    const inactiveCount = users.filter(u => u.statut === 'inactif').length;
+    
+    return { adminCount, superAdminCount, technicianCount, userCount, activeCount, inactiveCount };
+  }, [users]);
+
+  // Refresh users function
+  const refreshUsers = useCallback(() => {
+    setInitialLoadDone(false);
+    dispatch(fetchUsers());
+  }, [dispatch]);
 
   const openNew = () => {
+    if (isTechnician) {
+      showToast('Les techniciens ne peuvent pas créer d\'utilisateurs', 'error');
+      return;
+    }
     setEditing(null);
     setForm({ 
       name: '', 
@@ -1277,7 +2220,15 @@ const Users = () => {
   
   const openEdit = (u) => {
     if (!canModifyUser(u)) {
-      showToast('Vous ne pouvez pas modifier ce compte', 'error');
+      if (u.role === 'superadmin') {
+        showToast('Vous ne pouvez pas modifier un compte Super Administrateur', 'error');
+      } else if (isTechnician) {
+        showToast('Les techniciens ne peuvent pas modifier d\'utilisateurs', 'error');
+      } else if (u.id === currentUser?.id) {
+        showToast('Vous ne pouvez pas modifier votre propre compte', 'error');
+      } else {
+        showToast('Vous ne pouvez pas modifier ce compte', 'error');
+      }
       return;
     }
     setEditing(u);
@@ -1305,17 +2256,21 @@ const Users = () => {
       return;
     }
     
-    // Check if admin is trying to create a superadmin
     if (isAdminOnly && form.role === 'superadmin') {
       setFormError('Vous n\'avez pas les droits pour créer un compte Super Administrateur');
       showToast('Vous n\'avez pas les droits pour créer un compte Super Administrateur', 'error');
       return;
     }
     
-    // Check if admin is trying to update a role to superadmin
     if (isAdminOnly && editing && form.role === 'superadmin' && editing.role !== 'superadmin') {
       setFormError('Vous ne pouvez pas promouvoir un compte au rang de Super Administrateur');
       showToast('Vous ne pouvez pas promouvoir un compte au rang de Super Administrateur', 'error');
+      return;
+    }
+    
+    if (isTechnician) {
+      setFormError('Les techniciens ne peuvent pas créer ou modifier d\'utilisateurs');
+      showToast('Les techniciens ne peuvent pas créer ou modifier d\'utilisateurs', 'error');
       return;
     }
     
@@ -1345,10 +2300,11 @@ const Users = () => {
         showToast(`Utilisateur "${form.name}" créé avec succès`, 'success');
       }
       setOpen(false);
-      dispatch(fetchUsers());
+      refreshUsers();
     } catch (err) {
-      setFormError(err || 'Une erreur est survenue');
-      showToast(err || 'Erreur lors de l\'enregistrement', 'error');
+      const errorMsg = getErrorMessage(err);
+      setFormError(errorMsg);
+      showToast(errorMsg, 'error');
     }
   };
 
@@ -1360,6 +2316,8 @@ const Users = () => {
         showToast('Impossible de supprimer votre propre compte', 'error');
       } else if (user.is_system) {
         showToast('Impossible de supprimer un compte système', 'error');
+      } else if (isTechnician) {
+        showToast('Les techniciens ne peuvent pas supprimer d\'utilisateurs', 'error');
       }
       return;
     }
@@ -1374,9 +2332,9 @@ const Users = () => {
       await dispatch(deleteUser(deleteDialog.id)).unwrap();
       showToast(`Utilisateur "${deleteDialog.name}" supprimé avec succès`, 'success');
       setDeleteDialog(null);
-      dispatch(fetchUsers());
+      refreshUsers();
     } catch (err) {
-      showToast(err || 'Erreur lors de la suppression', 'error');
+      showToast(getErrorMessage(err), 'error');
     } finally {
       setDeleting(false);
     }
@@ -1390,6 +2348,8 @@ const Users = () => {
         showToast('Impossible de modifier votre propre statut', 'error');
       } else if (user.is_system) {
         showToast('Impossible de modifier le statut d\'un compte système', 'error');
+      } else if (isTechnician) {
+        showToast('Les techniciens ne peuvent pas modifier le statut d\'utilisateurs', 'error');
       }
       return;
     }
@@ -1398,10 +2358,18 @@ const Users = () => {
       await dispatch(toggleUserStatus(user.id)).unwrap();
       const newStatus = user.statut === 'actif' ? 'inactif' : 'actif';
       showToast(`Utilisateur ${newStatus === 'actif' ? 'activé' : 'désactivé'} avec succès`, 'success');
-      dispatch(fetchUsers());
+      refreshUsers();
     } catch (err) {
-      showToast(err || 'Erreur lors du changement de statut', 'error');
+      showToast(getErrorMessage(err), 'error');
     }
+  };
+
+  const openPaymentModal = (user, type) => {
+    setPaymentModal({ open: true, user, type });
+  };
+
+  const openHistoryModal = (user, type) => {
+    setHistoryModal({ open: true, user, type });
   };
 
   const clearAllFilters = () => {
@@ -1410,25 +2378,22 @@ const Users = () => {
     setRoleFilter('all');
   };
 
-  const getRoleBadgeVariant = (role) => {
-    if (role === 'superadmin') return 'default';
-    if (role === 'admin') return 'warning';
-    return 'secondary';
-  };
-
   const getRoleLabel = (role) => {
     if (role === 'superadmin') return 'Super Admin';
     if (role === 'admin') return 'Admin';
+    if (role === 'technician') return 'Technicien';
     return 'Utilisateur';
   };
 
   const getRoleIcon = (role) => {
     if (role === 'superadmin') return <Crown size={12} />;
     if (role === 'admin') return <UserCog size={12} />;
+    if (role === 'technician') return <Wrench size={12} />;
     return <UserCircle size={12} />;
   };
 
   const getInitials = (name) => {
+    if (!name) return '?';
     return name
       .split(' ')
       .map(word => word[0])
@@ -1439,7 +2404,8 @@ const Users = () => {
 
   const hasActiveFilters = search !== '' || statusFilter !== 'all' || roleFilter !== 'all';
 
-  if (loading && users.length === 0) {
+  // Show loading only on initial load when users array is empty
+  if (loading && users.length === 0 && !initialLoadDone) {
     return (
       <div className="users-loading">
         <div className="users-loading-spinner" />
@@ -1481,7 +2447,7 @@ const Users = () => {
             {isAdminOnly && (
               <span className="users-subtitle-badge" style={{ background: '#fef3c7', color: '#d97706' }}>
                 <Shield size={12} style={{ display: 'inline', marginRight: '0.25rem' }} />
-                Mode Admin (Super Admins visibles uniquement)
+                Mode Admin
               </span>
             )}
             {isSuperAdmin && (
@@ -1490,22 +2456,28 @@ const Users = () => {
                 Super Admin - Accès total
               </span>
             )}
+            {isTechnician && (
+              <span className="users-subtitle-badge" style={{ background: '#cffafe', color: '#0891b2' }}>
+                <Wrench size={12} style={{ display: 'inline', marginRight: '0.25rem' }} />
+                Technicien - Accès limité
+              </span>
+            )}
           </div>
         </div>
         <div className="users-actions">
-          <ExportMenu 
-            title="Liste des utilisateurs" 
-            rows={filtered} 
-            columns={[
-              { header: 'Nom', accessor: u => u.name },
-              { header: 'Email', accessor: u => u.email },
-              { header: 'Rôle', accessor: u => getRoleLabel(u.role) },
-              { header: 'Statut', accessor: u => u.statut === 'actif' ? 'Actif' : 'Inactif' },
-              { header: 'Date création', accessor: u => u.created_at ? new Date(u.created_at).toLocaleDateString('fr-FR') : '-' },
-            ]} 
-          />
-          <button onClick={openNew} className="users-btn users-btn-primary">
+          <button 
+            onClick={openNew} 
+            className="users-btn users-btn-primary"
+            disabled={isTechnician}
+          >
             <Plus size={16} /> Ajouter un utilisateur
+          </button>
+          <button 
+            onClick={refreshUsers} 
+            className="users-btn users-btn-outline"
+            title="Rafraîchir"
+          >
+            <RefreshCw size={16} /> Rafraîchir
           </button>
         </div>
       </div>
@@ -1521,20 +2493,25 @@ const Users = () => {
         <StatCard 
           icon={ShieldCheck} 
           label="Administrateurs" 
-          value={adminCount + superAdminCount} 
+          value={stats.adminCount + stats.superAdminCount} 
           color="warning"
-          trend={`${superAdminCount} super admin`}
+        />
+        <StatCard 
+          icon={Wrench} 
+          label="Techniciens" 
+          value={stats.technicianCount} 
+          color="technician"
         />
         <StatCard 
           icon={UserCheck} 
           label="Utilisateurs actifs" 
-          value={activeCount} 
+          value={stats.activeCount} 
           color="success"
         />
         <StatCard 
           icon={UserX} 
           label="Comptes inactifs" 
-          value={inactiveCount} 
+          value={stats.inactiveCount} 
           color="info"
         />
       </div>
@@ -1576,6 +2553,7 @@ const Users = () => {
               >
                 <option value="all">Tous les rôles</option>
                 <option value="user">Utilisateurs</option>
+                <option value="technician">Techniciens</option>
                 <option value="admin">Admins</option>
                 <option value="superadmin">Super Admins</option>
               </select>
@@ -1596,10 +2574,10 @@ const Users = () => {
             <thead>
               <tr>
                 <th>Utilisateur</th>
-                <th>Email</th>
                 <th>Rôle</th>
                 <th>Statut</th>
                 <th>Date création</th>
+                <th>Paiements</th>
                 <th className="users-w-24">Actions</th>
               </tr>
             </thead>
@@ -1624,16 +2602,15 @@ const Users = () => {
                       </div>
                     </div>
                   </td>
-                  <td className="users-text-muted">{u.email}</td>
                   <td>
                     <div className={`users-badge ${
                       u.role === 'superadmin' ? 'users-badge-default' : 
                       u.role === 'admin' ? 'users-badge-warning' : 
+                      u.role === 'technician' ? 'users-badge-cyan' :
                       'users-badge-secondary'
                     }`}>
                       {getRoleIcon(u.role)}
                       {getRoleLabel(u.role)}
-                      {u.role === 'superadmin' && <Crown size={12} style={{ marginLeft: '0.25rem' }} />}
                     </div>
                   </td>
                   <td>
@@ -1651,6 +2628,28 @@ const Users = () => {
                   <td className="users-text-muted">
                     {u.created_at ? new Date(u.created_at).toLocaleDateString('fr-FR') : '-'}
                   </td>
+                  <td>
+                    <div className="users-actions-cell">
+                      {canViewPayments(u) && (
+                        <button 
+                          onClick={() => openHistoryModal(u, u.role === 'admin' ? 'admin' : 'technician')} 
+                          className="users-btn-icon" 
+                          title="Voir historique des paiements"
+                        >
+                          <History size={16} />
+                        </button>
+                      )}
+                      {canAddPayments(u) && (
+                        <button 
+                          onClick={() => openPaymentModal(u, u.role === 'admin' ? 'admin' : 'technician')} 
+                          className="users-btn-icon" 
+                          title="Ajouter un paiement"
+                        >
+                          <DollarSign size={16} />
+                        </button>
+                      )}
+                    </div>
+                   </td>
                   <td>
                     <div className="users-actions-cell">
                       <button 
@@ -1678,7 +2677,7 @@ const Users = () => {
                         <Trash2 size={16} />
                       </button>
                     </div>
-                  </td>
+                   </td>
                 </tr>
               ))}
               {paginatedUsers.length === 0 && (
@@ -1736,7 +2735,7 @@ const Users = () => {
               {formError && (
                 <div className="users-error-message">
                   <AlertTriangle size={16} />
-                  {formError}
+                  <span>{formError}</span>
                 </div>
               )}
               
@@ -1780,16 +2779,6 @@ const Users = () => {
                     </option>
                   ))}
                 </select>
-                {isAdminOnly && editing && editing.role === 'superadmin' && (
-                  <p className="users-text-muted" style={{ fontSize: '0.75rem', marginTop: '0.25rem', color: '#ef4444' }}>
-                    Vous ne pouvez pas modifier ce compte Super Administrateur
-                  </p>
-                )}
-                {isAdminOnly && !editing && (
-                  <p className="users-text-muted" style={{ fontSize: '0.75rem', marginTop: '0.25rem', color: '#64748b' }}>
-                    Vous ne pouvez créer que des comptes Utilisateur ou Administrateur
-                  </p>
-                )}
               </div>
               
               <div className="users-form-group">
@@ -1861,7 +2850,6 @@ const Users = () => {
                 <div style={{ marginTop: '0.5rem' }}>
                   ✉️ {deleteDialog.email}<br />
                   👤 {getRoleLabel(deleteDialog.role)}
-                  {deleteDialog.role === 'superadmin' && ' ⚠️ Ce compte a des privilèges maximum'}
                 </div>
               </div>
             </div>
@@ -1878,7 +2866,6 @@ const Users = () => {
                 className="users-btn users-btn-danger" 
                 onClick={handleDelete}
                 disabled={deleting}
-                style={deleting ? { animation: 'pulse 1s ease-in-out infinite' } : {}}
               >
                 {deleting ? (
                   <>
@@ -1903,6 +2890,37 @@ const Users = () => {
             </button>
           </div>
         </>
+      )}
+
+      {/* Payment Modals */}
+      {paymentModal.open && paymentModal.type === 'admin' && (
+        <AdminPaymentModal
+          user={paymentModal.user}
+          onClose={() => setPaymentModal({ open: false, user: null, type: null })}
+          onSuccess={showToast}
+        />
+      )}
+      
+      {paymentModal.open && paymentModal.type === 'technician' && (
+        <TechnicianPaymentModal
+          user={paymentModal.user}
+          onClose={() => setPaymentModal({ open: false, user: null, type: null })}
+          onSuccess={showToast}
+        />
+      )}
+      
+      {historyModal.open && historyModal.type === 'admin' && (
+        <AdminPaymentHistoryModal
+          user={historyModal.user}
+          onClose={() => setHistoryModal({ open: false, user: null, type: null })}
+        />
+      )}
+      
+      {historyModal.open && historyModal.type === 'technician' && (
+        <TechnicianPaymentHistoryModal
+          user={historyModal.user}
+          onClose={() => setHistoryModal({ open: false, user: null, type: null })}
+        />
       )}
     </div>
   );

@@ -1463,6 +1463,11 @@ const styles = `
     white-space: nowrap;
     border-width: 0;
   }
+    input::placeholder {
+  color: #999;
+  font-style: italic;
+  opacity: 1;
+}
 `;
 
 // Helper function to safely format price
@@ -2465,36 +2470,33 @@ const Products = () => {
               
               <div className="products-grid-2">
                 <div className="products-form-group">
-                  <Label required>Prix de vente (MAD)</Label>
-                  <Input 
-                    type="number" 
-                    step="0.01"
-                    value={form.prix_vente} 
-                    onChange={(e) => setForm({ ...form, prix_vente: parseFloat(e.target.value) || 0 })} 
-                    placeholder="0"
-                  />
-                </div>
+  <Label required>Prix de vente (MAD)</Label>
+
+  <Input
+    type="number"
+    step="0.01"
+    value={form.prix_vente || ""}
+    onChange={(e) =>
+      setForm({
+        ...form,
+        prix_vente: e.target.value
+      })
+    }
+    placeholder="0.00 MAD"
+  />
+</div>
                 <div className="products-form-group">
                   <Label>Prix d'achat (MAD)</Label>
                   <Input 
                     type="number" 
                     step="0.01"
-                    value={form.prix} 
+                    value={form.prix || ""}
                     onChange={(e) => setForm({ ...form, prix: parseFloat(e.target.value) || 0 })} 
-                    placeholder="0"
+                    placeholder="0.00 MAD"
                   />
                 </div>
               </div>
               
-              <div className="products-form-group">
-                <Label>Stock initial</Label>
-                <Input 
-                  type="number" 
-                  value={form.stock} 
-                  onChange={(e) => setForm({ ...form, stock: parseInt(e.target.value) || 0 })} 
-                  placeholder="0"
-                />
-              </div>
             </div>
             <div className="products-dialog-footer">
               <Button variant="outline" onClick={() => setOpen(false)}>Annuler</Button>

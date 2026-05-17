@@ -1,10 +1,10 @@
-// App.jsx (updated with Sidebar component and Client Activation route)
+// App.jsx (updated with Technician route OUTSIDE the sidebar)
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, Outlet, useLocation } from 'react-router-dom';
 import { Provider, useDispatch, useSelector } from 'react-redux';
 import {
   LayoutDashboard, Package, Users as UsersIcon, ShoppingCart, FileText, Satellite, Settings, LogOut, UserCog,
-  Receipt
+  Receipt, Wallet, Wrench  // Added Wrench icon for Technician
 } from 'lucide-react';
 
 // Import store
@@ -23,7 +23,9 @@ import Users from './Users';
 import Check from './Check';
 import NotFound from './NotFound';
 import Profile from './Profile';
-import ClientActivation from './ClientActivation'; // Import the new component
+import ClientActivation from './ClientActivation';
+import Depenses from './Depenses';
+import Technician from './Technician'; // Import the Technician component
 
 // Import Sidebar component
 import Sidebar from './Sidebar';
@@ -114,7 +116,7 @@ const AuthGuard = ({ children }) => {
 };
 
 // =============================================================================
-// APP LAYOUT
+// APP LAYOUT (with Sidebar)
 // =============================================================================
 const AppLayout = () => {
   const { user } = useSelector((state) => state.auth);
@@ -134,6 +136,38 @@ const AppLayout = () => {
 };
 
 // =============================================================================
+// STANDALONE LAYOUT (without Sidebar)
+// =============================================================================
+const StandaloneLayout = ({ children }) => {
+  const { isAuthenticated, loading } = useSelector((state) => state.auth);
+  const dispatch = useDispatch();
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token && !isAuthenticated && !loading) {
+      dispatch(fetchMe());
+    }
+  }, [dispatch, isAuthenticated, loading]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+// =============================================================================
 // APP COMPONENT WITH REDUX PROVIDER
 // =============================================================================
 const App = () => (
@@ -145,6 +179,15 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/login" element={<Login />} />
+          
+          {/* Technician route OUTSIDE sidebar - standalone page */}
+          <Route path="/techniciens" element={
+            <StandaloneLayout>
+              <Technician />
+            </StandaloneLayout>
+          } />
+          
+          {/* All routes WITH sidebar */}
           <Route element={
             <AuthGuard>
               <AppLayout />
@@ -156,12 +199,14 @@ const App = () => (
             <Route path="/ventes" element={<Sales />} />
             <Route path="/factures" element={<Invoices />} />
             <Route path="/remises" element={<Check />} />
+            <Route path="/depenses" element={<Depenses />} />
             <Route path="/activation" element={<Activation />} />
-            <Route path="/client-activation" element={<ClientActivation />} /> {/* New route added */}
+            <Route path="/client-activation" element={<ClientActivation />} />
             <Route path="/utilisateurs" element={<Users />} />
             <Route path="/parametres" element={<SettingsPage />} />
             <Route path="/profile" element={<Profile />} />
           </Route>
+          
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

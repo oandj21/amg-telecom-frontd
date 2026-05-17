@@ -133,9 +133,21 @@ export const deleteCheck = createAsyncThunk("checks/delete", async (id, thunkAPI
 export const uploadCheckFiles = createAsyncThunk("checks/uploadFiles", async ({ id, files }, thunkAPI) => {
   try {
     const formData = new FormData();
-    files.forEach((file) => {
-      formData.append("files[]", file);
+    
+    // Ensure each file is properly appended
+    files.forEach((file, index) => {
+      // For compressed images that might not be File objects
+      if (file instanceof File || file instanceof Blob) {
+        formData.append(`files[${index}]`, file, file.name || `file_${index}`);
+      } else if (file && file.file) {
+        // Handle custom file wrapper
+        formData.append(`files[${index}]`, file.file, file.name);
+      } else {
+        formData.append(`files[${index}]`, file);
+      }
     });
+    
+    console.log('Uploading files:', files.map(f => ({ name: f.name, size: f.size, type: f.type })));
     
     const response = await api.post(`/checks/${id}/upload-files`, formData, {
       headers: {
@@ -144,6 +156,7 @@ export const uploadCheckFiles = createAsyncThunk("checks/uploadFiles", async ({ 
     });
     return { id, data: response.data };
   } catch (error) {
+    console.error('Upload error details:', error.response?.data);
     return handleError(error, thunkAPI);
   }
 });
@@ -188,6 +201,81 @@ export const exportChecks = createAsyncThunk("checks/export", async (filters = {
   }
 });
 
+export const markChequeEncaisse = createAsyncThunk("checks/markEncaisse", async ({ checkId, saleId, paymentId }, thunkAPI) => {
+  try {
+    const response = await api.post(`/checks/${checkId}/mark-encaisse`, { sale_id: saleId, payment_id: paymentId });
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+// store.js - Add/Update these actions
+
+// ==============================================
+// 📍 GPS ACTIVATION PAYMENT ACTIONS with payment_type
+// ==============================================
+
+export const fetchActivationPaymentHistory = createAsyncThunk("activations/fetchPaymentHistory", async (id, thunkAPI) => {
+  try {
+    const response = await api.get(`/activations/${id}/payments`);
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const addActivationPayment = createAsyncThunk("activations/addPayment", async ({ id, amount, method, payment_type, reference, notes }, thunkAPI) => {
+  try {
+    const response = await api.post(`/activations/${id}/payments`, { 
+      amount, 
+      method, 
+      payment_type,
+      reference, 
+      notes 
+    });
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const addActivationChequePayment = createAsyncThunk("activations/addChequePayment", async ({ id, amount, payment_type, cheque_number, bank_name, notes }, thunkAPI) => {
+  try {
+    const response = await api.post(`/activations/${id}/cheque-payment`, { 
+      amount, 
+      payment_type,
+      cheque_number, 
+      bank_name, 
+      notes 
+    });
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const updateActivationPayment = createAsyncThunk("activations/updatePayment", async ({ id, paymentId, amount, method, payment_type, reference }, thunkAPI) => {
+  try {
+    const response = await api.put(`/activations/${id}/payments/${paymentId}`, { 
+      amount, 
+      method, 
+      payment_type,
+      reference 
+    });
+    return { id, paymentId, data: response.data };
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const deleteActivationPayment = createAsyncThunk("activations/deletePayment", async ({ id, paymentId }, thunkAPI) => {
+  try {
+    const response = await api.delete(`/activations/${id}/payments/${paymentId}`);
+    return { id, paymentId, data: response.data };
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
 // ==============================================
 // 👥 CLIENT ACTIONS
 // ==============================================
@@ -473,11 +561,10 @@ export const fetchAvailableImeis = createAsyncThunk("gpsDevices/fetchAvailableIm
     const response = await api.get("/gps-devices", { params: { status: 'available' } });
     const devices = response.data.devices || response.data;
     
-    // ✅ Include produit_id in the mapped objects
     const imeis = devices.map(d => ({
       id: d.id,
       imei: d.imei,
-      produit_id: d.produit_id,          // <-- CRITICAL: needed for product filtering
+      produit_id: d.produit_id,
       produit_nom: d.produit?.nom || 'GPS'
     }));
     return imeis;
@@ -558,6 +645,24 @@ export const updateSale = createAsyncThunk("sales/update", async ({ id, ...data 
   try {
     const response = await api.put(`/ventes/${id}`, data);
     return response.data.vente || response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const addChequePayment = createAsyncThunk("sales/addChequePayment", async ({ id, amount, cheque_number, bank_name, notes }, thunkAPI) => {
+  try {
+    const response = await api.post(`/ventes/${id}/cheque-payment`, { amount, cheque_number, bank_name, notes });
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const getPendingChequePayments = createAsyncThunk("sales/getPendingChequePayments", async (id, thunkAPI) => {
+  try {
+    const response = await api.get(`/ventes/${id}/pending-cheque-payments`);
+    return response.data;
   } catch (error) {
     return handleError(error, thunkAPI);
   }
@@ -705,6 +810,86 @@ export const createInstallation = createAsyncThunk("activations/createInstallati
     return handleError(error, thunkAPI);
   }
 });
+// ==============================================
+// 📝 CHEQUE PAYMENTS (Combined Sales + Activations)
+// ==============================================
+
+export const fetchClientsWithChequePaymentsAll = createAsyncThunk("clients/fetchChequeClientsAll", async (_, thunkAPI) => {
+  try {
+    const response = await api.get("/payments/cheque-clients-all");
+    return response.data.clients || response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+// ==============================================
+// 💸 DEPENSE ACTIONS
+// ==============================================
+
+export const fetchDepenses = createAsyncThunk("depenses/fetchAll", async (filters = {}, thunkAPI) => {
+  try {
+    const params = new URLSearchParams(filters).toString();
+    const response = await api.get(`/depenses${params ? `?${params}` : ""}`);
+    return response.data.depenses || response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const fetchDepenseById = createAsyncThunk("depenses/fetchById", async (id, thunkAPI) => {
+  try {
+    const response = await api.get(`/depenses/${id}`);
+    return response.data.depense || response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const createDepense = createAsyncThunk("depenses/create", async (data, thunkAPI) => {
+  try {
+    const response = await api.post("/depenses", data);
+    return response.data.depense || response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const updateDepense = createAsyncThunk("depenses/update", async ({ id, ...data }, thunkAPI) => {
+  try {
+    const response = await api.put(`/depenses/${id}`, data);
+    return response.data.depense || response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const deleteDepense = createAsyncThunk("depenses/delete", async (id, thunkAPI) => {
+  try {
+    await api.delete(`/depenses/${id}`);
+    return id;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const fetchDepenseStats = createAsyncThunk("depenses/fetchStats", async (filters = {}, thunkAPI) => {
+  try {
+    const params = new URLSearchParams(filters).toString();
+    const response = await api.get(`/depenses/stats${params ? `?${params}` : ""}`);
+    return response.data.stats || response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const fetchDepenseCategories = createAsyncThunk("depenses/fetchCategories", async (_, thunkAPI) => {
+  try {
+    const response = await api.get("/depenses/categories");
+    return response.data.categories || response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
 
 // ==============================================
 // 💰 SALE PAYMENT ACTIONS
@@ -814,6 +999,86 @@ export const toggleUserStatus = createAsyncThunk("users/toggleStatus", async (id
 });
 
 // ==============================================
+// 💰 ADMIN PAYMENT ACTIONS
+// ==============================================
+
+export const addAdminPayment = createAsyncThunk("adminPayments/add", async ({ userId, amount, description, date }, thunkAPI) => {
+  try {
+    const response = await api.post(`/admin-payments/${userId}`, { amount, description, date });
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const getAdminPayments = createAsyncThunk("adminPayments/get", async (userId, thunkAPI) => {
+  try {
+    const response = await api.get(`/admin-payments/${userId}`);
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const getAllAdminPayments = createAsyncThunk("adminPayments/getAll", async (_, thunkAPI) => {
+  try {
+    const response = await api.get("/all-admin-payments");
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const deleteAdminPayment = createAsyncThunk("adminPayments/delete", async ({ userId, paymentIndex }, thunkAPI) => {
+  try {
+    const response = await api.delete(`/admin-payments/${userId}/${paymentIndex}`);
+    return { userId, paymentIndex, data: response.data };
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+// ==============================================
+// 💰 TECHNICIAN PAYMENT ACTIONS
+// ==============================================
+
+export const addTechnicianPayment = createAsyncThunk("technicianPayments/add", async ({ userId, type, amount, count, date }, thunkAPI) => {
+  try {
+    const response = await api.post(`/technician-payments/${userId}`, { type, amount, count, date });
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const getTechnicianPayments = createAsyncThunk("technicianPayments/get", async (userId, thunkAPI) => {
+  try {
+    const response = await api.get(`/technician-payments/${userId}`);
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const getAllTechnicianPayments = createAsyncThunk("technicianPayments/getAll", async (_, thunkAPI) => {
+  try {
+    const response = await api.get("/all-technician-payments");
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const deleteTechnicianPayment = createAsyncThunk("technicianPayments/delete", async ({ userId, paymentIndex }, thunkAPI) => {
+  try {
+    const response = await api.delete(`/technician-payments/${userId}/${paymentIndex}`);
+    return { userId, paymentIndex, data: response.data };
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+// ==============================================
 // 👤 PROFILE ACTIONS
 // ==============================================
 
@@ -839,6 +1104,28 @@ export const changePassword = createAsyncThunk("profile/changePassword", async (
   try {
     const response = await api.put("/profile/change-password", data);
     return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+// ==============================================
+// ⚙️ SETTINGS ACTIONS
+// ==============================================
+
+export const fetchCompanyInfo = createAsyncThunk("settings/fetchCompanyInfo", async (_, thunkAPI) => {
+  try {
+    const response = await api.get("/settings/company");
+    return response.data.company_info || response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const updateCompanyInfo = createAsyncThunk("settings/updateCompanyInfo", async (data, thunkAPI) => {
+  try {
+    const response = await api.put("/settings/company", data);
+    return response.data.company_info || response.data;
   } catch (error) {
     return handleError(error, thunkAPI);
   }
@@ -934,6 +1221,56 @@ const authSlice = createSlice({
           state.user = { ...state.user, ...action.payload.user };
           localStorage.setItem("user", JSON.stringify(state.user));
         }
+      });
+  },
+});
+
+const settingsSlice = createSlice({
+  name: "settings",
+  initialState: {
+    companyInfo: null,
+    loading: false,
+    error: null,
+    success: false,
+  },
+  reducers: {
+    clearSettingsError: (state) => {
+      state.error = null;
+    },
+    clearSettingsSuccess: (state) => {
+      state.success = false;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchCompanyInfo.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchCompanyInfo.fulfilled, (state, action) => {
+        state.loading = false;
+        state.companyInfo = action.payload;
+        localStorage.setItem('company_info', JSON.stringify(action.payload));
+      })
+      .addCase(fetchCompanyInfo.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(updateCompanyInfo.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+        state.success = false;
+      })
+      .addCase(updateCompanyInfo.fulfilled, (state, action) => {
+        state.loading = false;
+        state.companyInfo = action.payload;
+        state.success = true;
+        localStorage.setItem('company_info', JSON.stringify(action.payload));
+      })
+      .addCase(updateCompanyInfo.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+        state.success = false;
       });
   },
 });
@@ -1353,6 +1690,90 @@ const salesSlice = createSlice({
   },
 });
 
+const depensesSlice = createSlice({
+  name: "depenses",
+  initialState: {
+    list: [],
+    selected: null,
+    stats: null,
+    categories: [],
+    loading: false,
+    error: null,
+    pagination: {
+      current_page: 1,
+      last_page: 1,
+      per_page: 15,
+      total: 0,
+    },
+  },
+  reducers: {
+    clearDepenseError: (state) => {
+      state.error = null;
+    },
+    clearSelectedDepense: (state) => {
+      state.selected = null;
+    },
+    setDepensePage: (state, action) => {
+      state.pagination.current_page = action.payload;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchDepenses.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchDepenses.fulfilled, (state, action) => {
+        state.loading = false;
+        if (action.payload.data) {
+          state.list = action.payload.data;
+          state.pagination = {
+            current_page: action.payload.current_page || 1,
+            last_page: action.payload.last_page || 1,
+            per_page: action.payload.per_page || 15,
+            total: action.payload.total || 0,
+          };
+        } else {
+          state.list = Array.isArray(action.payload) ? action.payload : [];
+        }
+      })
+      .addCase(fetchDepenses.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(fetchDepenseById.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchDepenseById.fulfilled, (state, action) => {
+        state.loading = false;
+        state.selected = action.payload;
+      })
+      .addCase(fetchDepenseById.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(createDepense.fulfilled, (state, action) => {
+        state.list.unshift(action.payload);
+      })
+      .addCase(updateDepense.fulfilled, (state, action) => {
+        const index = state.list.findIndex(d => d.id === action.payload.id);
+        if (index !== -1) state.list[index] = action.payload;
+        if (state.selected?.id === action.payload.id) state.selected = action.payload;
+      })
+      .addCase(deleteDepense.fulfilled, (state, action) => {
+        state.list = state.list.filter(d => d.id !== action.payload);
+        if (state.selected?.id === action.payload) state.selected = null;
+      })
+      .addCase(fetchDepenseStats.fulfilled, (state, action) => {
+        state.stats = action.payload;
+      })
+      .addCase(fetchDepenseCategories.fulfilled, (state, action) => {
+        state.categories = Array.isArray(action.payload) ? action.payload : [];
+      });
+  },
+});
+
 const activationsSlice = createSlice({
   name: "activations",
   initialState: {
@@ -1565,6 +1986,225 @@ const usersSlice = createSlice({
   },
 });
 
+// ==============================================
+// 💰 ADMIN PAYMENTS SLICE
+// ==============================================
+const adminPaymentsSlice = createSlice({
+  name: "adminPayments",
+  initialState: {
+    currentAdminPayments: null,
+    allAdminsPayments: null,
+    loading: false,
+    error: null,
+    success: false,
+  },
+  reducers: {
+    clearAdminPaymentsError: (state) => {
+      state.error = null;
+    },
+    clearAdminPaymentsSuccess: (state) => {
+      state.success = false;
+    },
+    clearCurrentAdminPayments: (state) => {
+      state.currentAdminPayments = null;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(getAdminPayments.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getAdminPayments.fulfilled, (state, action) => {
+        state.loading = false;
+        state.currentAdminPayments = action.payload;
+        state.error = null;
+      })
+      .addCase(getAdminPayments.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(getAllAdminPayments.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getAllAdminPayments.fulfilled, (state, action) => {
+        state.loading = false;
+        state.allAdminsPayments = action.payload;
+        state.error = null;
+      })
+      .addCase(getAllAdminPayments.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(addAdminPayment.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+        state.success = false;
+      })
+      .addCase(addAdminPayment.fulfilled, (state, action) => {
+        state.loading = false;
+        state.success = true;
+        state.error = null;
+        // FIX: Only update if currentAdminPayments exists
+        if (state.currentAdminPayments && state.currentAdminPayments.user?.id === action.payload.summary?.user?.id) {
+          state.currentAdminPayments.summary = action.payload.summary;
+        }
+      })
+      .addCase(addAdminPayment.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+        state.success = false;
+      })
+      .addCase(deleteAdminPayment.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(deleteAdminPayment.fulfilled, (state, action) => {
+        state.loading = false;
+        // FIX: Only update if currentAdminPayments exists
+        if (state.currentAdminPayments && state.currentAdminPayments.user?.id === action.payload.userId) {
+          if (state.currentAdminPayments.summary) {
+            state.currentAdminPayments.summary = action.payload.data.summary;
+          }
+        }
+        if (state.allAdminsPayments) {
+          const adminIndex = state.allAdminsPayments.admins?.findIndex(
+            a => a.user.id === action.payload.userId
+          );
+          if (adminIndex !== -1 && adminIndex !== undefined && state.allAdminsPayments.admins[adminIndex]) {
+            state.allAdminsPayments.admins[adminIndex].payments = action.payload.data.summary.payments;
+            state.allAdminsPayments.admins[adminIndex].total = action.payload.data.summary.total;
+            state.allAdminsPayments.grand_total = state.allAdminsPayments.admins.reduce(
+              (sum, admin) => sum + (admin.total || 0), 0
+            );
+          }
+        }
+      })
+      .addCase(deleteAdminPayment.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      });
+  },
+});
+
+
+// ==============================================
+// 💰 TECHNICIAN PAYMENTS SLICE
+// ==============================================
+
+const technicianPaymentsSlice = createSlice({
+  name: "technicianPayments",
+  initialState: {
+    currentTechnicianPayments: null,
+    allTechniciansPayments: null,
+    loading: false,
+    error: null,
+    success: false,
+  },
+  reducers: {
+    clearTechnicianPaymentsError: (state) => {
+      state.error = null;
+    },
+    clearTechnicianPaymentsSuccess: (state) => {
+      state.success = false;
+    },
+    clearCurrentTechnicianPayments: (state) => {
+      state.currentTechnicianPayments = null;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(getTechnicianPayments.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getTechnicianPayments.fulfilled, (state, action) => {
+        state.loading = false;
+        state.currentTechnicianPayments = action.payload;
+        state.error = null;
+      })
+      .addCase(getTechnicianPayments.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(getAllTechnicianPayments.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getAllTechnicianPayments.fulfilled, (state, action) => {
+        state.loading = false;
+        state.allTechniciansPayments = action.payload;
+        state.error = null;
+      })
+      .addCase(getAllTechnicianPayments.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(addTechnicianPayment.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+        state.success = false;
+      })
+      .addCase(addTechnicianPayment.fulfilled, (state, action) => {
+        state.loading = false;
+        state.success = true;
+        state.error = null;
+        // FIX: Only update if currentTechnicianPayments exists
+        if (state.currentTechnicianPayments && state.currentTechnicianPayments.user?.id === action.payload.summary?.user?.id) {
+          state.currentTechnicianPayments.summary = action.payload.summary;
+        }
+      })
+      .addCase(addTechnicianPayment.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+        state.success = false;
+      })
+      .addCase(deleteTechnicianPayment.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(deleteTechnicianPayment.fulfilled, (state, action) => {
+        state.loading = false;
+        // FIX: Only update if currentTechnicianPayments exists
+        if (state.currentTechnicianPayments && state.currentTechnicianPayments.user?.id === action.payload.userId) {
+          if (state.currentTechnicianPayments.summary) {
+            state.currentTechnicianPayments.summary = action.payload.data.summary;
+          }
+        }
+        if (state.allTechniciansPayments) {
+          const techIndex = state.allTechniciansPayments.technicians?.findIndex(
+            t => t.user.id === action.payload.userId
+          );
+          if (techIndex !== -1 && techIndex !== undefined && state.allTechniciansPayments.technicians[techIndex]) {
+            state.allTechniciansPayments.technicians[techIndex].payments = action.payload.data.summary.all_payments;
+            state.allTechniciansPayments.technicians[techIndex].activation_total = action.payload.data.summary.activation.total;
+            state.allTechniciansPayments.technicians[techIndex].vente_total = action.payload.data.summary.vente.total;
+            state.allTechniciansPayments.technicians[techIndex].grand_total = action.payload.data.summary.grand_total;
+            state.allTechniciansPayments.technicians[techIndex].activation_count = action.payload.data.summary.activation.count;
+            state.allTechniciansPayments.technicians[techIndex].vente_count = action.payload.data.summary.vente.count;
+            
+            if (state.allTechniciansPayments.grand_totals) {
+              state.allTechniciansPayments.grand_totals.activation_total = state.allTechniciansPayments.technicians.reduce(
+                (sum, tech) => sum + (tech.activation_total || 0), 0
+              );
+              state.allTechniciansPayments.grand_totals.vente_total = state.allTechniciansPayments.technicians.reduce(
+                (sum, tech) => sum + (tech.vente_total || 0), 0
+              );
+              state.allTechniciansPayments.grand_totals.all_total = 
+                state.allTechniciansPayments.grand_totals.activation_total + 
+                state.allTechniciansPayments.grand_totals.vente_total;
+            }
+          }
+        }
+      })
+      .addCase(deleteTechnicianPayment.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      });
+  },
+});
+
 const dashboardSlice = createSlice({
   name: "dashboard",
   initialState: {
@@ -1604,7 +2244,11 @@ export const store = configureStore({
     sales: salesSlice.reducer,
     users: usersSlice.reducer,
     dashboard: dashboardSlice.reducer,
+    settings: settingsSlice.reducer,
     activations: activationsSlice.reducer,
+    depenses: depensesSlice.reducer,
+    adminPayments: adminPaymentsSlice.reducer,
+    technicianPayments: technicianPaymentsSlice.reducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -1615,7 +2259,11 @@ export const store = configureStore({
 // ==============================================
 // 📤 EXPORT ACTIONS
 // ==============================================
-
+export const { 
+  clearDepenseError, 
+  clearSelectedDepense, 
+  setDepensePage 
+} = depensesSlice.actions;
 export const { clearAuthError, updateAuthUser } = authSlice.actions;
 export const { clearClientError, clearSelectedClient } = clientsSlice.actions;
 export const { clearProductError } = productsSlice.actions;
@@ -1625,15 +2273,34 @@ export const { clearSaleError, clearPaymentHistory } = salesSlice.actions;
 export const { clearUserError } = usersSlice.actions;
 export const { clearCheckError, clearSelectedCheck, setPage } = checksSlice.actions;
 export const { clearActivationError, clearSelectedSale, setActivationPage } = activationsSlice.actions;
+export const { clearSettingsError, clearSettingsSuccess } = settingsSlice.actions;
+export const { 
+  clearAdminPaymentsError, 
+  clearAdminPaymentsSuccess, 
+  clearCurrentAdminPayments 
+} = adminPaymentsSlice.actions;
+export const { 
+  clearTechnicianPaymentsError, 
+  clearTechnicianPaymentsSuccess, 
+  clearCurrentTechnicianPayments 
+} = technicianPaymentsSlice.actions;
 
 // ==============================================
-// 📥 SELECTORS
+// 📤 EXPORT SELECTORS
 // ==============================================
 
+// Settings selectors
+export const selectCompanyInfo = (state) => state.settings.companyInfo;
+export const selectSettingsLoading = (state) => state.settings.loading;
+export const selectSettingsError = (state) => state.settings.error;
+export const selectSettingsSuccess = (state) => state.settings.success;
+
+// Auth selectors
 export const selectAuth = (state) => state.auth;
 export const selectCurrentUser = (state) => state.auth.user;
 export const selectIsAuthenticated = (state) => state.auth.isAuthenticated;
 
+// Checks selectors
 export const selectChecks = (state) => state.checks.list;
 export const selectSelectedCheck = (state) => state.checks.selected;
 export const selectChecksSummary = (state) => state.checks.summary;
@@ -1642,27 +2309,41 @@ export const selectChecksLoading = (state) => state.checks.loading;
 export const selectChecksError = (state) => state.checks.error;
 export const selectChecksPagination = (state) => state.checks.pagination;
 
+// Depenses selectors
+export const selectDepenses = (state) => state.depenses.list;
+export const selectSelectedDepense = (state) => state.depenses.selected;
+export const selectDepensesStats = (state) => state.depenses.stats;
+export const selectDepensesCategories = (state) => state.depenses.categories;
+export const selectDepensesLoading = (state) => state.depenses.loading;
+export const selectDepensesError = (state) => state.depenses.error;
+export const selectDepensesPagination = (state) => state.depenses.pagination;
+
+// Clients selectors
 export const selectClients = (state) => state.clients.list;
 export const selectSelectedClient = (state) => state.clients.selected;
 export const selectClientsLoading = (state) => state.clients.loading;
 export const selectClientVehicles = (state, clientId) => state.clients.vehicles[clientId] || [];
 export const selectClientSales = (state, clientId) => state.clients.sales[clientId] || [];
 
+// Products selectors
 export const selectProducts = (state) => state.products.list;
 export const selectSelectedProduct = (state) => state.products.selected;
 export const selectCategories = (state) => state.products.categories;
 export const selectProductsLoading = (state) => state.products.loading;
 
+// Vehicles selectors
 export const selectVehicles = (state) => state.vehicles.list;
 export const selectSelectedVehicle = (state) => state.vehicles.selected;
 export const selectVehiclesLoading = (state) => state.vehicles.loading;
 
+// GPS Devices selectors
 export const selectGpsDevices = (state) => state.gpsDevices.list;
 export const selectSelectedDevice = (state) => state.gpsDevices.selected;
 export const selectAvailableDevices = (state, productId) => state.gpsDevices.availableByProduct[productId] || [];
 export const selectAvailableImeis = (state) => state.gpsDevices.availableImeis;
 export const selectDevicesLoading = (state) => state.gpsDevices.loading;
 
+// Sales selectors
 export const selectSales = (state) => state.sales.list;
 export const selectSelectedSale = (state) => state.sales.selected;
 export const selectSaleStats = (state) => state.sales.stats;
@@ -1670,6 +2351,7 @@ export const selectSalesLoading = (state) => state.sales.loading;
 export const selectPaymentHistory = (state) => state.sales.paymentHistory;
 export const selectPaymentSummary = (state) => state.sales.paymentSummary;
 
+// Activations selectors
 export const selectSalesForActivation = (state) => state.activations.sales;
 export const selectSelectedSaleActivation = (state) => state.activations.selectedSale;
 export const selectActivations = (state) => state.activations.list;
@@ -1679,11 +2361,27 @@ export const selectActivationsLoading = (state) => state.activations.loading;
 export const selectActivationsError = (state) => state.activations.error;
 export const selectActivationsPagination = (state) => state.activations.pagination;
 
+// Users selectors
 export const selectUsers = (state) => state.users.list;
 export const selectSelectedUser = (state) => state.users.selected;
 export const selectUsersLoading = (state) => state.users.loading;
 
+// Dashboard selectors
 export const selectDashboardStats = (state) => state.dashboard.stats;
 export const selectDashboardLoading = (state) => state.dashboard.loading;
+
+// Admin Payments selectors
+export const selectCurrentAdminPayments = (state) => state.adminPayments.currentAdminPayments;
+export const selectAllAdminsPayments = (state) => state.adminPayments.allAdminsPayments;
+export const selectAdminPaymentsLoading = (state) => state.adminPayments.loading;
+export const selectAdminPaymentsError = (state) => state.adminPayments.error;
+export const selectAdminPaymentsSuccess = (state) => state.adminPayments.success;
+
+// Technician Payments selectors
+export const selectCurrentTechnicianPayments = (state) => state.technicianPayments.currentTechnicianPayments;
+export const selectAllTechniciansPayments = (state) => state.technicianPayments.allTechniciansPayments;
+export const selectTechnicianPaymentsLoading = (state) => state.technicianPayments.loading;
+export const selectTechnicianPaymentsError = (state) => state.technicianPayments.error;
+export const selectTechnicianPaymentsSuccess = (state) => state.technicianPayments.success;
 
 export default store;

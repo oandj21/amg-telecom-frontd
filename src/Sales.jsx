@@ -792,6 +792,7 @@ const styles = `
   .sales-badge-partial { background-color: #fffbeb; color: #d97706; }
   .sales-badge-unpaid { background-color: #fef2f2; color: #dc2626; }
   .sales-badge-secondary { background-color: #f3f4f6; color: #1f2937; }
+  .sales-badge-info { background-color: #e0f2fe; color: #0369a1; }
   
   /* Overlay */
   .sales-overlay {
@@ -1858,6 +1859,7 @@ const PaymentHistoryModal = ({
     }
   }, [isOpen, sale?.id]);
 
+  // Handle adding a regular payment (cash, card, bank transfer)
   const handleAddPayment = async () => {
     if (!localPaymentAmount || parseFloat(localPaymentAmount) <= 0) {
       if (showToast) showToast('Montant invalide', 'error');
@@ -1899,6 +1901,58 @@ const PaymentHistoryModal = ({
       setLocalPaymentReference('');
       
       if (showToast) showToast('Paiement ajouté avec succès', 'success');
+      
+      if (onPaymentChange) onPaymentChange();
+      
+    } catch (err) {
+      if (showToast) showToast(err.message, 'error');
+    } finally {
+      setLocalAddingPayment(false);
+    }
+  };
+
+  // Handle adding a cheque payment (does not update amount_paid)
+  const handleAddChequePayment = async () => {
+    if (!localPaymentAmount || parseFloat(localPaymentAmount) <= 0) {
+      if (showToast) showToast('Montant invalide', 'error');
+      return;
+    }
+    
+    const amount = parseFloat(localPaymentAmount);
+    if (amount > localRemaining) {
+      if (showToast) showToast(`Le montant ne peut pas dépasser ${safeToFixed(localRemaining)} MAD`, 'error');
+      return;
+    }
+    
+    setLocalAddingPayment(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/ventes/${sale.id}/cheque-payment`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          amount: amount,
+          cheque_number: localPaymentReference,
+          bank_name: 'Autre',
+          notes: `Paiement par chèque - ${localPaymentReference || 'sans référence'}`
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Erreur lors de l'ajout");
+      }
+      
+      setHasLoaded(false);
+      await loadPayments();
+      
+      setLocalPaymentAmount('');
+      setLocalPaymentReference('');
+      
+      if (showToast) showToast('Chèque enregistré. Veuillez créer une remise pour finaliser le paiement.', 'info');
       
       if (onPaymentChange) onPaymentChange();
       
@@ -2028,6 +2082,18 @@ const PaymentHistoryModal = ({
     );
   };
 
+  // Function to get cheque status badge
+  const getChequeStatusBadge = (remiseStatus) => {
+    if (!remiseStatus || remiseStatus === 'pending') {
+      return <span style={{ fontSize: '0.65rem', color: '#d97706', background: '#fef3c7', padding: '2px 6px', borderRadius: '12px' }}>⏳ En attente remise</span>;
+    } else if (remiseStatus === 'remis') {
+      return <span style={{ fontSize: '0.65rem', color: '#2563eb', background: '#dbeafe', padding: '2px 6px', borderRadius: '12px' }}>📝 Remis en banque</span>;
+    } else if (remiseStatus === 'encaisse') {
+      return <span style={{ fontSize: '0.65rem', color: '#059669', background: '#d1fae5', padding: '2px 6px', borderRadius: '12px' }}>✅ Encaissé</span>;
+    }
+    return null;
+  };
+
   if (!isOpen || !sale) return null;
 
   return (
@@ -2072,6 +2138,7 @@ const PaymentHistoryModal = ({
                     <th>Montant</th>
                     <th>Méthode</th>
                     <th>Référence</th>
+                    <th>Statut Chèque</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -2119,6 +2186,11 @@ const PaymentHistoryModal = ({
                           />
                         ) : (
                           payment.reference || '-'
+                        )}
+                      </td>
+                      <td>
+                        {(payment.method === 'check' || payment.method === 'cheque') && (
+                          getChequeStatusBadge(payment.remise_status)
                         )}
                       </td>
                       <td>
@@ -2197,14 +2269,19 @@ const PaymentHistoryModal = ({
                   style={{ flex: 1 }} 
                 />
                 <button 
-                  onClick={handleAddPayment} 
-                  disabled={localAddingPayment || !localPaymentAmount || parseFloat(localPaymentAmount) <= 0 || parseFloat(localPaymentAmount) > localRemaining} 
+                  onClick={localPaymentMethod === 'check' || localPaymentMethod === 'cheque' ? handleAddChequePayment : handleAddPayment} 
+                  disabled={localAddingPayment || !localPaymentAmount || parseFloat(localPaymentAmount) <= 0} 
                   className="btn-add-payment"
                   style={{ padding: '0.5rem 1.5rem' }}
                 >
                   {localAddingPayment ? <Loader size={14} className="spinning" /> : <><Plus size={14} /> Ajouter</>}
                 </button>
               </div>
+              {(localPaymentMethod === 'check' || localPaymentMethod === 'cheque') && (
+                <div style={{ fontSize: '0.7rem', color: '#d97706', marginTop: '0.5rem', background: '#fef3c7', padding: '0.5rem', borderRadius: '0.5rem' }}>
+                  ⚠️ Les paiements par chèque ne sont pas comptabilisés immédiatement. Vous devrez créer une remise pour finaliser le paiement.
+                </div>
+              )}
               {localPaymentAmount && parseFloat(localPaymentAmount) > localRemaining && localRemaining > 0 && (
                 <div style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.5rem' }}>
                   Le montant dépasse le reste à payer ({safeToFixed(localRemaining)} MAD)
@@ -2247,6 +2324,7 @@ const Badge = ({ children, variant = 'default' }) => {
                        variant === 'paid' ? 'sales-badge-paid' :
                        variant === 'partial' ? 'sales-badge-partial' :
                        variant === 'unpaid' ? 'sales-badge-unpaid' :
+                       variant === 'info' ? 'sales-badge-info' :
                        'sales-badge-secondary';
   return <span className={`sales-badge ${variantClass}`}>{children}</span>;
 };
@@ -2335,7 +2413,6 @@ const Sales = () => {
   useEffect(() => {
     const loadCacheImage = async () => {
       try {
-        // Try to load from public folder
         const response = await fetch('/cache.png');
         if (response.ok) {
           const blob = await response.blob();
@@ -2358,6 +2435,9 @@ const Sales = () => {
   const showToast = (message, type = 'success') => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(toast => toast.id !== id));
+    }, 5000);
   };
   
   const removeToast = (id) => {
@@ -2690,7 +2770,7 @@ const Sales = () => {
       
       const saleData = {
         client_id: finalClientId,
-        product_owner: 'amg', // Always AMG now
+        product_owner: 'amg',
         produits: productsData,
         status: saleStatus,
         payment_due_date: paymentDueDate || null,
@@ -2796,59 +2876,89 @@ const Sales = () => {
       <head>
         <meta charset="UTF-8">
         <title>Facture N° ${invoiceNumber}</title>
-        <style>
-          @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
-          * { box-sizing: border-box; margin: 0; padding: 0; }
-          body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            color: #1e293b;
-            background-color: #ffffff;
-            line-height: 1.5;
-            padding: 35px 40px;
-            font-size: 12px;
-          }
-          .invoice-container { max-width: 850px; margin: 0 auto; max-height: 100%; box-sizing: border-box; page-break-inside: avoid; }
-          .header-top { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 25px; }
-          .logo-wrapper { width: 130px; height: 130px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 8px; }
-          .invoice-logo { width: 100%; height: 100%; object-fit: cover; }
-          .company-name-placeholder { font-size: 20px; font-weight: 700; color: #0f172a; font-family: 'Playfair Display', serif; }
-          .corporate-meta-box { text-align: right; }
-          .document-type-badge { font-family: 'Playfair Display', serif; font-size: 28px; font-style: italic; color: #0f172a; margin-bottom: 4px; font-weight: 600; }
-          .invoice-id-badge { font-size: 14px; font-weight: 700; color: #475569; letter-spacing: 0.05em; margin-bottom: 4px; }
-          .invoice-date-line { font-size: 12px; color: #94a3b8; }
-          .parties-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 30px; }
-          .party-card .block-title { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; }
-          .party-card .party-name { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
-          .party-card .party-details { color: #475569; line-height: 1.5; font-size: 12px; }
-          .table-wrapper { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 25px; }
-          .invoice-table { width: 100%; border-collapse: collapse; }
-          .invoice-table th { background-color: #f8fafc; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; padding: 12px 8px; border-bottom: 1px solid #e2e8f0; text-align: left; }
-          .invoice-table td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; color: #334155; font-size: 12px; }
-          .invoice-table tr:last-child td { border-bottom: 1px solid #334155; }
-          .text-center { text-align: center; }
-          .text-right { text-align: right; }
-          .text-cas { text-align: center; }
-          .summary-container { display: grid; grid-template-columns: 1.12fr 0.88fr; gap: 40px; align-items: start; margin-bottom: 25px; }
-          .legal-wordings { border-left: 2px solid #e2e8f0; padding-left: 18px; margin-top: 5px; }
-          .wording-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.05em; margin-bottom: 4px; }
-          .wording-value { font-family: 'Playfair Display', serif; font-size: 14px; font-style: italic; color: #334155; font-weight: 600; line-height: 1.4; }
-          .financial-math { width: 100%; border-collapse: collapse; }
-          .financial-math td { padding: 6px 8px; font-size: 12px; color: #475569; }
-          .financial-math tr.premium-total td { font-size: 16px; font-weight: 700; color: #0f172a; border-top: 1px solid #e2e8f0; padding-top: 10px; padding-bottom: 10px; }
-          .payment-routing { border-top: 1px solid #e2e8f0; padding-top: 15px; margin-bottom: 30px; }
-          .routing-title { font-size: 11px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
-          .routing-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; font-size: 11px; color: #475569; }
-          .routing-item strong { color: #0f172a; display: block; margin-bottom: 2px; }
-          .executive-footer { border-top: 2px solid #0f172a; padding-top: 15px; text-align: center; font-size: 10px; color: #64748b; line-height: 1.6; }
-          .executive-footer .footer-company-name { font-weight: 700; color: #0f172a; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
-          .bank-info { margin-top: 12px; font-size: 11px; color: #475569; border-top: 1px dashed #e2e8f0; padding-top: 10px; }
-          .bank-info strong { color: #0f172a; }
-          .signature-section { margin-top: 55px; margin-bottom: 55px; display: flex; justify-content: flex-end; padding-right: 20px; }
-          .signature-box { text-align: center; width: 200px; }
-          .signature-label { font-size: 11px; font-weight: bold; margin-bottom: 10px; text-decoration: underline; color: #1f2937; }
-          .signature-image { margin-top: 10px; display: flex; justify-content: center; }
-          .signature-img { max-width: 150px; max-height: 80px; object-fit: contain; }
-        </style>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: #1e293b;
+    background-color: #ffffff;
+    line-height: 1.5;
+    padding: 35px 40px 60px 40px;
+    font-size: 12px;
+  }
+  .invoice-container { 
+    max-width: 850px; 
+    margin: 0 auto; 
+    box-sizing: border-box; 
+    page-break-after: avoid;
+    position: relative;
+    min-height: 100%;
+  }
+  .header-top { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 25px; }
+  .logo-wrapper { width: 130px; height: 130px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 8px; }
+  .invoice-logo { width: 100%; height: 100%; object-fit: cover; }
+  .company-name-placeholder { font-size: 20px; font-weight: 700; color: #0f172a; font-family: 'Playfair Display', serif; }
+  .corporate-meta-box { text-align: right; }
+  .document-type-badge { font-family: 'Playfair Display', serif; font-size: 28px; font-style: italic; color: #0f172a; margin-bottom: 4px; font-weight: 600; }
+  .invoice-id-badge { font-size: 14px; font-weight: 700; color: #475569; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .invoice-date-line { font-size: 12px; color: #94a3b8; }
+  .parties-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 30px; }
+  .party-card .block-title { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; }
+  .party-card .party-name { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+  .party-card .party-details { color: #475569; line-height: 1.5; font-size: 12px; }
+  .table-wrapper { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 25px; }
+  .invoice-table { width: 100%; border-collapse: collapse; }
+  .invoice-table th { background-color: #f8fafc; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; padding: 12px 8px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+  .invoice-table td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; color: #334155; font-size: 12px; }
+  .invoice-table tr:last-child td { border-bottom: 1px solid #334155; }
+  .text-center { text-align: center; }
+  .text-right { text-align: right; }
+  .text-cas { text-align: center; }
+  .summary-container { display: grid; grid-template-columns: 1.12fr 0.88fr; gap: 40px; align-items: start; margin-bottom: 25px; }
+  .legal-wordings { border-left: 2px solid #e2e8f0; padding-left: 18px; margin-top: 5px; }
+  .wording-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .wording-value { font-family: 'Playfair Display', serif; font-size: 14px; font-style: italic; color: #334155; font-weight: 600; line-height: 1.4; }
+  .financial-math { width: 100%; border-collapse: collapse; }
+  .financial-math td { padding: 6px 8px; font-size: 12px; color: #475569; }
+  .financial-math tr.premium-total td { font-size: 16px; font-weight: 700; color: #0f172a; border-top: 1px solid #e2e8f0; padding-top: 10px; padding-bottom: 10px; }
+  .payment-routing { border-top: 1px solid #e2e8f0; padding-top: 15px; margin-bottom: 30px; }
+  .routing-title { font-size: 11px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  .routing-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; font-size: 11px; color: #475569; }
+  .routing-item strong { color: #0f172a; display: block; margin-bottom: 2px; }
+  .executive-footer { 
+    border-top: 2px solid #0f172a; 
+    padding-top: 15px; 
+    padding-bottom: 10px;
+    text-align: center; 
+    font-size: 10px; 
+    color: #64748b; 
+    line-height: 1.6;
+    margin-top: 20px;
+    page-break-inside: avoid;
+    page-break-before: avoid;
+    page-break-after: avoid;
+  }
+  .executive-footer .footer-company-name { font-weight: 700; color: #0f172a; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .bank-info { margin-top: 12px; font-size: 11px; color: #475569; border-top: 1px dashed #e2e8f0; padding-top: 10px; }
+  .bank-info strong { color: #0f172a; }
+  .signature-section { margin-top: 40px; margin-bottom: 30px; display: flex; justify-content: flex-end; padding-right: 20px; }
+  .signature-box { text-align: center; width: 200px; }
+  .signature-label { font-size: 11px; font-weight: bold; margin-bottom: 10px; text-decoration: underline; color: #1f2937; }
+  .signature-image { margin-top: 10px; display: flex; justify-content: center; }
+  .signature-img { max-width: 150px; max-height: 80px; object-fit: contain; }
+  
+  @media print {
+    body { padding: 0 0 40px 0; }
+    .executive-footer { 
+      position: fixed; 
+      bottom: 0; 
+      left: 0; 
+      right: 0;
+      background: white;
+    }
+  }
+</style>
       </head>
       <body>
         <div class="invoice-container">
@@ -2970,6 +3080,7 @@ const Sales = () => {
               <div class="routing-item"><strong>RC</strong> ${companyInfo.rc || '-'}</div>
               <div class="routing-item"><strong>Patente</strong> ${companyInfo.patente || '-'}</div>
               <div class="routing-item"><strong>IF</strong> ${companyInfo.tax_number || '-'}</div>
+              <div class="routing-item"><strong>CNSS</strong> ${companyInfo.cnss || '-'}</div>
             </div>
           </div>
           
@@ -3048,6 +3159,21 @@ const Sales = () => {
     };
     const s = statusMap[status] || { label: status, variant: 'secondary' };
     return <Badge variant={s.variant}>{s.label}</Badge>;
+  };
+
+  // Function to get cheque status badge for sales table
+  const getChequeStatusBadge = (chequeStatus) => {
+    const config = {
+      pending: { label: 'Chèque en attente', variant: 'pending', icon: '⏳' },
+      remis: { label: 'Remis en banque', variant: 'info', icon: '📝' },
+      encaisse: { label: 'Encaissé', variant: 'success', icon: '✅' }
+    };
+    const c = config[chequeStatus] || { label: chequeStatus || 'N/A', variant: 'secondary', icon: '❓' };
+    return (
+      <Badge variant={c.variant}>
+        <span style={{ marginRight: '4px' }}>{c.icon}</span> {c.label}
+      </Badge>
+    );
   };
 
   const formatDate = (dateString) => {
@@ -3284,6 +3410,7 @@ const Sales = () => {
                     <th className="text-right">Reste</th>
                     <th>Statut</th>
                     <th>Paiement</th>
+                    <th>Chèque</th>
                     <th className="text-right">Actions</th>
                   </tr>
                 </thead>
@@ -3304,6 +3431,7 @@ const Sales = () => {
                         <td className="text-right text-orange-500">{safeToFixed(remainingAmount)} MAD</td>
                         <td>{statusBadge(sale.status)}</td>
                         <td>{getPaymentStatusBadge(sale.payment_status)}</td>
+                        <td>{getChequeStatusBadge(sale.cheque_status)}</td>
                         <td>
                           <div className="sales-actions-cell">
                             <button onClick={() => setView(sale)} className="sales-btn-icon" title="Voir détails">
@@ -3343,13 +3471,13 @@ const Sales = () => {
                               </>
                             )}
                           </div>
-                          </td>
-                        </tr>
+                         </td>
+                      </tr>
                     );
                   })}
                   {filteredSales.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="sales-empty">
+                      <td colSpan={10} className="sales-empty">
                         <FileText size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
                         Aucune vente trouvée
                       </td>
@@ -3448,6 +3576,10 @@ const Sales = () => {
               <div>
                 <span className="sales-form-label-sm">Statut Paiement:</span>
                 <div>{getPaymentStatusBadge(view.payment_status)}</div>
+              </div>
+              <div>
+                <span className="sales-form-label-sm">Statut Chèque:</span>
+                <div>{getChequeStatusBadge(view.cheque_status)}</div>
               </div>
             </div>
 
@@ -3680,7 +3812,7 @@ const Sales = () => {
                               <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
                                 Catégorie: {item.categorie}
                               </div>
-                            </td>
+                             </td>
                             <td>
                               <input 
                                 type="number" 
@@ -3689,7 +3821,7 @@ const Sales = () => {
                                 onChange={(e) => updateQuantity(item.productId, e.target.value)} 
                                 className="modern-item-input" 
                               />
-                            </td>
+                             </td>
                             <td>
                               <input 
                                 type="number" 
@@ -3698,7 +3830,7 @@ const Sales = () => {
                                 step="0.01" 
                                 className="modern-item-input" 
                               />
-                            </td>
+                             </td>
                             <td className="text-right font-semibold">
                               {safeToFixed(item.unitPrice * item.quantity)} MAD
                             </td>

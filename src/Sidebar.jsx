@@ -1,4 +1,5 @@
-// Sidebar.jsx - Fully Responsive with Bright Alert Colors + Incomplete Activations Alert
+// Sidebar.jsx - Fully Responsive with Bright Alert Colors + Incomplete Activations Alert + Dépenses
+// UPDATED: Excludes checks with status "encaisse" from notifications
 import React, { useState, useEffect } from 'react';
 import { NavLink as RouterNavLink } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -18,9 +19,11 @@ import {
   AlertCircle,
   Bell,
   User,
-  Smartphone
+  Smartphone,
+  Wallet,  // Added for Dépenses
+  TrendingDown  // Added for Dépenses
 } from 'lucide-react';
-import { logout as logoutAction, fetchChecks, fetchActivations } from './Store/store';
+import { logout as logoutAction, fetchChecks, fetchActivations, fetchDepenses } from './Store/store';
 
 // =============================================================================
 // HELPER FUNCTIONS FOR DATE CHECKING
@@ -69,6 +72,12 @@ const isActivationIncomplete = (activation) => {
   return criticalFieldsMissing || (recommendedFieldsMissing && (!hasMatricule && !hasPrice));
 };
 
+// Helper to check if expense amount is high (for alert on high expenses)
+const isExpenseHigh = (amount) => {
+  const numAmount = Number(amount);
+  return !isNaN(numAmount) && numAmount > 10000; // Alert for expenses > 10,000 MAD
+};
+
 // =============================================================================
 // NAVLINK COMPONENT
 // =============================================================================
@@ -102,9 +111,10 @@ const Sidebar = () => {
   const { user } = useSelector((state) => state.auth);
   const { list: checks, loading } = useSelector((state) => state.checks);
   const { list: activations } = useSelector((state) => state.activations || { list: [] });
+  const { list: depenses } = useSelector((state) => state.depenses || { list: [] });
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
-  // Remises alert states
+  // Remises alert states (EXCLUDING "encaisse" status)
   const [approachingCount, setApproachingCount] = useState(0);
   const [urgentCount, setUrgentCount] = useState(0);
   const [veryUrgentCount, setVeryUrgentCount] = useState(0);
@@ -116,26 +126,39 @@ const Sidebar = () => {
   
   // Incomplete activations alert state
   const [incompleteActivationsCount, setIncompleteActivationsCount] = useState(0);
+  
+  // Dépenses alert states (high expenses this month)
+  const [highExpensesCount, setHighExpensesCount] = useState(0);
+  const [totalExpensesThisMonth, setTotalExpensesThisMonth] = useState(0);
+  const [expenseAlertColor, setExpenseAlertColor] = useState(null);
 
   // Fetch checks periodically to update the alert count
   useEffect(() => {
     // Initial fetch
     dispatch(fetchChecks({ page: 1, per_page: 100 }));
     dispatch(fetchActivations({ page: 1, per_page: 100 }));
+    dispatch(fetchDepenses({ page: 1, per_page: 100 }));
     
     // Set up interval to refresh every 5 minutes
     const interval = setInterval(() => {
       dispatch(fetchChecks({ page: 1, per_page: 100 }));
       dispatch(fetchActivations({ page: 1, per_page: 100 }));
+      dispatch(fetchDepenses({ page: 1, per_page: 100 }));
     }, 5 * 60 * 1000);
     
     return () => clearInterval(interval);
   }, [dispatch]);
 
   // Calculate approaching dates count when checks change
+  // IMPORTANT: EXCLUDES checks with status "encaisse" (cashed)
   useEffect(() => {
     if (checks && checks.length > 0) {
-      const approaching = checks.filter(check => 
+      // Filter out checks that are already encaisse (cashed) - they should NOT trigger notifications
+      const pendingOrRemisChecks = checks.filter(check => 
+        check.status !== 'encaisse'
+      );
+      
+      const approaching = pendingOrRemisChecks.filter(check => 
         isDateApproachingWithin7Days(check.date_et_heure)
       );
       setApproachingCount(approaching.length);
@@ -204,6 +227,44 @@ const Sidebar = () => {
     }
   }, [activations]);
 
+  // Calculate expense alerts (high expenses and total expenses this month)
+  useEffect(() => {
+    if (depenses && depenses.length > 0) {
+      const today = new Date();
+      const currentMonth = today.getMonth();
+      const currentYear = today.getFullYear();
+      
+      const thisMonthExpenses = depenses.filter(d => {
+        if (!d.date) return false;
+        const expenseDate = new Date(d.date);
+        return expenseDate.getMonth() === currentMonth && expenseDate.getFullYear() === currentYear;
+      });
+      
+      const total = thisMonthExpenses.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+      setTotalExpensesThisMonth(total);
+      
+      const highExpenses = thisMonthExpenses.filter(d => isExpenseHigh(d.amount));
+      setHighExpensesCount(highExpenses.length);
+      
+      // Determine alert color based on total expenses
+      if (total > 50000) {
+        setExpenseAlertColor('critical');
+      } else if (total > 25000) {
+        setExpenseAlertColor('danger');
+      } else if (total > 10000) {
+        setExpenseAlertColor('warning');
+      } else if (highExpensesCount > 0) {
+        setExpenseAlertColor('warning');
+      } else {
+        setExpenseAlertColor(null);
+      }
+    } else {
+      setHighExpensesCount(0);
+      setTotalExpensesThisMonth(0);
+      setExpenseAlertColor(null);
+    }
+  }, [depenses]);
+
   // Close mobile menu when route changes
   useEffect(() => {
     setIsMobileMenuOpen(false);
@@ -237,6 +298,7 @@ const Sidebar = () => {
     { to: '/clients', label: 'Clients', icon: UsersIcon },
     { to: '/ventes', label: 'Ventes', icon: ShoppingCart },
     { to: '/remises', label: 'Remises', icon: Receipt, alert: approachingCount > 0 },
+    { to: '/depenses', label: 'Dépenses', icon: Wallet, alert: expenseAlertColor !== null },
     { to: '/activation', label: 'Activation GPS', icon: Satellite, alert: expiringActivationsCount > 0 || incompleteActivationsCount > 0 },
     { to: '/utilisateurs', label: 'Utilisateurs', icon: UserCog, adminOnly: true },
     { to: '/parametres', label: 'Paramètres', icon: Settings, adminOnly: true },
@@ -246,6 +308,7 @@ const Sidebar = () => {
   const visible = items.filter(i => !i.adminOnly || user?.role === 'admin' || user?.role === 'superadmin');
 
   // Get alert severity and appropriate color for Remises
+  // Only triggered if there are approaching checks that are NOT encaisse
   const getAlertColor = () => {
     if (veryUrgentCount > 0) return 'critical';
     if (urgentCount > 0) return 'danger';
@@ -269,7 +332,12 @@ const Sidebar = () => {
     return null;
   };
 
-  // Get badge text for Remises
+  // Get alert severity for Dépenses
+  const getExpenseAlertColor = () => {
+    return expenseAlertColor;
+  };
+
+  // Get badge text for Remises (only counts non-encaisse checks)
   const getBadgeText = () => {
     if (veryUrgentCount > 0) return veryUrgentCount;
     if (urgentCount > 0) return urgentCount;
@@ -283,6 +351,13 @@ const Sidebar = () => {
     return expiringActivationsCount;
   };
 
+  // Get badge text for Dépenses
+  const getExpenseBadgeText = () => {
+    if (totalExpensesThisMonth > 50000) return '!';
+    if (totalExpensesThisMonth > 25000) return Math.round(totalExpensesThisMonth / 1000) + 'k';
+    return highExpensesCount;
+  };
+
   // Get combined badge for Activation menu (shows highest priority)
   const getCombinedActivationBadge = () => {
     if (incompleteActivationsCount > 0) {
@@ -294,6 +369,7 @@ const Sidebar = () => {
   const alertColor = getAlertColor();
   const activationAlertColor = getActivationAlertColor();
   const incompleteAlertColor = getIncompleteAlertColor();
+  const expenseAlert = getExpenseAlertColor();
   const totalExpiring = expiringActivationsCount;
   const combinedActivationBadge = getCombinedActivationBadge();
 
@@ -319,6 +395,23 @@ const Sidebar = () => {
     return '';
   };
 
+  // Get expense alert banner text
+  const getExpenseAlertText = () => {
+    if (totalExpensesThisMonth > 50000) {
+      return `🔴 Dépenses mensuelles: ${Math.round(totalExpensesThisMonth).toLocaleString()} MAD (TRÈS ÉLEVÉ!)`;
+    }
+    if (totalExpensesThisMonth > 25000) {
+      return `⚠️ Dépenses mensuelles: ${Math.round(totalExpensesThisMonth).toLocaleString()} MAD (Élevé)`;
+    }
+    if (totalExpensesThisMonth > 10000) {
+      return `📊 Dépenses mensuelles: ${Math.round(totalExpensesThisMonth).toLocaleString()} MAD`;
+    }
+    if (highExpensesCount > 0) {
+      return `⚠️ ${highExpensesCount} dépense${highExpensesCount > 1 ? 's' : ''} élevée${highExpensesCount > 1 ? 's' : ''} (>10k MAD) ce mois-ci`;
+    }
+    return '';
+  };
+
   // Sidebar content component (reused for both desktop and mobile)
   const SidebarContent = ({ onItemClick }) => (
     <>
@@ -336,6 +429,7 @@ const Sidebar = () => {
         {visible.map((item) => {
           const isActive = location.pathname === item.to;
           const showRemiseAlert = item.to === '/remises' && approachingCount > 0;
+          const showExpenseAlert = item.to === '/depenses' && expenseAlert !== null;
           const showActivationAlert = item.to === '/activation' && (expiringActivationsCount > 0 || incompleteActivationsCount > 0);
           
           let badgeInfo = null;
@@ -344,6 +438,9 @@ const Sidebar = () => {
           if (showRemiseAlert) {
             alertColorForItem = getAlertColor();
             badgeInfo = { text: getBadgeText(), color: alertColorForItem };
+          } else if (showExpenseAlert) {
+            alertColorForItem = getExpenseAlertColor();
+            badgeInfo = { text: getExpenseBadgeText(), color: alertColorForItem };
           } else if (showActivationAlert) {
             // For activation, prioritize incomplete alert over expiring
             if (incompleteActivationsCount > 0) {
@@ -375,7 +472,7 @@ const Sidebar = () => {
         })}
       </nav>
 
-      {/* Alert Banner for Remises Approaching Dates */}
+      {/* Alert Banner for Remises Approaching Dates (EXCLUDING encaisse status) */}
       {approachingCount > 0 && (
         <div className={`sidebar-alert-banner banner-${alertColor}`}>
           <AlertCircle size={18} />
@@ -395,6 +492,18 @@ const Sidebar = () => {
                 📅 {approachingCount} remise{approachingCount > 1 ? 's' : ''} dans les 7 jours
               </span>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Alert Banner for Dépenses (High Expenses) */}
+      {expenseAlert !== null && (
+        <div className={`sidebar-alert-banner banner-${expenseAlert}`}>
+          <TrendingDown size={18} />
+          <div className="sidebar-alert-text">
+            <span className={expenseAlert === 'critical' ? 'very-urgent-text' : expenseAlert === 'danger' ? 'urgent-text' : 'warning-text'}>
+              {getExpenseAlertText()}
+            </span>
           </div>
         </div>
       )}
@@ -457,9 +566,13 @@ const Sidebar = () => {
     const hasIncomplete = incompleteActivationsCount > 0;
     const hasExpiring = expiringActivationsCount > 0;
     const hasRemise = approachingCount > 0;
+    const hasExpense = expenseAlert !== null;
     
     if (hasIncomplete) {
       return { count: incompleteActivationsCount, color: getIncompleteAlertColor() };
+    }
+    if (hasExpense) {
+      return { count: getExpenseBadgeText(), color: getExpenseAlertColor() };
     }
     if (hasExpiring) {
       return { count: getActivationBadgeText(), color: getActivationAlertColor() };
@@ -1155,6 +1268,7 @@ const Sidebar = () => {
           {visible.map((item) => {
             const isActive = location.pathname === item.to;
             const showRemiseAlert = item.to === '/remises' && approachingCount > 0;
+            const showExpenseAlert = item.to === '/depenses' && expenseAlert !== null;
             const showActivationAlert = item.to === '/activation' && (expiringActivationsCount > 0 || incompleteActivationsCount > 0);
             
             let badgeInfo = null;
@@ -1163,6 +1277,9 @@ const Sidebar = () => {
             if (showRemiseAlert) {
               alertColorForItem = getAlertColor();
               badgeInfo = { text: getBadgeText(), color: alertColorForItem };
+            } else if (showExpenseAlert) {
+              alertColorForItem = getExpenseAlertColor();
+              badgeInfo = { text: getExpenseBadgeText(), color: alertColorForItem };
             } else if (showActivationAlert) {
               if (incompleteActivationsCount > 0) {
                 alertColorForItem = getIncompleteAlertColor();
@@ -1193,7 +1310,7 @@ const Sidebar = () => {
           })}
         </nav>
         
-        {/* Mobile Alert Banner for Remises */}
+        {/* Mobile Alert Banner for Remises (EXCLUDING encaisse status) */}
         {approachingCount > 0 && (
           <div className={`sidebar-alert-banner banner-${alertColor}`}>
             <AlertCircle size={18} />
@@ -1213,6 +1330,18 @@ const Sidebar = () => {
                   📅 {approachingCount} remise{approachingCount > 1 ? 's' : ''} dans les 7 jours
                 </span>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Mobile Alert Banner for Dépenses */}
+        {expenseAlert !== null && (
+          <div className={`sidebar-alert-banner banner-${expenseAlert}`}>
+            <TrendingDown size={18} />
+            <div className="sidebar-alert-text">
+              <span className={expenseAlert === 'critical' ? 'very-urgent-text' : expenseAlert === 'danger' ? 'urgent-text' : 'warning-text'}>
+                {getExpenseAlertText()}
+              </span>
             </div>
           </div>
         )}
