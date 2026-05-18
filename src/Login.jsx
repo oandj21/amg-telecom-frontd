@@ -1,4 +1,4 @@
-// Login.jsx
+// Login.jsx (updated with technician redirect)
 import { useState, useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, ArrowRight } from 'lucide-react';
@@ -18,7 +18,13 @@ const Login = () => {
     dispatch(clearAuthError());
   }, [email, password, dispatch]);
 
+  // Redirect based on user role
   if (isAuthenticated && user) {
+    // If user is technician, redirect to /techniciens page
+    if (user.role === 'technician') {
+      return <Navigate to="/techniciens" replace />;
+    }
+    // Otherwise redirect to dashboard
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -27,8 +33,15 @@ const Login = () => {
     const result = await dispatch(login({ email, password }));
     
     if (login.fulfilled.match(result)) {
+      const userRole = result.payload?.user?.role;
       window.toast?.('Connexion réussie', 'success');
-      navigate('/dashboard');
+      
+      // Redirect based on role after successful login
+      if (userRole === 'technician') {
+        navigate('/techniciens');
+      } else {
+        navigate('/dashboard');
+      }
     } else {
       window.toast?.(result.payload || 'Identifiants incorrects', 'error');
     }
@@ -104,7 +117,7 @@ const Login = () => {
           width: 160px;
           height: 160px;
           object-fit: cover;
-          border-radius: 2rem; /* Border radius ajouté au logo */
+          border-radius: 2rem;
           margin-bottom: 2rem;
           box-shadow: 0 20px 40px rgba(0,0,0,0.3);
           border: 4px solid rgba(255, 255, 255, 0.1);
