@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo,useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
   Plus, Search, Filter, Download, Edit, Trash2, X, 
@@ -7,7 +7,8 @@ import {
   RefreshCw, Eye, Printer, AlertTriangle, CheckCircle, Info,
   Calendar, Building2, User, CreditCard, Banknote, ChevronDown,
   TrendingUp, Shield, Clock, Wallet, Landmark, Users,
-  AlertCircle, Bell, FileCheck, DollarSign, CalendarDays
+  AlertCircle, Bell, FileCheck, DollarSign, CalendarDays,
+  Check as CheckIcon
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -30,16 +31,13 @@ import {
 } from './Store/store';
 
 // ==================== IMAGE COMPRESSION UTILITY ====================
-// ==================== IMAGE COMPRESSION UTILITY ====================
 const compressImage = async (file, maxWidth = 1200, quality = 0.8) => {
   return new Promise((resolve, reject) => {
-    // If file is not an image, return as is
     if (!file.type.startsWith('image/')) {
       resolve(file);
       return;
     }
     
-    // If it's a PDF, don't compress
     if (file.type === 'application/pdf') {
       resolve(file);
       return;
@@ -57,7 +55,6 @@ const compressImage = async (file, maxWidth = 1200, quality = 0.8) => {
         let width = img.width;
         let height = img.height;
         
-        // Calculate new dimensions
         if (width > maxWidth) {
           height = Math.round((height * maxWidth) / width);
           width = maxWidth;
@@ -67,22 +64,16 @@ const compressImage = async (file, maxWidth = 1200, quality = 0.8) => {
         canvas.height = height;
         
         const ctx = canvas.getContext('2d');
-        
-        // Set white background for transparent PNGs
         ctx.fillStyle = 'white';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // Draw image
         ctx.drawImage(img, 0, 0, width, height);
         
-        // Determine output format and quality
         let outputFormat = 'image/jpeg';
         let outputQuality = quality;
         
-        // Keep PNG for images that need transparency (but compress)
         if (file.type === 'image/png') {
           outputFormat = 'image/png';
-          outputQuality = 0.9; // PNG compression is lossless, quality parameter affects compression level
+          outputQuality = 0.9;
         } else if (file.type === 'image/webp') {
           outputFormat = 'image/webp';
         }
@@ -94,7 +85,6 @@ const compressImage = async (file, maxWidth = 1200, quality = 0.8) => {
               return;
             }
             
-            // Preserve original extension for PDF files, use webp for images
             let newFileName = file.name;
             if (file.type.startsWith('image/')) {
               const extension = outputFormat === 'image/jpeg' ? '.jpg' : 
@@ -102,7 +92,6 @@ const compressImage = async (file, maxWidth = 1200, quality = 0.8) => {
               newFileName = file.name.replace(/\.[^/.]+$/, '') + extension;
             }
             
-            // Create new file from blob - use window.File to avoid naming conflict
             const compressedFile = new window.File([blob], newFileName, {
               type: outputFormat,
               lastModified: Date.now()
@@ -131,7 +120,6 @@ const compressImage = async (file, maxWidth = 1200, quality = 0.8) => {
   });
 };
 
-// Add this near the top of your file, before the SearchableSelect component
 const formatCurrencyHelper = (amount) => {
   if (amount === undefined || amount === null) return '0 MAD';
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -140,14 +128,14 @@ const formatCurrencyHelper = (amount) => {
 };
 
 // ==================== SEARCHABLE SELECT COMPONENT ====================
+// ==================== SEARCHABLE SELECT COMPONENT ====================
 const SearchableSelect = ({ 
   options, 
   value, 
   onChange, 
   placeholder = "Sélectionner...",
   disabled = false,
-  renderOption = null,
-  formatCurrency = null
+  renderOption = null
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -159,12 +147,14 @@ const SearchableSelect = ({
     (opt.id && opt.id === value) || (opt.nom && opt.nom === value) || opt === value
   );
   
-  const filteredOptions = options.filter(opt => {
-    if (!searchTerm) return true;
+  const filteredOptions = useMemo(() => {
+    if (!searchTerm) return options;
     const searchLower = searchTerm.toLowerCase();
-    const optionValue = typeof opt === 'object' ? (opt.nom || opt.name || '') : opt;
-    return optionValue.toLowerCase().includes(searchLower);
-  });
+    return options.filter(opt => {
+      const optionValue = typeof opt === 'object' ? (opt.nom || opt.name || '') : opt;
+      return optionValue.toLowerCase().includes(searchLower);
+    });
+  }, [options, searchTerm]);
   
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -226,84 +216,21 @@ const SearchableSelect = ({
     }
   };
   
-  const defaultRenderOption = (option) => {
-    const optionName = typeof option === 'object' ? (option.nom || option.name) : option;
-    const hasVenteInfo = typeof option === 'object' && (option.vente_id || option.vente_reference);
-    const paymentStatus = option.payment_status;
-    const saleStatus = option.vente_status;
-    
-    // Determine status badge color
-    const getStatusBadge = () => {
-        if (saleStatus !== 'confirmed') {
-            return { bg: '#fef3c7', color: '#92400e', text: 'Vente en attente' };
-        }
-        if (paymentStatus === 'unpaid') {
-            return { bg: '#fee2e2', color: '#dc2626', text: 'Impayé' };
-        }
-        if (paymentStatus === 'partial') {
-            return { bg: '#fef3c7', color: '#d97706', text: 'Partiel' };
-        }
-        return null;
-    };
-    
-    const statusBadge = getStatusBadge();
-    
-    return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', width: '100%' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between' }}>
-                <span style={{ fontWeight: 500 }}>{optionName}</span>
-                {statusBadge && (
-                    <span style={{ 
-                        fontSize: '0.65rem', 
-                        background: statusBadge.bg, 
-                        padding: '2px 8px', 
-                        borderRadius: '12px', 
-                        color: statusBadge.color,
-                        fontWeight: 'bold'
-                    }}>
-                        {statusBadge.text}
-                    </span>
-                )}
-                {hasVenteInfo && (
-                    <span style={{ fontSize: '0.65rem', background: '#e2e8f0', padding: '2px 6px', borderRadius: '12px', color: '#475569' }}>
-                        Vente #{option.vente_reference}
-                    </span>
-                )}
-            </div>
-            {typeof option === 'object' && option.ice_client && (
-                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>ICE: {option.ice_client}</span>
-            )}
-            {typeof option === 'object' && option.telephone && (
-                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>{option.telephone}</span>
-            )}
-            {hasVenteInfo && (
-                <div style={{ display: 'flex', gap: '12px', marginTop: '2px' }}>
-                    <span style={{ fontSize: '0.65rem', color: '#3b82f6' }}>
-                        📅 {option.vente_date}
-                    </span>
-                    <span style={{ fontSize: '0.65rem', color: '#10b981' }}>
-                        💰 {formatCurrencyHelper(option.vente_total)}
-                    </span>
-                    {option.cheque_amount && (
-                        <span style={{ fontSize: '0.65rem', color: '#8b5cf6' }}>
-                            Chèque: {formatCurrencyHelper(option.cheque_amount)}
-                        </span>
-                    )}
-                </div>
-            )}
-            {paymentStatus === 'unpaid' && (
-                <div style={{ fontSize: '0.65rem', color: '#dc2626', marginTop: '2px' }}>
-                    ⚠️ Aucun paiement effectué
-                </div>
-            )}
-            {paymentStatus === 'partial' && option.cheque_amount && (
-                <div style={{ fontSize: '0.65rem', color: '#d97706', marginTop: '2px' }}>
-                   💰 Chèque reçu: {formatCurrencyHelper(option.cheque_amount)} / {formatCurrencyHelper(option.vente_total)}
-                </div>
-            )}
-        </div>
-    );
-};
+  // Helper to get a unique key for an option
+  const getOptionKey = (option, index) => {
+    if (typeof option === 'object') {
+      // Use a combination of properties to create a unique key
+      if (option.id !== undefined && option.id !== null) {
+        return `${option.id}_${option.source_type || ''}_${option.source_reference || ''}`;
+      }
+      if (option.nom) {
+        // For client objects, use nom + source_reference for uniqueness
+        return `${option.nom}_${option.source_reference || index}_${option.source_type || ''}`;
+      }
+    }
+    // Fallback to index with prefix to ensure uniqueness
+    return `option_${index}_${Date.now()}`;
+  };
   
   return (
     <div className="searchable-select" ref={containerRef} onKeyDown={handleKeyDown}>
@@ -344,14 +271,14 @@ const SearchableSelect = ({
                 );
                 return (
                   <div
-                    key={typeof option === 'object' ? (option.id || index) : index}
+                    key={getOptionKey(option, index)}
                     className={`searchable-select-option ${isSelected ? 'selected' : ''} ${highlightedIndex === index ? 'highlighted' : ''}`}
                     onClick={() => handleSelect(option)}
                     onMouseEnter={() => setHighlightedIndex(index)}
                   >
-                    {renderOption ? renderOption(option) : defaultRenderOption(option)}
+                    {renderOption ? renderOption(option) : <span>{optionName}</span>}
                     {isSelected && (
-                      <Check size={16} className="searchable-select-option-check" />
+                      <CheckIcon size={16} className="searchable-select-option-check" />
                     )}
                   </div>
                 );
@@ -545,14 +472,6 @@ const styles = `
     font-weight: 800;
     color: #0f172a;
     line-height: 1;
-  }
-  
-  .check-summary-trend {
-    font-size: 0.75rem;
-    color: #10b981;
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
   }
   
   /* Filter Bar */
@@ -784,6 +703,7 @@ const styles = `
     cursor: pointer;
     border: none;
     font-family: inherit;
+    padding: 11px;
   }
   
   .check-btn:focus-visible {
@@ -920,6 +840,24 @@ const styles = `
     background-color: #f0fdf4;
     color: #10b981;
     border: 1px solid #86efac;
+  }
+  
+  .check-status-pending {
+    background-color: #fef3c7;
+    color: #d97706;
+    border: 1px solid #fde68a;
+  }
+  
+  .check-status-remis {
+    background-color: #dbeafe;
+    color: #2563eb;
+    border: 1px solid #bfdbfe;
+  }
+  
+  .check-status-encaisse {
+    background-color: #d1fae5;
+    color: #059669;
+    border: 1px solid #a7f3d0;
   }
   
   @keyframes pulse {
@@ -1157,6 +1095,7 @@ const styles = `
     transition: all 0.2s ease;
     cursor: pointer;
     background: #f8fafc;
+    margin: 1rem;
   }
   
   .check-upload-area:hover {
@@ -1356,6 +1295,18 @@ const styles = `
     border-radius: 0.75rem;
     padding: 0.75rem 1rem;
     color: #dc2626;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .check-warning-message {
+    background: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+    border: 1px solid #fde68a;
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    color: #d97706;
     font-size: 0.875rem;
     display: flex;
     align-items: center;
@@ -1574,6 +1525,101 @@ const styles = `
     border-radius: 50%;
     animation: spin 0.6s linear infinite;
   }
+  
+  /* Auto-link success message */
+  .auto-link-success {
+    background: #d1fae5;
+    border: 1px solid #86efac;
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #065f46;
+    font-size: 0.875rem;
+  }
+  
+  /* Encaisse Dialog specific styles */
+  .encaisse-dialog {
+    max-width: 32rem;
+  }
+  
+  .encaisse-warning {
+    background: #fef3c7;
+    border-left: 4px solid #f59e0b;
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    margin: 1rem 0;
+  }
+  
+  .reference-update-info {
+    background: #eff6ff;
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    color: #1e40af;
+    margin-top: 0.25rem;
+  }
+  
+  /* Enhanced Delete Button */
+  .check-btn-danger-enhanced {
+    background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+    color: white;
+    border: none;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border-radius: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .check-btn-danger-enhanced:hover:not(:disabled) {
+    background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(239, 68, 68, 0.3);
+  }
+  
+  .check-btn-danger-enhanced:active:not(:disabled) {
+    transform: translateY(0);
+  }
+  
+  /* Delete button in table actions */
+  .check-icon-btn.delete-action {
+    color: #ef4444;
+  }
+  
+  .check-icon-btn.delete-action:hover {
+    background: #fef2f2;
+    color: #dc2626;
+  }
+    /* Fix modal stacking order - ensure payment selection modal appears on top */
+.check-dialog {
+  z-index: 51;
+}
+
+.check-overlay {
+  z-index: 50;
+}
+
+/* When a check dialog contains the payment selection title, give it higher z-index */
+.check-dialog:has(.check-dialog-title .lucide-credit-card) {
+  z-index: 201 !important;
+}
+
+.check-overlay:has(+ .check-dialog .lucide-credit-card) {
+  z-index: 200 !important;
+}
+
+/* Also ensure the main modal doesn't block clicks */
+.check-dialog:has(form) {
+  z-index: 51;
+}
 `;
 
 // Bank list with logo file names
@@ -1648,14 +1694,6 @@ const getStatusBadge = (dateString) => {
   if (daysUntil <= 3 && daysUntil > 0) return 'urgent';
   if (daysUntil <= 7 && daysUntil > 3) return 'approaching';
   return 'normal';
-};
-
-const formatDaysUntilText = (dateString) => {
-  const daysUntil = getDaysUntilDate(dateString);
-  if (daysUntil === 0) return "Aujourd'hui!";
-  if (daysUntil === 1) return "Demain!";
-  if (daysUntil > 1 && daysUntil <= 7) return `Dans ${daysUntil} jours`;
-  return null;
 };
 
 // ==================== TOAST COMPONENT ====================
@@ -1760,6 +1798,92 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
   );
 };
 
+const renderClientOption = (option) => {
+  const isActivation = option.source_type === 'activation';
+  // Check both payment_type and also derive from source if needed
+  let isRenewal = option.payment_type === 'renewal';
+  
+  // If payment_type is not set but this is an activation with source_reference, 
+  // we need another way to determine if it's a renewal
+  // For now, we'll rely on payment_type from backend
+  
+  const sourceLabel = isActivation ? 'Activation GPS' : 'Vente';
+  const typeLabel = isRenewal ? '🔄 Renouvellement' : '✅ Activation';
+  const typeColor = isRenewal ? '#3b82f6' : '#10b981';
+  
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>
+            {option.nom}
+          </span>
+          <span style={{ 
+            fontSize: '0.65rem', 
+            background: typeColor, 
+            color: 'white', 
+            padding: '2px 8px', 
+            borderRadius: '12px',
+            fontWeight: 'bold'
+          }}>
+            {typeLabel}
+          </span>
+        </div>
+        <span style={{ 
+          fontSize: '0.7rem', 
+          background: '#e2e8f0', 
+          padding: '2px 8px', 
+          borderRadius: '12px', 
+          color: '#475569',
+          fontWeight: 'bold'
+        }}>
+          {sourceLabel} #{option.source_reference}
+        </span>
+      </div>
+      
+      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '0.7rem', color: '#059669', fontWeight: 'bold' }}>
+          💰 {formatCurrencyHelper(option.cheque_amount)}
+        </span>
+        {option.cheque_reference && (
+          <span style={{ fontSize: '0.7rem', color: '#64748b' }}>
+            📝 Chèque: {option.cheque_reference}
+          </span>
+        )}
+        {option.bank_name && (
+          <span style={{ fontSize: '0.7rem', color: '#6b7280' }}>
+            🏦 {option.bank_name}
+          </span>
+        )}
+        <span style={{ fontSize: '0.7rem', color: '#3b82f6' }}>
+          📅 {option.source_date}
+        </span>
+        <span style={{ fontSize: '0.7rem', color: '#8b5cf6' }}>
+          💰 Total: {formatCurrencyHelper(option.source_total)}
+        </span>
+      </div>
+      
+      {option.activation_imei && (
+        <div style={{ fontSize: '0.65rem', color: '#6b7280', fontFamily: 'monospace' }}>
+          📱 IMEI: {option.activation_imei}
+        </div>
+      )}
+      
+      {option.payment_status === 'unpaid' && (
+        <div style={{ fontSize: '0.65rem', color: '#dc2626' }}>
+          ⚠️ Aucun paiement effectué
+        </div>
+      )}
+      
+      {option.cheque_status === 'remis' && (
+        <div style={{ fontSize: '0.65rem', color: '#d97706' }}>
+          📝 Déjà remis en banque
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ==================== MAIN COMPONENT ====================
 const Check = () => {
   const dispatch = useDispatch();
@@ -1797,8 +1921,24 @@ const Check = () => {
   const [printCheck, setPrintCheck] = useState(null);
   const [printing, setPrinting] = useState(false);
   const [toasts, setToasts] = useState([]);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   
-  // Clients who paid with cheque
+  // State for pending cheque payments (both sales and activations)
+  const [pendingPayments, setPendingPayments] = useState([]);
+  const [selectedPendingPayment, setSelectedPendingPayment] = useState(null);
+  const [showPendingPaymentsModal, setShowPendingPaymentsModal] = useState(false);
+  const [autoLinkedPayment, setAutoLinkedPayment] = useState(null);
+  const [showAutoLinkSuccess, setShowAutoLinkSuccess] = useState(false);
+  
+  // 🔧 NEW: Ref to track if modal was opened manually
+  const modalOpenedManually = useRef(false);
+  
+  // ==================== ENCAISSE CONFIRMATION STATE ====================
+  const [showEncaisseConfirm, setShowEncaisseConfirm] = useState(null);
+  const [newReferenceInput, setNewReferenceInput] = useState('');
+  const [encaisseProcessing, setEncaisseProcessing] = useState(false);
+  
+  // Clients with cheque payments (combined sales and activations)
   const [clientsWithChequePayments, setClientsWithChequePayments] = useState([]);
   const [loadingClients, setLoadingClients] = useState(false);
   
@@ -1822,9 +1962,7 @@ const Check = () => {
     montant_max: ''
   });
   
-  // Replace the initial formData useState with this:
   const [formData, setFormData] = useState(() => {
-    // Try to get company info from localStorage synchronously
     let ribValue = '';
     try {
       const saved = localStorage.getItem('company_info');
@@ -1850,7 +1988,11 @@ const Check = () => {
       montant_total_dh: '',
       type_remise: '',
       taux_escompte: 0,
-      utilisateur: user?.name || ''
+      utilisateur: user?.name || '',
+      status: 'pending',
+      source_type: 'sale',
+      sale_id: null,
+      payment_id: null
     };
   });
   const [existingFiles, setExistingFiles] = useState([]);
@@ -1861,7 +2003,7 @@ const Check = () => {
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(toast => toast.id !== id));
-    }, 3000);
+    }, 5000);
   };
   
   const removeToast = (id) => {
@@ -1880,106 +2022,221 @@ const Check = () => {
       dispatch(clearCheckError());
     };
   }, [dispatch]);
-// Add this state with your other state declarations (around line 1940)
-const [bankLogosBase64, setBankLogosBase64] = useState({});
 
-// Add this useEffect to load logos as base64 (add with your other useEffects around line 2080)
-useEffect(() => {
-  const loadBankLogos = async () => {
-    const logos = {};
-    for (const bank of bankOptions) {
-      try {
-        // Try to fetch the logo from the root
-        const response = await fetch(`/${bank.logo}`);
-        if (response.ok) {
-          const blob = await response.blob();
-          const base64 = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.readAsDataURL(blob);
-          });
-          logos[bank.name] = base64;
-          console.log(`✅ Loaded logo for ${bank.name}`);
-        } else {
-          console.warn(`❌ Could not load logo for ${bank.name}`);
+  const [bankLogosBase64, setBankLogosBase64] = useState({});
+
+  useEffect(() => {
+    const loadBankLogos = async () => {
+      const logos = {};
+      for (const bank of bankOptions) {
+        try {
+          const response = await fetch(`/${bank.logo}`);
+          if (response.ok) {
+            const blob = await response.blob();
+            const base64 = await new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result);
+              reader.readAsDataURL(blob);
+            });
+            logos[bank.name] = base64;
+          } else {
+            console.warn(`Could not load logo for ${bank.name}`);
+          }
+        } catch (error) {
+          console.error(`Error loading logo for ${bank.name}:`, error);
         }
-      } catch (error) {
-        console.error(`Error loading logo for ${bank.name}:`, error);
       }
-    }
-    setBankLogosBase64(logos);
-  };
-  
-  loadBankLogos();
-}, []);
+      setBankLogosBase64(logos);
+    };
+    
+    loadBankLogos();
+  }, []);
+
   const fetchClientsWithChequePayments = async () => {
-    setLoadingClients(true);
+  setLoadingClients(true);
+  try {
+    const token = localStorage.getItem('token');
+    const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
+    
+    const response = await fetch(`${API_URL}/payments/cheque-clients-all`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      
+      const formattedClients = (data.clients || []).map(client => ({
+        id: client.id,
+        nom: client.nom,
+        email: client.email,
+        telephone: client.telephone,
+        ice_client: client.ice_client || '',
+        adresse: client.adresse || '',
+        source_type: client.source_type,
+        source_reference: client.source_reference,
+        source_date: client.source_date,
+        source_total: client.source_total,
+        source_status: client.source_status,
+        payment_status: client.payment_status,
+        cheque_amount: client.cheque_amount,
+        cheque_reference: client.cheque_reference,
+        cheque_status: client.cheque_status,
+        payment_id: client.payment_id,
+        remise_reference: client.remise_reference,
+        activation_imei: client.activation_imei,
+        payment_type: client.payment_type || 'activation', // ADD THIS LINE
+        bank_name: client.bank_name, // ADD THIS LINE
+        date: client.date, // ADD THIS LINE
+        pending_payments: client.pending_payments || []
+      }));
+      
+      // Log to debug
+      console.log('Formatted clients with payment_type:', formattedClients.map(c => ({
+        nom: c.nom,
+        source_type: c.source_type,
+        source_reference: c.source_reference,
+        payment_type: c.payment_type,
+        cheque_amount: c.cheque_amount
+      })));
+      
+      setClientsWithChequePayments(formattedClients);
+    } else {
+      setClientsWithChequePayments([]);
+    }
+  } catch (error) {
+    console.error('Error fetching cheque payments:', error);
+    setClientsWithChequePayments([]);
+  } finally {
+    setLoadingClients(false);
+  }
+};
+
+  // ==================== FETCH AND AUTO-LINK PENDING PAYMENTS ====================
+  const fetchAndAutoLinkPendingPayments = async (clientName, clientData) => {
+    if (!clientName) return [];
+
     try {
+      // If we have clientData with pending_payments, use that
+      if (clientData && clientData.pending_payments && clientData.pending_payments.length > 0) {
+        const pending = clientData.pending_payments.map(payment => ({
+          id: payment.id,
+          amount: payment.amount,
+          cheque_number: payment.reference || payment.cheque_number,
+          bank_name: payment.bank_name,
+          date: payment.date,
+          source_type: clientData.source_type,
+          source_reference: clientData.source_reference,
+          source_total: clientData.source_total,
+          source_status: clientData.source_status,
+          payment_status: clientData.payment_status,
+          payment_id: payment.id,
+          client_name: clientData.nom,
+          client_id: clientData.id
+        }));
+
+        setPendingPayments(pending);
+
+        // AUTO-LINK: if exactly one payment
+        if (pending.length === 1 && !editingId) {
+          const autoPayment = pending[0];
+          setSelectedPendingPayment(autoPayment);
+          setAutoLinkedPayment(autoPayment);
+          setShowAutoLinkSuccess(true);
+          setTimeout(() => setShowAutoLinkSuccess(false), 5000);
+          const sourceLabel = autoPayment.source_type === 'activation' ? 'Activation' : 'Vente';
+          showToast(`✅ Paiement automatiquement lié - ${sourceLabel} #${autoPayment.source_reference} (${formatCurrencyHelper(autoPayment.amount)})`, 'success');
+          setFormData(prev => ({
+            ...prev,
+            source_type: autoPayment.source_type,
+            sale_id: autoPayment.source_reference,
+            payment_id: autoPayment.payment_id
+          }));
+        }
+        else if (pending.length > 1 && !editingId) {
+          // 🔁 Open the selection modal and mark as manually opened
+          modalOpenedManually.current = true;
+          setShowPendingPaymentsModal(true);
+        }
+        return pending;
+      }
+
+      // Fallback: fetch from API
       const token = localStorage.getItem('token');
       const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
-      
-      // Use the endpoint that includes sale details
-      const response = await fetch(`${API_URL}/payments/cheque-payments`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const response = await fetch(`${API_URL}/payments/cheque-clients-all`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-      
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Filter clients where sale status is CONFIRMED and payment status is UNPAID or PARTIAL
-        // Also filter out clients that already have a check remise? (optional)
-        const formattedClients = (data.cheque_payments || [])
-          .filter(payment => {
-            // CRITICAL: Only include if sale is confirmed AND payment status is unpaid or partial
-            const isValidSaleStatus = payment.vente_status === 'confirmed';
-            const isValidPaymentStatus = payment.payment_status === 'unpaid' || payment.payment_status === 'partial';
-            
-            // Also check if there's actually a cheque payment
-            const hasChequePayment = payment.payment_method === 'check' || 
-                                    payment.payment_method === 'cheque' ||
-                                    (payment.cheque_amount && payment.cheque_amount > 0);
-            
-            console.log(`Client: ${payment.client_nom}, Sale Status: ${payment.vente_status}, Payment Status: ${payment.payment_status}, Has Cheque: ${hasChequePayment}`);
-            
-            return isValidSaleStatus && isValidPaymentStatus && hasChequePayment;
-          })
-          .map(payment => ({
-            id: payment.client_id,
-            nom: payment.client_nom,
-            email: payment.client_email,
-            telephone: payment.client_telephone,
-            ice_client: payment.client_ice_client || '',
-            adresse: payment.client_adresse || '',
-            vente_id: payment.vente_id,
-            vente_reference: payment.vente_reference,
-            vente_date: payment.vente_date,
-            vente_total: payment.vente_total,
-            vente_status: payment.vente_status,
-            payment_status: payment.payment_status,
-            payment_method: payment.payment_method,
-            cheque_amount: payment.cheque_amount,
-            cheque_reference: payment.cheque_reference,
-            payment_date: payment.payment_date,
+
+      if (!response.ok) return [];
+
+      const data = await response.json();
+      const allClients = data.clients || [];
+      const matchedClient = allClients.find(client =>
+        client.nom === clientName ||
+        client.nom?.toLowerCase().includes(clientName.toLowerCase())
+      );
+
+      if (matchedClient && matchedClient.pending_payments) {
+        const pending = matchedClient.pending_payments.map(payment => ({
+          id: payment.id,
+          amount: payment.amount,
+          cheque_number: payment.reference || payment.cheque_number,
+          bank_name: payment.bank_name,
+          date: payment.date,
+          source_type: matchedClient.source_type,
+          source_reference: matchedClient.source_reference,
+          source_total: matchedClient.source_total,
+          source_status: matchedClient.source_status,
+          payment_status: matchedClient.payment_status,
+          payment_id: payment.id,
+          client_name: matchedClient.nom,
+          client_id: matchedClient.id
+        }));
+
+        setPendingPayments(pending);
+
+        if (pending.length === 1 && !editingId) {
+          const autoPayment = pending[0];
+          setSelectedPendingPayment(autoPayment);
+          setAutoLinkedPayment(autoPayment);
+          setShowAutoLinkSuccess(true);
+          setTimeout(() => setShowAutoLinkSuccess(false), 5000);
+          const sourceLabel = autoPayment.source_type === 'activation' ? 'Activation' : 'Vente';
+          showToast(`✅ Paiement automatiquement lié - ${sourceLabel} #${autoPayment.source_reference} (${formatCurrencyHelper(autoPayment.amount)})`, 'success');
+          setFormData(prev => ({
+            ...prev,
+            source_type: autoPayment.source_type,
+            sale_id: autoPayment.source_reference,
+            payment_id: autoPayment.payment_id
           }));
-        
-        console.log(`Found ${formattedClients.length} clients with cheque payments on confirmed sales with unpaid/partial status`);
-        setClientsWithChequePayments(formattedClients);
-      } else {
-        console.warn('Failed to fetch cheque payments');
-        setClientsWithChequePayments([]);
+        }
+        else if (pending.length > 1 && !editingId) {
+          modalOpenedManually.current = true;
+          setShowPendingPaymentsModal(true);
+        }
+        return pending;
       }
-    } catch (error) {
-      console.error('Error fetching cheque payments:', error);
-      setClientsWithChequePayments([]);
-    } finally {
-      setLoadingClients(false);
+
+      return [];
+    } catch (err) {
+      console.error('Error fetching pending payments:', err);
+      return [];
     }
   };
-  
-  // Fetch company info for RIB
+
+  // 🔧 Automatically open the selection modal when multiple pending payments are detected
+  // but only if it hasn't been opened manually
+  useEffect(() => {
+    if (pendingPayments.length > 1 && !editingId && !showPendingPaymentsModal && !modalOpenedManually.current) {
+      modalOpenedManually.current = true;
+      setShowPendingPaymentsModal(true);
+    }
+  }, [pendingPayments, editingId]);
+
+  // ==================== FETCH COMPANY INFO ====================
   const fetchCompanyInfo = async () => {
     setLoadingCompanyInfo(true);
     try {
@@ -1996,7 +2253,6 @@ useEffect(() => {
       if (response.ok) {
         const data = await response.json();
         setCompanyInfo(data.company_info);
-        // Update formData if RIB is empty
         setFormData(prev => ({
           ...prev,
           rib_remettant: prev.rib_remettant || data.company_info?.rib || ''
@@ -2028,20 +2284,16 @@ useEffect(() => {
     }
   };
   
-  // Add this useEffect after the fetchCompanyInfo call or near other useEffects
   useEffect(() => {
-    // Only update if not editing and RIB is empty
     if (!editingId && companyInfo?.rib && !formData.rib_remettant) {
       setFormData(prev => ({ ...prev, rib_remettant: companyInfo.rib }));
     }
   }, [companyInfo, editingId, formData.rib_remettant]);
   
-  // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [search, agencyFilter, typeFilter, statusFilter, filters]);
 
-  // Load checks when filters or pagination change
   useEffect(() => {
     const activeFilters = {};
     Object.keys(filters).forEach(key => {
@@ -2057,25 +2309,58 @@ useEffect(() => {
     dispatch(fetchCheckSummary(activeFilters));
   }, [dispatch, filters, search, agencyFilter, typeFilter, currentPage]);
 
-  // Filter checks by status and paginate
+  // Alert calculations
+  const approachingCount = checks.filter(c => 
+    c.status !== 'encaisse' && 
+    isDateApproachingWithin7Days(c.date_et_heure) && 
+    getDaysUntilDate(c.date_et_heure) > 0
+  ).length;
+  
+  const urgentCount = checks.filter(c => {
+    if (c.status === 'encaisse') return false;
+    const days = getDaysUntilDate(c.date_et_heure);
+    return days > 0 && days <= 3;
+  }).length;
+  
+  const todayCount = checks.filter(c => {
+    if (c.status === 'encaisse') return false;
+    return getDaysUntilDate(c.date_et_heure) === 0;
+  }).length;
+
   const filteredByStatus = useMemo(() => {
     if (statusFilter === 'all') return checks;
     if (statusFilter === 'approaching') {
-      return checks.filter(c => isDateApproachingWithin7Days(c.date_et_heure) && getDaysUntilDate(c.date_et_heure) > 3);
+      return checks.filter(c => 
+        c.status !== 'encaisse' && 
+        isDateApproachingWithin7Days(c.date_et_heure) && 
+        getDaysUntilDate(c.date_et_heure) > 3
+      );
     }
     if (statusFilter === 'urgent') {
       return checks.filter(c => {
+        if (c.status === 'encaisse') return false;
         const days = getDaysUntilDate(c.date_et_heure);
         return days > 0 && days <= 3;
       });
     }
     if (statusFilter === 'today') {
-      return checks.filter(c => getDaysUntilDate(c.date_et_heure) === 0);
+      return checks.filter(c => {
+        if (c.status === 'encaisse') return false;
+        return getDaysUntilDate(c.date_et_heure) === 0;
+      });
+    }
+    if (statusFilter === 'pending') {
+      return checks.filter(c => c.status === 'pending');
+    }
+    if (statusFilter === 'remis') {
+      return checks.filter(c => c.status === 'remis');
+    }
+    if (statusFilter === 'encaisse') {
+      return checks.filter(c => c.status === 'encaisse');
     }
     return checks;
   }, [checks, statusFilter]);
 
-  // Pagination calculations
   const totalPages = Math.ceil(filteredByStatus.length / itemsPerPage);
   const paginatedChecks = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -2124,20 +2409,102 @@ useEffect(() => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleClientSelect = (clientName, clientData) => {
-    setFormData(prev => ({
-      ...prev,
-      client_remettant: clientName,
-      // Optionally auto-fill other fields from the client data
-      ville: clientData?.ville || prev.ville,
-    }));
-  };
+  const handleClientSelect = async (clientName, clientData) => {
+  const sourceType = clientData?.source_type || 'sale';
+  const paymentType = clientData?.payment_type || 'activation';
+  
+  console.log('Selected client payment_type:', paymentType, clientData);
+  
+  setFormData(prev => ({
+    ...prev,
+    client_remettant: clientName,
+    ville: clientData?.ville || prev.ville,
+    source_type: sourceType,
+    sale_id: clientData?.source_reference || null,
+    payment_id: clientData?.payment_id || null
+  }));
+  
+  setSelectedPendingPayment(null);
+  setAutoLinkedPayment(null);
+  setShowAutoLinkSuccess(false);
+  
+  if (!editingId && clientName && clientData) {
+    // If the client data already has payment info (single payment)
+    if (clientData.payment_id && !clientData.pending_payments?.length) {
+      const singlePayment = {
+        id: clientData.payment_id,
+        amount: clientData.cheque_amount,
+        cheque_number: clientData.cheque_reference,
+        bank_name: clientData.bank_name,
+        date: clientData.source_date,
+        source_type: clientData.source_type,
+        source_reference: clientData.source_reference,
+        source_total: clientData.source_total,
+        source_status: clientData.source_status,
+        payment_status: clientData.payment_status,
+        payment_id: clientData.payment_id,
+        client_name: clientData.nom,
+        client_id: clientData.id,
+        payment_type: clientData.payment_type || 'activation',
+        cheque_status: clientData.cheque_status || 'pending'
+      };
+      
+      setSelectedPendingPayment(singlePayment);
+      setAutoLinkedPayment(singlePayment);
+      setShowAutoLinkSuccess(true);
+      setTimeout(() => setShowAutoLinkSuccess(false), 5000);
+      const typeLabel = singlePayment.payment_type === 'renewal' ? 'Renouvellement' : 'Activation';
+      showToast(`✅ ${typeLabel} automatiquement lié - ${formatCurrencyHelper(singlePayment.amount)}`, 'success');
+      return;
+    }
+    
+    // If we have pending_payments array
+    if (clientData.pending_payments && clientData.pending_payments.length > 0) {
+      const payments = clientData.pending_payments.map(payment => ({
+        id: payment.id,
+        amount: payment.amount,
+        cheque_number: payment.reference || payment.cheque_number,
+        bank_name: payment.bank_name,
+        date: payment.date,
+        source_type: clientData.source_type,
+        source_reference: clientData.source_reference,
+        source_total: clientData.source_total,
+        source_status: clientData.source_status,
+        payment_status: clientData.payment_status,
+        payment_id: payment.id,
+        client_name: clientData.nom,
+        client_id: clientData.id,
+        payment_type: payment.payment_type || 'activation',
+        cheque_status: payment.remise_status || 'pending'
+      }));
+      
+      setPendingPayments(payments);
+      
+      if (payments.length === 1) {
+        const autoPayment = payments[0];
+        setSelectedPendingPayment(autoPayment);
+        setAutoLinkedPayment(autoPayment);
+        setShowAutoLinkSuccess(true);
+        setTimeout(() => setShowAutoLinkSuccess(false), 5000);
+        const typeLabel = autoPayment.payment_type === 'renewal' ? 'Renouvellement' : 'Activation';
+        showToast(`✅ ${typeLabel} automatiquement lié - ${formatCurrencyHelper(autoPayment.amount)}`, 'success');
+        setFormData(prev => ({ 
+          ...prev, 
+          source_type: autoPayment.source_type,
+          sale_id: autoPayment.source_reference,
+          payment_id: autoPayment.payment_id
+        }));
+      } else if (payments.length > 1) {
+        modalOpenedManually.current = true;
+        setShowPendingPaymentsModal(true);
+      }
+    }
+  }
+};
 
-  // Updated handleFileSelect with compression
   const handleFileSelect = async (e) => {
     const files = Array.from(e.target.files);
     
-    // Filter valid files
     const validFiles = files.filter(file => {
       const isValidType = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type);
       const isValidSize = file.size <= 10 * 1024 * 1024;
@@ -2148,26 +2515,18 @@ useEffect(() => {
     
     if (validFiles.length === 0) return;
     
-    // Show compression progress
     setCompressing(true);
     
     try {
       const compressedFiles = [];
-      let processed = 0;
-      
-      // Process files in batches to show progress
       for (const file of validFiles) {
         const compressedFile = await compressImage(file);
         compressedFiles.push(compressedFile);
-        processed++;
-        // Update progress if needed (optional)
       }
-      
       setSelectedFiles(prev => [...prev, ...compressedFiles]);
       showToast(`✅ ${compressedFiles.length} fichier(s) compressé(s) et prêt(s)`, 'success');
     } catch (error) {
       console.error('Compression error:', error);
-      // If compression fails, still add original files
       setSelectedFiles(prev => [...prev, ...validFiles]);
       showToast(`⚠️ Compression impossible, fichiers ajoutés sans compression`, 'warning');
     } finally {
@@ -2191,308 +2550,305 @@ useEffect(() => {
     setShowFilePreview(true);
   };
 
- const generatePDF = async (check, bank) => {
-  setPrinting(true);
-  
-  const printDiv = document.createElement('div');
-  printDiv.style.position = 'absolute';
-  printDiv.style.left = '-9999px';
-  printDiv.style.top = '0';
-  printDiv.style.width = '800px';
-  printDiv.style.backgroundColor = 'white';
-  printDiv.style.fontFamily = 'Arial, sans-serif';
-  printDiv.style.padding = '15px';
-  
-  // Get the base64 logo from our cache
-  const bankLogoBase64 = bankLogosBase64[bank.name];
-  
-  // Also convert the main company logo to base64
-  let mainLogoBase64 = null;
-  try {
-    const mainLogoResponse = await fetch(logo);
-    if (mainLogoResponse.ok) {
-      const mainLogoBlob = await mainLogoResponse.blob();
-      mainLogoBase64 = await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.readAsDataURL(mainLogoBlob);
-      });
-    }
-  } catch (error) {
-    console.error('Error loading main logo:', error);
-  }
-  
-  let bankHeaderHtml = '';
-  if (bankLogoBase64) {
-    bankHeaderHtml = `
-      <div style="text-align: center; margin-bottom: 15px;">
-        <img src="${bankLogoBase64}" alt="${bank.name} logo" style="height: 60px; width: auto; object-fit: contain; margin-bottom: 8px;" />
-      </div>
-    `;
-  } else {
-    // Fallback - show bank name if logo not available
-    bankHeaderHtml = `
-      <div style="text-align: center; margin-bottom: 15px;">
-        <div style="font-size: 14px; font-weight: bold; color: #1a3a5c;">${bank.name}</div>
-      </div>
-    `;
-  }
-  
-  let filesHtml = '';
-  
-  if (check.files && check.files.length > 0) {
-    const imageFiles = check.files.filter(file => file.match(/\.(jpg|jpeg|png|webp)$/i));
-    const pdfFiles = check.files.filter(file => file.match(/\.pdf$/i));
-    const otherFiles = check.files.filter(file => !file.match(/\.(jpg|jpeg|png|webp|pdf)$/i));
+  const generatePDF = async (check, bank) => {
+    setPrinting(true);
     
-    filesHtml = `
-      <div style="margin: 20px 0;">
-        <div style="font-size: 12px; font-weight: bold; margin-bottom: 12px; color: #1a3a5c; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
-          📎 Documents attachés (${check.files.length} fichier(s))
-        </div>
-    `;
+    const printDiv = document.createElement('div');
+    printDiv.style.position = 'absolute';
+    printDiv.style.left = '-9999px';
+    printDiv.style.top = '0';
+    printDiv.style.width = '800px';
+    printDiv.style.backgroundColor = 'white';
+    printDiv.style.fontFamily = 'Arial, sans-serif';
+    printDiv.style.padding = '15px';
     
-    if (imageFiles.length > 0) {
-      filesHtml += `
-        <div style="margin-bottom: 15px;">
-          <div style="font-size: 11px; font-weight: bold; margin-bottom: 8px; color: #666;">Images (${imageFiles.length})</div>
-          <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-      `;
-      
-      for (const imageFile of imageFiles) {
-        const fileUrl = `${import.meta.env.VITE_API_URL || 'https://amg-telecom-backd-production.up.railway.app'}/api/files/${imageFile}`;
-        filesHtml += `
-          <div style="margin-bottom: 10px; border: 1px solid #e5e7eb; border-radius: 4px; overflow: hidden; max-width: 200px;">
-            <img 
-              src="${fileUrl}" 
-              style="width: 100%; max-height: 150px; object-fit: cover;" 
-              alt="${imageFile}"
-              onerror="this.style.display='none'"
-            />
-            <div style="font-size: 9px; padding: 4px; text-align: center; background: #f9fafb; word-break: break-all;">${imageFile}</div>
-          </div>
-        `;
+    const bankLogoBase64 = bankLogosBase64[bank.name];
+    
+    let mainLogoBase64 = null;
+    try {
+      const mainLogoResponse = await fetch(logo);
+      if (mainLogoResponse.ok) {
+        const mainLogoBlob = await mainLogoResponse.blob();
+        mainLogoBase64 = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(mainLogoBlob);
+        });
       }
-      
-      filesHtml += `
-          </div>
-        </div>
-      `;
+    } catch (error) {
+      console.error('Error loading main logo:', error);
     }
     
-    if (pdfFiles.length > 0) {
-      filesHtml += `
-        <div style="margin-bottom: 15px;">
-          <div style="font-size: 11px; font-weight: bold; margin-bottom: 8px; color: #666;">Documents PDF (${pdfFiles.length})</div>
-          <div style="border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px;">
-      `;
-      
-      for (const pdfFile of pdfFiles) {
-        filesHtml += `
-          <div style="padding: 6px 0; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 16px;">📄</span>
-            <div style="flex: 1;">
-              <div style="font-size: 10px; font-weight: 500; word-break: break-all;">${pdfFile}</div>
-            </div>
-          </div>
-        `;
-      }
-      
-      filesHtml += `
-          </div>
+    let bankHeaderHtml = '';
+    if (bankLogoBase64) {
+      bankHeaderHtml = `
+        <div style="text-align: center; margin-bottom: 15px;">
+          <img src="${bankLogoBase64}" alt="${bank.name} logo" style="height: 60px; width: auto; object-fit: contain; margin-bottom: 8px;" />
         </div>
       `;
-    }
-    
-    if (otherFiles.length > 0) {
-      filesHtml += `
-        <div style="margin-bottom: 15px;">
-          <div style="font-size: 11px; font-weight: bold; margin-bottom: 8px; color: #666;">Autres fichiers (${otherFiles.length})</div>
-          <div style="border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px;">
-      `;
-      
-      for (const otherFile of otherFiles) {
-        filesHtml += `
-          <div style="padding: 6px 0; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 16px;">📎</span>
-            <div style="flex: 1;">
-              <div style="font-size: 10px; word-break: break-all;">${otherFile}</div>
-            </div>
-          </div>
-        `;
-      }
-      
-      filesHtml += `
-          </div>
-        </div>
-      `;
-    }
-    
-    filesHtml += `</div>`;
-  }
-  
-  const formatDateForPrint = (dateString) => {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  };
-  
-  const formatTimeForPrint = (dateString) => {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  };
-  
-  const formatCurrency = (amount) => {
-    if (amount === undefined || amount === null) return '0 MAD';
-    const num = typeof amount === 'string' ? parseFloat(amount) : amount;
-    if (isNaN(num)) return '0 MAD';
-    return new Intl.NumberFormat('fr-MA', { style: 'currency', currency: 'MAD' }).format(num);
-  };
-  
-  printDiv.innerHTML = `
-    <div style="padding: 20px; max-width: 800px; margin: 0 auto; font-family: Arial, sans-serif; font-size: 11px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #1a3a5c; padding-bottom: 10px;">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          ${mainLogoBase64 ? `<img src="${mainLogoBase64}" alt="GROUPE Logo" style="height: 120px; width: 120px;" />` : '<div style="height: 120px; width: 120px;"></div>'}
-        </div>
-        <div style="text-align: right;">
-          ${bankHeaderHtml}
-        </div>
-      </div>
-
-      <div style="text-align: right; margin-bottom: 12px;">
-        <div style="font-size: 10px; color: #666;">BORDEREAU N°</div>
-        <div style="font-size: 12px; font-weight: bold;">${check.reference_remise || 'N/A'}</div>
-      </div>
-
-      <div style="text-align: center; margin-bottom: 15px;">
-        <div style="font-size: 16px; font-weight: bold; color: #1a3a5c;">BORDEREAU DE REMISE DE VALEUR</div>
-        <div style="font-size: 11px; color: #666;">CHÈQUE(S)</div>
-      </div>
-
-      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; border: 1px solid #e5e7eb; padding: 10px; background: #fafafa;">
-        <div>
-          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">A (Ville)</div>
-          <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.ville || 'Casablanca'}</div>
-        </div>
-        <div>
-          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Le (Date et heure)</div>
-          <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${formatDateForPrint(check.date_et_heure)} ${formatTimeForPrint(check.date_et_heure)}</div>
-        </div>
-        <div>
-          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Code agence remise</div>
-          <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.code_agence_remise || '78076'}</div>
-        </div>
-        <div>
-          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Code agence compte</div>
-          <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.code_agence_compte || '78076'}</div>
-        </div>
-        <div>
-          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">RIB Remettant</div>
-          <div style="font-size: 10px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd; word-break: break-all;">${check.rib_remettant || 'N/A'}</div>
-        </div>
-        <div>
-          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Nb valeurs</div>
-          <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.nombre_de_valeurs || 1}</div>
-        </div>
-        <div>
-          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Type remise</div>
-          <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.type_remise || 'ENCAISSEMENT'}</div>
-        </div>
-        <div>
-          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Taux Escompte</div>
-          <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.taux_escompte || 0} %</div>
-        </div>
-        <div>
-          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Montant total</div>
-          <div style="font-size: 11px; font-weight: bold; color: #16a34a; padding: 3px 0; border-bottom: 1px solid #ddd;">${formatCurrency(check.montant_total_dh)}</div>
-        </div>
-        <div style="grid-column: span 2;">
-          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Nom agence remise</div>
-          <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.nom_agence_remise || 'N/A'}</div>
-        </div>
-        <div>
-          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Client Remettant</div>
-          <div style="font-size: 11px; font-weight: bold; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.client_remettant || 'N/A'}</div>
-        </div>
-        <div style="grid-column: span 2;">
-          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Nom agence compte</div>
-          <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.nom_agence_compte || 'N/A'}</div>
-        </div>
-        <div>
-          <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Utilisateur</div>
-          <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.utilisateur || 'N/A'}</div>
-        </div>
-      </div>
-
-      ${filesHtml}
-
-      <div style="display: flex; justify-content: space-between; margin-top: 20px; padding-top: 12px; border-top: 1px dashed #ccc;">
-        <div style="text-align: center; width: 45%;">
-          <div style="font-size: 10px; color: #666; margin-bottom: 20px;">SIGNATURE CLIENT</div>
-          <div style="border-top: 1px solid #000; width: 80%; margin: 0 auto;"></div>
-        </div>
-        <div style="text-align: center; width: 45%;">
-          <div style="font-size: 10px; color: #666; margin-bottom: 20px;">SIGNATURE AGENCE</div>
-          <div style="border-top: 1px solid #000; width: 80%; margin: 0 auto;"></div>
-        </div>
-      </div>
-
-      <div style="margin-top: 15px; text-align: center; font-size: 8px; color: #999; border-top: 1px solid #eee; padding-top: 10px;">
-        Document généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}
-      </div>
-    </div>
-  `;
-  
-  document.body.appendChild(printDiv);
-  
-  try {
-    const canvas = await html2canvas(printDiv, {
-      scale: 2,
-      backgroundColor: '#ffffff',
-      logging: false,
-      useCORS: true,
-      allowTaint: false
-    });
-    
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
-    });
-    
-    const imgWidth = 210;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    
-    let position = 0;
-    const pageHeight = 297;
-
-    if (imgHeight < pageHeight) {
-      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
     } else {
-      let heightLeft = imgHeight;
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
+      bankHeaderHtml = `
+        <div style="text-align: center; margin-bottom: 15px;">
+          <div style="font-size: 14px; font-weight: bold; color: #1a3a5c;">${bank.name}</div>
+        </div>
+      `;
+    }
+    
+    let filesHtml = '';
+    
+    if (check.files && check.files.length > 0) {
+      const imageFiles = check.files.filter(file => file.match(/\.(jpg|jpeg|png|webp)$/i));
+      const pdfFiles = check.files.filter(file => file.match(/\.pdf$/i));
+      const otherFiles = check.files.filter(file => !file.match(/\.(jpg|jpeg|png|webp|pdf)$/i));
+      
+      filesHtml = `
+        <div style="margin: 20px 0;">
+          <div style="font-size: 12px; font-weight: bold; margin-bottom: 12px; color: #1a3a5c; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
+            📎 Documents attachés (${check.files.length} fichier(s))
+          </div>
+      `;
+      
+      if (imageFiles.length > 0) {
+        filesHtml += `
+          <div style="margin-bottom: 15px;">
+            <div style="font-size: 11px; font-weight: bold; margin-bottom: 8px; color: #666;">Images (${imageFiles.length})</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+        `;
+        
+        for (const imageFile of imageFiles) {
+          const fileUrl = `${import.meta.env.VITE_API_URL || 'https://amg-telecom-backd-production.up.railway.app'}/api/files/${imageFile}`;
+          filesHtml += `
+            <div style="margin-bottom: 10px; border: 1px solid #e5e7eb; border-radius: 4px; overflow: hidden; max-width: 200px;">
+              <img 
+                src="${fileUrl}" 
+                style="width: 100%; max-height: 150px; object-fit: cover;" 
+                alt="${imageFile}"
+                onerror="this.style.display='none'"
+              />
+              <div style="font-size: 9px; padding: 4px; text-align: center; background: #f9fafb; word-break: break-all;">${imageFile}</div>
+            </div>
+          `;
+        }
+        
+        filesHtml += `
+            </div>
+          </div>
+        `;
+      }
+      
+      if (pdfFiles.length > 0) {
+        filesHtml += `
+          <div style="margin-bottom: 15px;">
+            <div style="font-size: 11px; font-weight: bold; margin-bottom: 8px; color: #666;">Documents PDF (${pdfFiles.length})</div>
+            <div style="border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px;">
+        `;
+        
+        for (const pdfFile of pdfFiles) {
+          filesHtml += `
+            <div style="padding: 6px 0; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 16px;">📄</span>
+              <div style="flex: 1;">
+                <div style="font-size: 10px; font-weight: 500; word-break: break-all;">${pdfFile}</div>
+              </div>
+            </div>
+          `;
+        }
+        
+        filesHtml += `
+            </div>
+          </div>
+        `;
+      }
+      
+      if (otherFiles.length > 0) {
+        filesHtml += `
+          <div style="margin-bottom: 15px;">
+            <div style="font-size: 11px; font-weight: bold; margin-bottom: 8px; color: #666;">Autres fichiers (${otherFiles.length})</div>
+            <div style="border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px;">
+        `;
+        
+        for (const otherFile of otherFiles) {
+          filesHtml += `
+            <div style="padding: 6px 0; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 16px;">📎</span>
+              <div style="flex: 1;">
+                <div style="font-size: 10px; word-break: break-all;">${otherFile}</div>
+              </div>
+            </div>
+          `;
+        }
+        
+        filesHtml += `
+            </div>
+          </div>
+        `;
+      }
+      
+      filesHtml += `</div>`;
+    }
+    
+    const formatDateForPrint = (dateString) => {
+      if (!dateString) return '-';
+      const date = new Date(dateString);
+      return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
+    
+    const formatTimeForPrint = (dateString) => {
+      if (!dateString) return '-';
+      const date = new Date(dateString);
+      return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    };
+    
+    const formatCurrency = (amount) => {
+      if (amount === undefined || amount === null) return '0 MAD';
+      const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+      if (isNaN(num)) return '0 MAD';
+      return new Intl.NumberFormat('fr-MA', { style: 'currency', currency: 'MAD' }).format(num);
+    };
+    
+    printDiv.innerHTML = `
+      <div style="padding: 20px; max-width: 800px; margin: 0 auto; font-family: Arial, sans-serif; font-size: 11px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #1a3a5c; padding-bottom: 10px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            ${mainLogoBase64 ? `<img src="${mainLogoBase64}" alt="GROUPE Logo" style="height: 120px; width: 120px;" />` : '<div style="height: 120px; width: 120px;"></div>'}
+          </div>
+          <div style="text-align: right;">
+            ${bankHeaderHtml}
+          </div>
+        </div>
+
+        <div style="text-align: right; margin-bottom: 12px;">
+          <div style="font-size: 10px; color: #666;">BORDEREAU N°</div>
+          <div style="font-size: 12px; font-weight: bold;">${check.reference_remise || 'N/A'}</div>
+        </div>
+
+        <div style="text-align: center; margin-bottom: 15px;">
+          <div style="font-size: 16px; font-weight: bold; color: #1a3a5c;">BORDEREAU DE REMISE DE VALEUR</div>
+          <div style="font-size: 11px; color: #666;">CHÈQUE(S)</div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; border: 1px solid #e5e7eb; padding: 10px; background: #fafafa;">
+          <div>
+            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">A (Ville)</div>
+            <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.ville || 'Casablanca'}</div>
+          </div>
+          <div>
+            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Le (Date et heure)</div>
+            <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${formatDateForPrint(check.date_et_heure)} ${formatTimeForPrint(check.date_et_heure)}</div>
+          </div>
+          <div>
+            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Code agence remise</div>
+            <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.code_agence_remise || '78076'}</div>
+          </div>
+          <div>
+            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Code agence compte</div>
+            <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.code_agence_compte || '78076'}</div>
+          </div>
+          <div>
+            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">RIB Remettant</div>
+            <div style="font-size: 10px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd; word-break: break-all;">${check.rib_remettant || 'N/A'}</div>
+          </div>
+          <div>
+            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Nb valeurs</div>
+            <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.nombre_de_valeurs || 1}</div>
+          </div>
+          <div>
+            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Type remise</div>
+            <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.type_remise || 'ENCAISSEMENT'}</div>
+          </div>
+          <div>
+            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Taux Escompte</div>
+            <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.taux_escompte || 0} %</div>
+          </div>
+          <div>
+            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Montant total</div>
+            <div style="font-size: 11px; font-weight: bold; color: #16a34a; padding: 3px 0; border-bottom: 1px solid #ddd;">${formatCurrency(check.montant_total_dh)}</div>
+          </div>
+          <div style="grid-column: span 2;">
+            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Nom agence remise</div>
+            <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.nom_agence_remise || 'N/A'}</div>
+          </div>
+          <div>
+            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Client Remettant</div>
+            <div style="font-size: 11px; font-weight: bold; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.client_remettant || 'N/A'}</div>
+          </div>
+          <div style="grid-column: span 2;">
+            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Nom agence compte</div>
+            <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.nom_agence_compte || 'N/A'}</div>
+          </div>
+          <div>
+            <div style="font-size: 9px; color: #666; margin-bottom: 2px;">Utilisateur</div>
+            <div style="font-size: 11px; font-weight: 500; padding: 3px 0; border-bottom: 1px solid #ddd;">${check.utilisateur || 'N/A'}</div>
+          </div>
+        </div>
+
+        ${filesHtml}
+
+        <div style="display: flex; justify-content: space-between; margin-top: 20px; padding-top: 12px; border-top: 1px dashed #ccc;">
+          <div style="text-align: center; width: 45%;">
+            <div style="font-size: 10px; color: #666; margin-bottom: 20px;">SIGNATURE CLIENT</div>
+            <div style="border-top: 1px solid #000; width: 80%; margin: 0 auto;"></div>
+          </div>
+          <div style="text-align: center; width: 45%;">
+            <div style="font-size: 10px; color: #666; margin-bottom: 20px;">SIGNATURE AGENCE</div>
+            <div style="border-top: 1px solid #000; width: 80%; margin: 0 auto;"></div>
+          </div>
+        </div>
+
+        <div style="margin-top: 15px; text-align: center; font-size: 8px; color: #999; border-top: 1px solid #eee; padding-top: 10px;">
+          Document généré le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(printDiv);
+    
+    try {
+      const canvas = await html2canvas(printDiv, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        logging: false,
+        useCORS: true,
+        allowTaint: false
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      const imgWidth = 210;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      let position = 0;
+      const pageHeight = 297;
+
+      if (imgHeight < pageHeight) {
+        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      } else {
+        let heightLeft = imgHeight;
         pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
         heightLeft -= pageHeight;
+        while (heightLeft > 0) {
+          position = heightLeft - imgHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+          heightLeft -= pageHeight;
+        }
       }
+      
+      pdf.save(`bordereau_${check.reference_remise || 'remise'}.pdf`);
+      showToast('PDF généré avec succès', 'success');
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      showToast('Erreur lors de la génération du PDF', 'error');
+    } finally {
+      document.body.removeChild(printDiv);
+      setPrinting(false);
     }
-    
-    pdf.save(`bordereau_${check.reference_remise || 'remise'}.pdf`);
-    showToast('PDF généré avec succès', 'success');
-  } catch (error) {
-    console.error('PDF generation error:', error);
-    showToast('Erreur lors de la génération du PDF', 'error');
-  } finally {
-    document.body.removeChild(printDiv);
-    setPrinting(false);
-  }
-};
+  };
   
   const handlePrint = async (check) => {
     setPrintCheck(check);
@@ -2507,6 +2863,122 @@ useEffect(() => {
     }
   };
 
+  // Mark cheque as remis
+  const handleMarkAsRemis = async (check) => {
+    if (updatingStatus) return;
+    
+    setUpdatingStatus(true);
+    try {
+      await dispatch(updateCheck({ 
+        id: check.id, 
+        mark_as_remis: true,
+        status: 'remis'
+      })).unwrap();
+      
+      showToast(`Chèque marqué comme remis (déposé en banque)`, 'success');
+      
+      dispatch(fetchChecks({ page: currentPage }));
+      dispatch(fetchCheckSummary());
+      
+    } catch (err) {
+      console.error('Error marking as remis:', err);
+      showToast(err || 'Erreur lors de la mise à jour', 'error');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  // ==================== MARK CHEQUE AS ENCAISSE WITH REFERENCE UPDATE ====================
+  const handleMarkAsEncaisse = (check) => {
+    setShowEncaisseConfirm({ check, currentReference: check.reference_remise || '' });
+    setNewReferenceInput(check.reference_remise || '');
+  };
+
+ const confirmEncaisse = async () => {
+  if (!showEncaisseConfirm) return;
+  
+  const { check } = showEncaisseConfirm;
+  const newReference = newReferenceInput.trim();
+  
+  if (encaisseProcessing) return;
+  
+  setEncaisseProcessing(true);
+  
+  try {
+    const token = localStorage.getItem('token');
+    const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
+    
+    const payload = {
+      sale_id: check.sale_id,
+      payment_id: check.payment_id
+    };
+    
+    if (newReference && newReference !== check.reference_remise) {
+      payload.new_reference = newReference;
+    }
+    
+    const response = await fetch(`${API_URL}/checks/${check.id}/mark-encaisse`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Erreur lors de l'encaissement");
+    }
+    
+    const data = await response.json();
+    
+    let message = `Chèque marqué comme encaissé - ${formatCurrencyHelper(check.montant_total_dh)} ajouté au montant payé`;
+    if (newReference && newReference !== check.reference_remise) {
+      message += `\nRéférence mise à jour: ${newReference}`;
+    }
+    
+    showToast(message, 'success');
+    
+    setShowEncaisseConfirm(null);
+    setNewReferenceInput('');
+    
+    // Build current filters to maintain the same view
+    const activeFilters = {};
+    Object.keys(filters).forEach(key => {
+      if (filters[key] && filters[key] !== '') {
+        activeFilters[key] = filters[key];
+      }
+    });
+    if (search) activeFilters.client_remettant = search;
+    if (agencyFilter) activeFilters.code_agence_remise = agencyFilter;
+    if (typeFilter) activeFilters.type_remise = typeFilter;
+    
+    // Refresh the data with current page and filters
+    await dispatch(fetchChecks({ ...activeFilters, page: currentPage }));
+    await dispatch(fetchCheckSummary(activeFilters));
+    
+    // Also refresh clients list to update payment statuses
+    await fetchClientsWithChequePayments();
+    
+  } catch (err) {
+    console.error('Error marking as encaisse:', err);
+    showToast(err.message || 'Erreur lors de la mise à jour', 'error');
+  } finally {
+    setEncaisseProcessing(false);
+  }
+};
+// Add this function to reset the form after encaissement
+const resetForNewRemise = () => {
+  resetForm();
+  // Clear any selected client or pending payment references
+  setSelectedPendingPayment(null);
+  setAutoLinkedPayment(null);
+  setShowAutoLinkSuccess(false);
+  setPendingPayments([]);
+  modalOpenedManually.current = false;
+};
+  // ==================== HANDLE SUBMIT ====================
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -2520,13 +2992,73 @@ useEffect(() => {
       return;
     }
 
+    if (!editingId && pendingPayments.length > 0 && !selectedPendingPayment) {
+      showToast('⚠️ Ce client a des paiements par chèque en attente. Veuillez sélectionner un paiement à lier.', 'warning');
+      setShowPendingPaymentsModal(true);
+      setUploading(false);
+      return;
+    }
+
     setUploading(true);
     try {
       let savedCheck;
       
+      const submitData = { ...formData };
+      submitData.montant_total_dh = parseFloat(submitData.montant_total_dh);
+      
+      if (selectedPendingPayment) {
+        submitData.sale_id = selectedPendingPayment.source_reference;
+        submitData.payment_id = selectedPendingPayment.payment_id;
+        submitData.source_type = selectedPendingPayment.source_type;
+      } else if (formData.sale_id && formData.payment_id) {
+        submitData.sale_id = formData.sale_id;
+        submitData.payment_id = formData.payment_id;
+      }
+      
+      if (!submitData.source_type) {
+        submitData.source_type = 'sale';
+      }
+      
+      console.log('Submitting check with data:', {
+        client_remettant: submitData.client_remettant,
+        montant_total_dh: submitData.montant_total_dh,
+        sale_id: submitData.sale_id,
+        payment_id: submitData.payment_id,
+        source_type: submitData.source_type
+      });
+      
       if (editingId) {
-        await dispatch(updateCheck({ id: editingId, ...formData })).unwrap();
-        savedCheck = { id: editingId };
+        const currentCheck = checks.find(c => c.id === editingId);
+        const oldStatus = currentCheck?.status || 'pending';
+        const newStatus = submitData.status;
+        
+        if (newStatus === 'encaisse' && oldStatus !== 'encaisse') {
+          const hasSaleId = submitData.sale_id || currentCheck?.sale_id;
+          const hasPaymentId = submitData.payment_id || currentCheck?.payment_id;
+          
+          if (!hasSaleId || !hasPaymentId) {
+            showToast('Impossible de marquer comme encaissé: Cette remise n\'est liée à aucune vente ou activation.', 'error');
+            setUploading(false);
+            return;
+          }
+          
+          submitData.mark_as_paid = true;
+          submitData.status = 'encaisse';
+        } else if (newStatus === 'remis' && oldStatus === 'pending') {
+          const hasSaleId = submitData.sale_id || currentCheck?.sale_id;
+          const hasPaymentId = submitData.payment_id || currentCheck?.payment_id;
+          
+          if (!hasSaleId || !hasPaymentId) {
+            showToast('Impossible de marquer comme remis: Cette remise n\'est liée à aucune vente ou activation.', 'error');
+            setUploading(false);
+            return;
+          }
+          
+          submitData.mark_as_remis = true;
+          submitData.status = 'remis';
+        }
+        
+        await dispatch(updateCheck({ id: editingId, ...submitData })).unwrap();
         
         for (const fileName of filesToDelete) {
           try {
@@ -2542,21 +3074,34 @@ useEffect(() => {
         
         showToast('Remise mise à jour avec succès', 'success');
       } else {
-        const result = await dispatch(createCheck(formData)).unwrap();
+        submitData.status = 'pending';
+        
+        const result = await dispatch(createCheck(submitData)).unwrap();
         savedCheck = result;
         
         if (selectedFiles.length > 0 && savedCheck.id) {
           await dispatch(uploadCheckFiles({ id: savedCheck.id, files: selectedFiles })).unwrap();
         }
         
-        showToast('Remise créée avec succès', 'success');
+        if (selectedPendingPayment) {
+          const sourceLabel = selectedPendingPayment.source_type === 'activation' ? 'Activation' : 'Vente';
+          showToast(`✅ Paiement par chèque lié à la remise (${sourceLabel} #${selectedPendingPayment.source_reference})`, 'success');
+          setSelectedPendingPayment(null);
+          setAutoLinkedPayment(null);
+          setShowAutoLinkSuccess(false);
+        } else {
+          showToast('Remise créée avec succès', 'success');
+        }
       }
       
       setShowModal(false);
       resetForm();
-      dispatch(fetchChecks({ page: currentPage }));
-      dispatch(fetchCheckSummary());
+      
+      await dispatch(fetchChecks({ page: currentPage }));
+      await dispatch(fetchCheckSummary());
+      
     } catch (err) {
+      console.error('Submit error:', err);
       showToast(err || 'Erreur lors de l\'enregistrement', 'error');
     } finally {
       setUploading(false);
@@ -2580,7 +3125,9 @@ useEffect(() => {
         montant_total_dh: result.montant_total_dh || '',
         type_remise: result.type_remise || '',
         taux_escompte: result.taux_escompte || 0,
-        utilisateur: result.utilisateur || user?.name || ''
+        utilisateur: result.utilisateur || user?.name || '',
+        status: result.status || 'pending',
+        source_type: result.source_type || 'sale'
       });
       setExistingFiles(result.files || []);
       setSelectedFiles([]);
@@ -2602,15 +3149,8 @@ useEffect(() => {
     setDeleting(true);
     try {
       await dispatch(deleteCheck(showDeleteDialog.id)).unwrap();
-      showToast(`Remise "${showDeleteDialog.reference_remise || showDeleteDialog.client_remettant}" supprimée avec succès`, 'success');
+      showToast(`Remise supprimée avec succès`, 'success');
       setShowDeleteDialog(null);
-      // Adjust current page if needed
-      const newTotalPages = Math.ceil((filteredByStatus.length - 1) / itemsPerPage);
-      if (currentPage > newTotalPages && newTotalPages > 0) {
-        setCurrentPage(newTotalPages);
-      } else if (filteredByStatus.length - 1 === 0) {
-        setCurrentPage(1);
-      }
       dispatch(fetchChecks({ page: currentPage }));
       dispatch(fetchCheckSummary());
     } catch (err) {
@@ -2621,6 +3161,17 @@ useEffect(() => {
   };
 
   const resetForm = () => {
+    let ribValue = '';
+    try {
+      const saved = localStorage.getItem('company_info');
+      if (saved) {
+        const localInfo = JSON.parse(saved);
+        ribValue = localInfo.rib || '';
+      }
+    } catch (e) {
+      console.error('Error reading company info from localStorage:', e);
+    }
+    
     setFormData({
       reference_remise: '',
       date_et_heure: new Date().toISOString().slice(0, 16),
@@ -2629,18 +3180,28 @@ useEffect(() => {
       nom_agence_remise: '',
       code_agence_compte: '',
       nom_agence_compte: '',
-      rib_remettant: companyInfo?.rib || '',
+      rib_remettant: ribValue,
       client_remettant: '',
       nombre_de_valeurs: 1,
       montant_total_dh: '',
       type_remise: '',
       taux_escompte: 0,
-      utilisateur: user?.name || ''
+      utilisateur: user?.name || '',
+      status: 'pending',
+      source_type: 'sale',
+      sale_id: null,
+      payment_id: null
     });
     setEditingId(null);
     setSelectedFiles([]);
     setExistingFiles([]);
     setFilesToDelete([]);
+    setSelectedPendingPayment(null);
+    setAutoLinkedPayment(null);
+    setShowAutoLinkSuccess(false);
+    setPendingPayments([]);
+    // Reset manual modal flag
+    modalOpenedManually.current = false;
   };
 
   const openFilesModal = async (check) => {
@@ -2698,7 +3259,9 @@ useEffect(() => {
     });
   };
 
-  const getStatusBadgeClass = (dateString) => {
+  const getStatusBadgeClass = (dateString, checkStatus) => {
+    if (checkStatus === 'encaisse') return 'check-status-encaisse';
+    
     const status = getStatusBadge(dateString);
     if (status === 'today') return 'check-status-today';
     if (status === 'urgent') return 'check-status-urgent';
@@ -2706,7 +3269,9 @@ useEffect(() => {
     return 'check-status-normal';
   };
 
-  const getStatusLabel = (dateString) => {
+  const getStatusLabel = (dateString, checkStatus) => {
+    if (checkStatus === 'encaisse') return "✓ Encaissé";
+    
     const status = getStatusBadge(dateString);
     if (status === 'today') return "🔥 Aujourd'hui!";
     if (status === 'urgent') return "⚠️ Urgent";
@@ -2714,7 +3279,20 @@ useEffect(() => {
     return "✓ Normal";
   };
 
-  // Prepare export columns for ExportMenu
+  const getChequeStatusBadge = (status) => {
+    const config = {
+      pending: { label: 'En attente', variant: 'pending', icon: '⏳' },
+      remis: { label: 'Remis en banque', variant: 'remis', icon: '📝' },
+      encaisse: { label: 'Encaissé', variant: 'encaisse', icon: '✅' }
+    };
+    const c = config[status] || { label: status || 'N/A', variant: 'pending', icon: '❓' };
+    return (
+      <span className={`check-status-badge check-status-${c.variant}`}>
+        <span style={{ marginRight: '4px' }}>{c.icon}</span> {c.label}
+      </span>
+    );
+  };
+
   const exportColumns = [
     { header: 'Référence', accessor: c => c.reference_remise || '-' },
     { header: 'Date et heure', accessor: c => formatDate(c.date_et_heure) },
@@ -2730,15 +3308,10 @@ useEffect(() => {
     { header: 'Taux escompte (%)', accessor: c => c.taux_escompte || 0 },
     { header: 'Montant net (MAD)', accessor: c => (parseFloat(c.montant_total_dh) || 0) - ((parseFloat(c.montant_total_dh) || 0) * (c.taux_escompte || 0) / 100) },
     { header: 'Type remise', accessor: c => c.type_remise || '-' },
+    { header: 'Statut chèque', accessor: c => c.status || 'pending' },
+    { header: 'Source', accessor: c => c.source_type === 'activation' ? 'Activation GPS' : 'Vente' },
     { header: 'Nombre fichiers', accessor: c => c.files?.length || 0 },
   ];
-
-  const approachingCount = checks.filter(c => isDateApproachingWithin7Days(c.date_et_heure) && getDaysUntilDate(c.date_et_heure) > 0).length;
-  const urgentCount = checks.filter(c => {
-    const days = getDaysUntilDate(c.date_et_heure);
-    return days > 0 && days <= 3;
-  }).length;
-  const todayCount = checks.filter(c => getDaysUntilDate(c.date_et_heure) === 0).length;
 
   if (loading && checks.length === 0) {
     return (
@@ -2753,7 +3326,6 @@ useEffect(() => {
     <div className="check-page-container">
       <style>{styles}</style>
       
-      {/* Compression Progress Indicator */}
       {compressing && (
         <div className="compression-progress">
           <div className="spinner"></div>
@@ -2761,7 +3333,6 @@ useEffect(() => {
         </div>
       )}
       
-      {/* Toast Container */}
       {toasts.length > 0 && (
         <div className="check-toast-container">
           {toasts.map(toast => (
@@ -2775,14 +3346,236 @@ useEffect(() => {
         </div>
       )}
       
+      {/* Auto-Link Success Message */}
+      {showAutoLinkSuccess && autoLinkedPayment && (
+        <div className="auto-link-success">
+          <CheckCircle size={20} />
+          <div>
+            <strong>✅ Paiement automatiquement lié!</strong><br />
+            {autoLinkedPayment.source_type === 'activation' ? 'Activation' : 'Vente'} #{autoLinkedPayment.source_reference} - {formatCurrencyHelper(autoLinkedPayment.amount)}<br />
+            <small>Le paiement sera automatiquement associé à cette remise.</small>
+          </div>
+        </div>
+      )}
+      
+      {/* Pending Payments Modal */}
+{showPendingPaymentsModal && pendingPayments.length > 1 && !editingId && (
+  <>
+    <div className="check-overlay" onClick={() => {
+      setShowPendingPaymentsModal(false);
+      setSelectedPendingPayment(null);
+      modalOpenedManually.current = false;
+    }} />
+    <div className="check-dialog" style={{ maxWidth: '45rem' }}>
+      <div className="check-dialog-header">
+        <h2 className="check-dialog-title">
+          <CreditCard size={20} />
+          Sélectionnez un paiement par chèque
+        </h2>
+        <p className="check-dialog-description">
+          Ce client a plusieurs paiements par chèque en attente.
+          Veuillez sélectionner celui correspondant à cette remise.
+        </p>
+      </div>
+      
+      <div className="check-dialog-body">
+        <div className="check-warning-message" style={{ marginBottom: '1rem' }}>
+          <AlertTriangle size={16} />
+          <div>Sélectionnez le paiement à lier à cette remise pour continuer.</div>
+        </div>
+        
+        <div className="check-file-list" style={{ maxHeight: '400px' }}>
+          {pendingPayments.map((payment, index) => {
+            const isActivation = payment.source_type === 'activation';
+            const isRenewal = payment.payment_type === 'renewal';
+            const sourceLabel = isActivation ? 'Activation GPS' : 'Vente';
+            const typeLabel = isRenewal ? '🔄 Renouvellement' : '✅ Activation';
+            const typeColor = isRenewal ? '#3b82f6' : '#10b981';
+            
+            return (
+              <div 
+                key={index} 
+                className={`check-file-item ${selectedPendingPayment?.payment_id === payment.payment_id ? 'payment-selected' : ''}`}
+                style={{ 
+                  cursor: 'pointer',
+                  backgroundColor: selectedPendingPayment?.payment_id === payment.payment_id ? '#eff6ff' : '',
+                  border: selectedPendingPayment?.payment_id === payment.payment_id ? '2px solid #3b82f6' : '1px solid #e2e8f0',
+                  borderRadius: '0.75rem',
+                  marginBottom: '0.75rem',
+                  padding: '1rem'
+                }}
+                onClick={() => setSelectedPendingPayment(payment)}
+              >
+                <div className="check-file-info" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem', width: '100%' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <span style={{ 
+                        fontSize: '0.7rem', 
+                        background: typeColor, 
+                        color: 'white', 
+                        padding: '0.25rem 0.75rem', 
+                        borderRadius: '2rem',
+                        fontWeight: 'bold'
+                      }}>
+                        {typeLabel}
+                      </span>
+                      <span style={{ 
+                        fontSize: '0.7rem', 
+                        background: isActivation ? '#f0fdf4' : '#eff6ff', 
+                        padding: '0.25rem 0.75rem', 
+                        borderRadius: '2rem',
+                        fontWeight: '500'
+                      }}>
+                        {sourceLabel} #{payment.source_reference}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#059669' }}>
+                      {formatCurrencyHelper(payment.amount)}
+                    </span>
+                  </div>
+                  
+                  <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                    gap: '0.5rem', 
+                    width: '100%',
+                    fontSize: '0.75rem',
+                    color: '#475569'
+                  }}>
+                    {payment.cheque_number && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <span>📝 N° Chèque:</span>
+                        <span style={{ fontWeight: '500', fontFamily: 'monospace' }}>{payment.cheque_number}</span>
+                      </div>
+                    )}
+                    {payment.bank_name && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <span>🏦 Banque:</span>
+                        <span style={{ fontWeight: '500' }}>{payment.bank_name}</span>
+                      </div>
+                    )}
+                    {payment.date && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <span>📅 Date paiement:</span>
+                        <span style={{ fontWeight: '500' }}>{new Date(payment.date).toLocaleDateString('fr-FR')}</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
+                    gap: '0.5rem', 
+                    width: '100%',
+                    fontSize: '0.7rem',
+                    color: '#6b7280',
+                    borderTop: '1px solid #e5e7eb',
+                    paddingTop: '0.5rem',
+                    marginTop: '0.25rem'
+                  }}>
+                    <div>
+                      <span>💰 Total {isActivation ? 'activation' : 'vente'}:</span>
+                      <span style={{ fontWeight: '500', marginLeft: '0.5rem', color: '#1e293b' }}>
+                        {formatCurrencyHelper(payment.source_total)}
+                      </span>
+                    </div>
+                    <div>
+                      <span>📊 Statut paiement:</span>
+                      <span style={{ 
+                        marginLeft: '0.5rem',
+                        padding: '0.125rem 0.5rem',
+                        borderRadius: '0.25rem',
+                        fontSize: '0.65rem',
+                        background: payment.payment_status === 'paid' ? '#d1fae5' : payment.payment_status === 'partial' ? '#fef3c7' : '#fee2e2',
+                        color: payment.payment_status === 'paid' ? '#065f46' : payment.payment_status === 'partial' ? '#92400e' : '#991b1b'
+                      }}>
+                        {payment.payment_status === 'paid' ? 'Payé' : payment.payment_status === 'partial' ? 'Partiel' : 'Impayé'}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div style={{ marginTop: '0.25rem' }}>
+                    <span style={{ 
+                      fontSize: '0.65rem', 
+                      background: payment.cheque_status === 'remis' ? '#dbeafe' : '#fef3c7',
+                      color: payment.cheque_status === 'remis' ? '#1e40af' : '#92400e',
+                      padding: '0.125rem 0.5rem',
+                      borderRadius: '0.25rem',
+                      display: 'inline-block'
+                    }}>
+                      {payment.cheque_status === 'remis' ? '📝 Déjà remis en banque' : '⏳ En attente de remise'}
+                    </span>
+                  </div>
+                </div>
+                
+                {selectedPendingPayment?.payment_id === payment.payment_id && (
+                  <div style={{ marginLeft: '0.5rem' }}>
+                    <CheckIcon size={20} style={{ color: '#3b82f6' }} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      
+      <div className="check-dialog-footer">
+        <button 
+          className="check-btn check-btn-outline"
+          onClick={() => {
+            setShowPendingPaymentsModal(false);
+            setSelectedPendingPayment(null);
+            modalOpenedManually.current = false;
+          }}
+        >
+          Annuler
+        </button>
+        <button 
+          className="check-btn check-btn-primary"
+          onClick={() => {
+            if (selectedPendingPayment) {
+              setShowPendingPaymentsModal(false);
+              const sourceLabel = selectedPendingPayment.source_type === 'activation' ? 'Activation' : 'Vente';
+              const typeLabel = selectedPendingPayment.payment_type === 'renewal' ? 'Renouvellement' : 'Activation';
+              showToast(`✅ Paiement sélectionné (${sourceLabel} #${selectedPendingPayment.source_reference} - ${typeLabel}) - ${formatCurrencyHelper(selectedPendingPayment.amount)}`, 'success');
+              setFormData(prev => ({ 
+                ...prev, 
+                source_type: selectedPendingPayment.source_type,
+                sale_id: selectedPendingPayment.source_reference,
+                payment_id: selectedPendingPayment.payment_id
+              }));
+              modalOpenedManually.current = false;
+            } else {
+              showToast('Veuillez sélectionner un paiement', 'warning');
+            }
+          }}
+          disabled={!selectedPendingPayment}
+        >
+          Confirmer la sélection
+        </button>
+      </div>
+      
+      <button 
+        className="check-dialog-close" 
+        onClick={() => {
+          setShowPendingPaymentsModal(false);
+          setSelectedPendingPayment(null);
+          modalOpenedManually.current = false;
+        }}
+      >
+        <X size={18} />
+        <span className="sr-only">Fermer</span>
+      </button>
+    </div>
+  </>
+)}
+      
       {/* Header */}
       <div className="check-page-header">
         <div className="check-title-section">
-          <h1 className="check-title">
-            Remises de Chèques
-          </h1>
+          <h1 className="check-title">Remises de Chèques</h1>
           <div className="check-subtitle">
-            <span>Gérez vos bordereaux de remise de valeurs</span>
+            <span>Gérez vos bordereaux de remise de valeurs (Ventes & Activations)</span>
             <span className="check-subtitle-badge">
               <FileText size={12} style={{ display: 'inline', marginRight: '0.25rem' }} />
               {summary?.total_checks || 0} remises
@@ -2790,70 +3583,42 @@ useEffect(() => {
           </div>
         </div>
         <div className="check-actions">
-          <Button variant="outline" onClick={() => setShowFilterModal(true)}>
+          <button onClick={() => setShowFilterModal(true)} className="check-btn check-btn-outline">
             <Filter size={16} /> Filtres
-          </Button>
+          </button>
           <ExportMenu 
             title="Liste des remises de chèques" 
             rows={filteredByStatus} 
             columns={exportColumns}
             dateField="date_et_heure"
           />
-          <Button onClick={() => { resetForm(); setShowModal(true); }}>
+          <button onClick={() => { resetForm(); setShowModal(true); }} className="check-btn check-btn-primary">
             <Plus size={16} /> Nouvelle Remise
-          </Button>
+          </button>
         </div>
       </div>
 
       {/* Stats Cards */}
       <div className="check-summary-container">
-        <StatCard 
-          icon={FileText} 
-          label="Total Remises" 
-          value={summary?.total_checks || 0} 
-          color="primary"
-        />
-        <StatCard 
-          icon={DollarSign} 
-          label="Montant Total" 
-          value={formatCurrency(summary?.total_amount || 0)} 
-          color="success"
-        />
-        <StatCard 
-          icon={Wallet} 
-          label="Escompte Total" 
-          value={formatCurrency(summary?.total_discount || 0)} 
-          color="warning"
-        />
-        <StatCard 
-          icon={Landmark} 
-          label="Montant Net" 
-          value={formatCurrency(summary?.net_amount || 0)} 
-          color="info"
-        />
+        <StatCard icon={FileText} label="Total Remises" value={summary?.total_checks || 0} color="primary" />
+        <StatCard icon={DollarSign} label="Montant Total" value={formatCurrency(summary?.total_amount || 0)} color="success" />
+        <StatCard icon={Wallet} label="Escompte Total" value={formatCurrency(summary?.total_discount || 0)} color="warning" />
+        <StatCard icon={Landmark} label="Montant Net" value={formatCurrency(summary?.net_amount || 0)} color="info" />
       </div>
 
-      {/* Approaching Dates Alert Cards */}
+      {/* Alert Cards */}
       {todayCount > 0 && (
         <div className="check-alert-card check-alert-danger">
           <div className="check-alert-content">
             <AlertCircle size={24} style={{ color: '#dc2626' }} />
             <div>
-              <div className="check-alert-title check-alert-title-danger">
-                🔥 {todayCount} remise(s) prévue(s) pour aujourd'hui!
-              </div>
-              <div className="check-alert-text check-alert-text-danger">
-                Ces remises doivent être traitées immédiatement
-              </div>
+              <div className="check-alert-title check-alert-title-danger">🔥 {todayCount} remise(s) prévue(s) pour aujourd'hui!</div>
+              <div className="check-alert-text check-alert-text-danger">Ces remises doivent être traitées immédiatement</div>
             </div>
           </div>
-          <Button 
-            variant="outline" 
-            style={{ backgroundColor: 'white', borderColor: '#fca5a5', color: '#dc2626' }}
-            onClick={() => setStatusFilter('today')}
-          >
+          <button className="check-btn check-btn-outline" style={{ backgroundColor: 'white', borderColor: '#fca5a5', color: '#dc2626' }} onClick={() => setStatusFilter('today')}>
             Voir les détails
-          </Button>
+          </button>
         </div>
       )}
 
@@ -2862,21 +3627,13 @@ useEffect(() => {
           <div className="check-alert-content">
             <AlertTriangle size={24} style={{ color: '#d97706' }} />
             <div>
-              <div className="check-alert-title">
-                ⚠️ {urgentCount} remise(s) dans les 3 prochains jours
-              </div>
-              <div className="check-alert-text">
-                Ces remises approchent de leur date limite
-              </div>
+              <div className="check-alert-title">⚠️ {urgentCount} remise(s) dans les 3 prochains jours</div>
+              <div className="check-alert-text">Ces remises approchent de leur date limite</div>
             </div>
           </div>
-          <Button 
-            variant="outline" 
-            style={{ backgroundColor: 'white', borderColor: '#fde68a', color: '#d97706' }}
-            onClick={() => setStatusFilter('urgent')}
-          >
+          <button className="check-btn check-btn-outline" style={{ backgroundColor: 'white', borderColor: '#fde68a', color: '#d97706' }} onClick={() => setStatusFilter('urgent')}>
             Voir les détails
-          </Button>
+          </button>
         </div>
       )}
 
@@ -2885,63 +3642,44 @@ useEffect(() => {
           <div className="check-alert-content">
             <Bell size={24} style={{ color: '#ca8a04' }} />
             <div>
-              <div className="check-alert-title" style={{ color: '#854d0e' }}>
-                📅 {approachingCount} remise(s) dans les 7 prochains jours
-              </div>
-              <div className="check-alert-text" style={{ color: '#a16207' }}>
-                Pensez à préparer ces remises
-              </div>
+              <div className="check-alert-title" style={{ color: '#854d0e' }}>📅 {approachingCount} remise(s) dans les 7 prochains jours</div>
+              <div className="check-alert-text" style={{ color: '#a16207' }}>Pensez à préparer ces remises</div>
             </div>
           </div>
-          <Button 
-            variant="outline" 
-            style={{ backgroundColor: 'white', borderColor: '#fde68a', color: '#854d0e' }}
-            onClick={() => setStatusFilter('approaching')}
-          >
+          <button className="check-btn check-btn-outline" style={{ backgroundColor: 'white', borderColor: '#fde68a', color: '#854d0e' }} onClick={() => setStatusFilter('approaching')}>
             Voir les détails
-          </Button>
+          </button>
         </div>
       )}
 
       {/* Main Card */}
       <div className="check-card">
-        {/* Filter Bar */}
         <div className="check-filter-bar">
           <div className="check-filter-group">
             <div className="check-search-wrapper">
               <Search className="check-search-icon" />
-              <input 
-                className="check-search-input" 
-                placeholder="Rechercher par client, référence, ville..." 
-                value={search} 
-                onChange={(e) => setSearch(e.target.value)} 
-              />
+              <input className="check-search-input" placeholder="Rechercher par client, référence, ville..." value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
-
             <div className="check-filter-select">
               <Calendar className="check-filter-icon" />
-              <select 
-                className="check-select-filter"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
+              <select className="check-select-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                 <option value="all">Tous les statuts</option>
                 <option value="today">Aujourd'hui</option>
                 <option value="urgent">Urgent (≤3 jours)</option>
                 <option value="approaching">Proche (≤7 jours)</option>
+                <option value="pending">En attente</option>
+                <option value="remis">Remis en banque</option>
+                <option value="encaisse">Encaissé</option>
               </select>
             </div>
           </div>
-          
           {hasActiveFilters && (
             <button className="check-clear-filters" onClick={clearQuickFilters}>
-              <X size={14} />
-              Effacer les filtres
+              <X size={14} /> Effacer les filtres
             </button>
           )}
         </div>
         
-        {/* Table */}
         <div className="check-table-container">
           <table className="check-table">
             <thead>
@@ -2955,48 +3693,32 @@ useEffect(() => {
                 <th className="check-text-right">Escompte</th>
                 <th className="check-text-right">Net</th>
                 <th>Type</th>
-                <th>Statut</th>
+                <th>Source</th>
+                <th>Statut Remise</th>
+                <th>Statut Chèque</th>
                 <th>Fichiers</th>
-                <th style={{ width: '100px' }}>Actions</th>
+                <th style={{ width: '140px' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {paginatedChecks.length === 0 ? (
-                <tr>
-                  <td colSpan="12" className="check-empty">
-                    <div className="check-empty-icon">
-                      <FileText size={64} />
-                    </div>
-                    <div className="check-empty-text">
-                      {hasActiveFilters 
-                        ? 'Aucune remise ne correspond aux critères de recherche'
-                        : 'Aucune remise dans la base de données'}
-                    </div>
-                  </td>
-                </tr>
+                <tr><td colSpan="14" className="check-empty"><div className="check-empty-icon"><FileText size={64} /></div><div className="check-empty-text">Aucune remise trouvée</div></td></tr>
               ) : (
                 paginatedChecks.map((check) => {
-                  const isApproaching = isDateApproachingWithin7Days(check.date_et_heure);
+                  const isApproaching = check.status !== 'encaisse' && isDateApproachingWithin7Days(check.date_et_heure);
                   const daysUntil = getDaysUntilDate(check.date_et_heure);
                   const dateWarningStyle = isApproaching ? getDateWarningStyle(check.date_et_heure) : {};
-                  const statusClass = getStatusBadgeClass(check.date_et_heure);
+                  const statusClass = getStatusBadgeClass(check.date_et_heure, check.status);
+                  const isLinked = check.sale_id && check.payment_id;
+                  const sourceLabel = check.source_type === 'activation' ? '📡 Activation' : '🛒 Vente';
                   
                   return (
-                    <tr 
-                      key={check.id} 
-                      id={`row-${check.id}`}
-                      style={isApproaching ? { ...dateWarningStyle, transition: 'all 0.2s ease' } : {}}
-                    >
+                    <tr key={check.id} style={isApproaching ? { ...dateWarningStyle, transition: 'all 0.2s ease' } : {}}>
                       <td className="check-font-medium">{check.reference_remise || '-'}</td>
                       <td style={isApproaching ? { fontWeight: 'bold' } : {}}>
                         {formatDate(check.date_et_heure)}
                         {isApproaching && daysUntil >= 0 && (
-                          <div style={{ 
-                            fontSize: '0.7rem', 
-                            marginTop: '0.25rem',
-                            color: daysUntil === 0 ? '#dc2626' : daysUntil <= 3 ? '#ea580c' : '#ca8a04',
-                            fontWeight: 'bold'
-                          }}>
+                          <div style={{ fontSize: '0.7rem', marginTop: '0.25rem', color: daysUntil === 0 ? '#dc2626' : daysUntil <= 3 ? '#ea580c' : '#ca8a04', fontWeight: 'bold' }}>
                             {daysUntil === 0 ? "🔥 Aujourd'hui!" : daysUntil === 1 ? "🔴 Demain!" : daysUntil <= 3 ? `⚠️ Dans ${daysUntil} jours` : `📅 Dans ${daysUntil} jours`}
                           </div>
                         )}
@@ -3005,58 +3727,59 @@ useEffect(() => {
                       <td>{check.nom_agence_remise || check.code_agence_remise || '-'}</td>
                       <td>{check.ville || '-'}</td>
                       <td className="check-text-right check-font-semibold">{formatCurrency(check.montant_total_dh)}</td>
-                      <td className="check-text-right">
-                        {check.taux_escompte > 0 ? (
-                          <span className="check-badge">{check.taux_escompte}%</span>
-                        ) : '-'}
-                      </td>
+                      <td className="check-text-right">{check.taux_escompte > 0 ? <span className="check-badge">{check.taux_escompte}%</span> : '-'}</td>
                       <td className="check-text-right" style={{ fontWeight: '600', color: '#059669' }}>
                         {formatCurrency(check.montant_total_dh - (check.montant_total_dh * (check.taux_escompte || 0) / 100))}
                       </td>
                       <td>{check.type_remise || '-'}</td>
                       <td>
-                        {isApproaching && daysUntil >= 0 ? (
+                        <span style={{ fontSize: '0.7rem', background: check.source_type === 'activation' ? '#f0fdf4' : '#eff6ff', padding: '2px 8px', borderRadius: '12px' }}>
+                          {sourceLabel} #{check.sale_id}
+                        </span>
+                      </td>
+                      <td>
+                        {check.status === 'encaisse' ? (
+                          <span className="check-status-badge check-status-encaisse">
+                            <CheckCircle size={12} /> Encaissé
+                          </span>
+                        ) : isApproaching && daysUntil >= 0 ? (
                           <span className={`check-status-badge ${statusClass}`}>
                             {daysUntil === 0 ? <AlertCircle size={12} /> : daysUntil <= 3 ? <AlertTriangle size={12} /> : <Bell size={12} />}
-                            {getStatusLabel(check.date_et_heure)}
+                            {getStatusLabel(check.date_et_heure, check.status)}
                           </span>
                         ) : (
-                          <span className="check-status-badge check-status-normal">
-                            <CheckCircle size={12} />
-                            Normal
-                          </span>
+                          <span className="check-status-badge check-status-normal"><CheckCircle size={12} /> Normal</span>
                         )}
                       </td>
                       <td>
-                        <button 
-                          className="check-icon-btn" 
-                          onClick={() => openFilesModal(check)} 
-                          title="Gérer les fichiers"
-                        >
+                        {getChequeStatusBadge(check.status)}
+                        {!isLinked && check.status !== 'encaisse' && (
+                          <div style={{ fontSize: '0.6rem', color: '#dc2626', marginTop: '4px' }}>Non lié</div>
+                        )}
+                      </td>
+                      <td>
+                        <button className="check-icon-btn" onClick={() => openFilesModal(check)} title="Gérer les fichiers">
                           <FileText size={16} />
                           <span style={{ marginLeft: '4px' }}>{check.files?.length || 0}</span>
                         </button>
                       </td>
                       <td>
                         <div className="check-actions-cell">
-                          <button 
-                            className="check-icon-btn" 
-                            onClick={() => handlePrint(check)} 
-                            title="Imprimer PDF"
-                            style={{ color: '#8b5cf6' }}
-                          >
+                          <button className="check-icon-btn" onClick={() => handlePrint(check)} title="Imprimer PDF" style={{ color: '#8b5cf6' }}>
                             <Printer size={16} />
                           </button>
-                          <button className="check-icon-btn" onClick={() => handleEdit(check.id)} title="Modifier">
-                            <Edit size={16} />
-                          </button>
-                          <button 
-                            className="check-icon-btn" 
-                            onClick={() => confirmDelete(check)} 
-                            title="Supprimer"
-                          >
-                            <Trash2 size={16} className="text-destructive" />
-                          </button>
+                          {check.status === 'pending' && isLinked && (
+                            <button className="check-icon-btn" onClick={() => handleMarkAsRemis(check)} title="Marquer comme remis" style={{ color: '#f59e0b' }} disabled={updatingStatus}>
+                              <Banknote size={16} />
+                            </button>
+                          )}
+                          {(check.status === 'pending' || check.status === 'remis') && isLinked && (
+                            <button className="check-icon-btn" onClick={() => handleMarkAsEncaisse(check)} title="Marquer comme encaissé" style={{ color: '#10b981' }} disabled={updatingStatus}>
+                              <CheckIcon size={16} />
+                            </button>
+                          )}
+                          <button className="check-icon-btn" onClick={() => handleEdit(check.id)} title="Modifier"><Edit size={16} /></button>
+                          <button className="check-icon-btn" onClick={() => confirmDelete(check)} title="Supprimer"><Trash2 size={16} className="text-destructive" /></button>
                         </div>
                       </td>
                     </tr>
@@ -3067,12 +3790,7 @@ useEffect(() => {
           </table>
         </div>
         
-        {/* Pagination */}
-        <Pagination 
-          currentPage={currentPage} 
-          totalPages={totalPages} 
-          onPageChange={setCurrentPage} 
-        />
+        <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
       </div>
 
       {/* Create/Edit Modal */}
@@ -3081,24 +3799,8 @@ useEffect(() => {
           <div className="check-overlay" onClick={() => { setShowModal(false); resetForm(); }} />
           <div className="check-dialog">
             <div className="check-dialog-header">
-              <h2 className="check-dialog-title">
-                {editingId ? (
-                  <>
-                    <Edit size={20} />
-                    Modifier la remise
-                  </>
-                ) : (
-                  <>
-                    <Plus size={20} />
-                    Nouvelle remise
-                  </>
-                )}
-              </h2>
-              <p className="check-dialog-description">
-                {editingId 
-                  ? 'Modifiez les informations de la remise ci-dessous' 
-                  : 'Remplissez les informations pour créer une nouvelle remise'}
-              </p>
+              <h2 className="check-dialog-title">{editingId ? <Edit size={20} /> : <Plus size={20} />} {editingId ? 'Modifier la remise' : 'Nouvelle remise'}</h2>
+              <p className="check-dialog-description">{editingId ? 'Modifiez les informations de la remise ci-dessous' : 'Remplissez les informations pour créer une nouvelle remise'}</p>
             </div>
             
             <form onSubmit={handleSubmit}>
@@ -3106,205 +3808,95 @@ useEffect(() => {
                 <div className="check-form-grid">
                   <div className="check-form-group">
                     <label className="check-label">Référence</label>
-                    <input 
-                      type="text" 
-                      name="reference_remise" 
-                      value={formData.reference_remise} 
-                      onChange={handleInputChange} 
-                      className="check-input" 
-                      placeholder="Auto-généré si vide" 
-                    />
+                    <input type="text" name="reference_remise" value={formData.reference_remise} onChange={handleInputChange} className="check-input" placeholder={editingId ? "Modifier la référence" : "Auto-généré si vide"} />
+                    {!editingId && <small style={{ fontSize: '0.7rem', color: '#64748b' }}>Laissez vide pour génération automatique</small>}
                   </div>
                   <div className="check-form-group">
                     <label className="check-label check-label-required">Date et Heure</label>
-                    <input 
-                      type="datetime-local" 
-                      name="date_et_heure" 
-                      value={formData.date_et_heure} 
-                      onChange={handleInputChange} 
-                      className="check-input" 
-                      required 
-                    />
+                    <input type="datetime-local" name="date_et_heure" value={formData.date_et_heure} onChange={handleInputChange} className="check-input" required />
                   </div>
                   
-                  {/* Client Remettant - Searchable Select */}
                   <div className="check-form-group">
                     <label className="check-label check-label-required">Client Remettant</label>
                     <SearchableSelect
                       options={clientsWithChequePayments}
                       value={formData.client_remettant}
-                      onChange={(clientName, clientData) => {
-                        setFormData(prev => ({
-                          ...prev,
-                          client_remettant: clientName,
-                          ville: clientData?.ville || prev.ville,
-                        }));
-                      }}
-                      placeholder="Rechercher un client..."
+                      onChange={(clientName, clientData) => handleClientSelect(clientName, clientData)}
+                      placeholder="Rechercher un client (Ventes ou Activations)..."
                       disabled={editingId !== null}
+                      renderOption={renderClientOption}
                     />
-                    {clientsWithChequePayments.length > 0 && (
-                      <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.25rem' }}>
-                        {clientsWithChequePayments.length} client(s) avec paiement par chèque
+                    {autoLinkedPayment && !editingId && (
+                      <div style={{ fontSize: '0.7rem', color: '#10b981', marginTop: '0.25rem' }}>
+                        ✅ Paiement automatiquement lié: {autoLinkedPayment.source_type === 'activation' ? 'Activation' : 'Vente'} #{autoLinkedPayment.source_reference} - {formatCurrencyHelper(autoLinkedPayment.amount)}
                       </div>
                     )}
-                    {editingId && (
-                      <div style={{ fontSize: '0.75rem', color: '#f59e0b', marginTop: '0.25rem' }}>
-                        <Info size={12} style={{ display: 'inline', marginRight: '0.25rem' }} />
-                        Le client remettant ne peut pas être modifié en mode édition
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="check-form-group">
-                    <label className="check-label">Ville</label>
-                    <input 
-                      type="text" 
-                      name="ville" 
-                      value={formData.ville} 
-                      onChange={handleInputChange} 
-                      className="check-input" 
-                    />
-                  </div>
-                  <div className="check-form-group">
-                    <label className="check-label">Code Agence Remise</label>
-                    <input 
-                      type="text" 
-                      name="code_agence_remise" 
-                      value={formData.code_agence_remise} 
-                      onChange={handleInputChange} 
-                      className="check-input" 
-                    />
-                  </div>
-                  <div className="check-form-group">
-                    <label className="check-label">Nom Agence Remise</label>
-                    <input 
-                      type="text" 
-                      name="nom_agence_remise" 
-                      value={formData.nom_agence_remise} 
-                      onChange={handleInputChange} 
-                      className="check-input" 
-                    />
-                  </div>
-                  <div className="check-form-group">
-                    <label className="check-label">Code Agence Compte</label>
-                    <input 
-                      type="text" 
-                      name="code_agence_compte" 
-                      value={formData.code_agence_compte} 
-                      onChange={handleInputChange} 
-                      className="check-input" 
-                    />
-                  </div>
-                  <div className="check-form-group">
-                    <label className="check-label">Nom Agence Compte</label>
-                    <input 
-                      type="text" 
-                      name="nom_agence_compte" 
-                      value={formData.nom_agence_compte} 
-                      onChange={handleInputChange} 
-                      className="check-input" 
-                    />
-                  </div>
-                  
-                  {/* RIB Remettant - Auto-filled from settings */}
-                  <div className="check-form-group">
-                    <label className="check-label">RIB Remettant</label>
-                    <input 
-                      type="text" 
-                      name="rib_remettant" 
-                      value={formData.rib_remettant} 
-                      onChange={handleInputChange} 
-                      className="check-input" 
-                      placeholder={loadingCompanyInfo ? "Chargement..." : "Auto-rempli depuis les paramètres"}
-                      readOnly
-                      style={{ backgroundColor: '#f8fafc', cursor: 'default' }}
-                    />
-                    {companyInfo && (
-                      <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.25rem' }}>
-                        RIB de l'entreprise: {companyInfo.bank_name || 'Banque'} - {formData.rib_remettant}
+                    {pendingPayments.length > 1 && !editingId && (
+                      <div style={{ fontSize: '0.7rem', color: '#f59e0b', marginTop: '0.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span>⚠️ {pendingPayments.length} paiements trouvés - Veuillez en sélectionner un</span>
+                        <button
+                          type="button"
+                          className="check-btn check-btn-outline"
+                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem' }}
+                          onClick={() => {
+                            modalOpenedManually.current = true;
+                            setShowPendingPaymentsModal(true);
+                          }}
+                        >
+                          Sélectionner
+                        </button>
                       </div>
                     )}
                   </div>
                   
-                  <div className="check-form-group">
-                    <label className="check-label">Nombre de Valeurs</label>
-                    <input 
-                      type="number" 
-                      name="nombre_de_valeurs" 
-                      value={formData.nombre_de_valeurs} 
-                      onChange={handleInputChange} 
-                      className="check-input" 
-                      min="1" 
-                    />
-                  </div>
-                  <div className="check-form-group">
-                    <label className="check-label check-label-required">Montant Total (MAD)</label>
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      name="montant_total_dh" 
-                      value={formData.montant_total_dh} 
-                      onChange={handleInputChange} 
-                      className="check-input" 
-                      required 
-                    />
-                  </div>
-                  <div className="check-form-group">
-                    <label className="check-label">Type Remise</label>
-                    <input 
-                      type="text" 
-                      name="type_remise" 
-                      value={formData.type_remise} 
-                      onChange={handleInputChange} 
-                      className="check-input" 
-                      placeholder="Ex: Normal, Urgent" 
-                    />
-                  </div>
-                  <div className="check-form-group">
-                    <label className="check-label">Taux Escompte (%)</label>
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      name="taux_escompte" 
-                      value={formData.taux_escompte} 
-                      onChange={handleInputChange} 
-                      className="check-input" 
-                      min="0" 
-                      max="100" 
-                    />
-                  </div>
+                  <div className="check-form-group"><label className="check-label">Ville</label><input type="text" name="ville" value={formData.ville} onChange={handleInputChange} className="check-input" /></div>
+                  <div className="check-form-group"><label className="check-label">Code Agence Remise</label><input type="text" name="code_agence_remise" value={formData.code_agence_remise} onChange={handleInputChange} className="check-input" /></div>
+                  <div className="check-form-group"><label className="check-label">Nom Agence Remise</label><input type="text" name="nom_agence_remise" value={formData.nom_agence_remise} onChange={handleInputChange} className="check-input" /></div>
+                  <div className="check-form-group"><label className="check-label">Code Agence Compte</label><input type="text" name="code_agence_compte" value={formData.code_agence_compte} onChange={handleInputChange} className="check-input" /></div>
+                  <div className="check-form-group"><label className="check-label">Nom Agence Compte</label><input type="text" name="nom_agence_compte" value={formData.nom_agence_compte} onChange={handleInputChange} className="check-input" /></div>
+                  <div className="check-form-group"><label className="check-label">RIB Remettant</label><input type="text" name="rib_remettant" value={formData.rib_remettant} onChange={handleInputChange} className="check-input" readOnly style={{ backgroundColor: '#f8fafc' }} /></div>
+                  <div className="check-form-group"><label className="check-label">Nombre de Valeurs</label><input type="number" name="nombre_de_valeurs" value={formData.nombre_de_valeurs} onChange={handleInputChange} className="check-input" min="1" /></div>
+                  <div className="check-form-group"><label className="check-label check-label-required">Montant Total (MAD)</label><input type="number" step="0.01" name="montant_total_dh" value={formData.montant_total_dh} onChange={handleInputChange} className="check-input" required /></div>
+                  <div className="check-form-group"><label className="check-label">Type Remise</label><input type="text" name="type_remise" value={formData.type_remise} onChange={handleInputChange} className="check-input" placeholder="Ex: Normal, Urgent" /></div>
+                  <div className="check-form-group"><label className="check-label">Taux Escompte (%)</label><input type="number" step="0.01" name="taux_escompte" value={formData.taux_escompte} onChange={handleInputChange} className="check-input" min="0" max="100" /></div>
+                  
+                  {editingId && (
+                    <>
+                      <div className="check-form-group">
+                        <label className="check-label">Statut Chèque</label>
+                        <select name="status" value={formData.status} onChange={handleInputChange} className="check-input">
+                          <option value="pending">⏳ En attente</option>
+                          <option value="remis">📝 Remis en banque</option>
+                          <option value="encaisse">✅ Encaissé</option>
+                        </select>
+                      </div>
+                      <div className="check-form-group">
+                        <label className="check-label">Source Type</label>
+                        <select name="source_type" value={formData.source_type} onChange={handleInputChange} className="check-input">
+                          <option value="sale">Vente</option>
+                          <option value="activation">Activation GPS</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
                 </div>
 
-                {/* Files Section with Compression */}
                 <div className="check-section">
-                  <div className="check-section-title">
-                    <FileText size={18} />
-                    Fichiers attachés
-                  </div>
+                  <div className="check-section-title"><FileText size={18} /> Fichiers attachés</div>
                   
                   {editingId && existingFiles.length > 0 && (
                     <div style={{ marginBottom: '1rem' }}>
-                      <label className="check-label" style={{ fontSize: '0.8125rem', color: '#64748b' }}>
-                        Fichiers existants
-                      </label>
+                      <label className="check-label">Fichiers existants</label>
                       <div className="check-file-list">
                         {existingFiles.map((file, index) => (
                           <div key={index} className="check-file-item">
                             <div className="check-file-info">
-                              {file.match(/\.(jpg|jpeg|png|webp)$/i) ? 
-                                <ImageIcon size={18} style={{ color: '#3b82f6' }} /> : 
-                                <File size={18} style={{ color: '#64748b' }} />
-                              }
+                              {file.match(/\.(jpg|jpeg|png|webp)$/i) ? <ImageIcon size={18} style={{ color: '#3b82f6' }} /> : <File size={18} style={{ color: '#64748b' }} />}
                               <span style={{ fontSize: '0.8125rem', wordBreak: 'break-all' }}>{file}</span>
                             </div>
                             <div className="check-file-actions">
-                              <button type="button" className="check-icon-btn" onClick={() => handlePreviewFile(file)} title="Aperçu">
-                                <Eye size={16} />
-                              </button>
-                              <button type="button" className="check-icon-btn" onClick={() => removeExistingFile(file)} title="Supprimer">
-                                <Trash2 size={16} style={{ color: '#ef4444' }} />
-                              </button>
+                              <button type="button" className="check-icon-btn" onClick={() => handlePreviewFile(file)}><Eye size={16} /></button>
+                              <button type="button" className="check-icon-btn" onClick={() => removeExistingFile(file)}><Trash2 size={16} style={{ color: '#ef4444' }} /></button>
                             </div>
                           </div>
                         ))}
@@ -3314,56 +3906,24 @@ useEffect(() => {
 
                   <div>
                     <div className="check-upload-area">
-                      <input
-                        type="file"
-                        multiple
-                        onChange={handleFileSelect}
-                        style={{ display: 'none' }}
-                        id="file-upload-form"
-                        accept=".pdf,.jpg,.jpeg,.png,.webp"
-                        disabled={compressing}
-                      />
-                      <label htmlFor="file-upload-form" className="check-upload-label">
-                        <Upload size={18} />
-                        {compressing ? 'Compression en cours...' : 'Sélectionner des fichiers'}
-                      </label>
-                      <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.5rem' }}>
-                        PDF, JPG, PNG, WebP (max 10MB - Les images sont automatiquement compressées)
-                      </p>
+                      <input type="file" multiple onChange={handleFileSelect} style={{ display: 'none' }} id="file-upload-form" accept=".pdf,.jpg,.jpeg,.png,.webp" disabled={compressing} />
+                      <label htmlFor="file-upload-form" className="check-upload-label"><Upload size={18} /> {compressing ? 'Compression en cours...' : 'Sélectionner des fichiers'}</label>
+                      <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.5rem' }}>PDF, JPG, PNG, WebP (max 10MB - Images compressées automatiquement)</p>
                     </div>
                     
                     {selectedFiles.length > 0 && (
                       <div style={{ marginTop: '1rem' }}>
-                        <label className="check-label" style={{ fontSize: '0.8125rem' }}>
-                          Fichiers sélectionnés ({selectedFiles.length})
-                        </label>
+                        <label className="check-label">Fichiers sélectionnés ({selectedFiles.length})</label>
                         <div className="check-file-list">
-                          {selectedFiles.map((file, index) => {
-                            // Calculate compressed size info
-                            const originalSize = (file.size / 1024).toFixed(1);
-                            const isImage = file.type.startsWith('image/');
-                            return (
-                              <div key={index} className="check-file-item">
-                                <div className="check-file-info">
-                                  {isImage ? 
-                                    <ImageIcon size={18} style={{ color: '#3b82f6' }} /> : 
-                                    <File size={18} style={{ color: '#64748b' }} />
-                                  }
-                                  <span style={{ fontSize: '0.8125rem' }}>
-                                    {file.name} ({originalSize} KB)
-                                    {isImage && file.type === 'image/webp' && (
-                                      <span style={{ fontSize: '0.7rem', color: '#10b981', marginLeft: '0.5rem' }}>
-                                        (compressé)
-                                      </span>
-                                    )}
-                                  </span>
-                                </div>
-                                <button type="button" className="check-icon-btn" onClick={() => removeSelectedFile(index)}>
-                                  <X size={14} style={{ color: '#ef4444' }} />
-                                </button>
+                          {selectedFiles.map((file, index) => (
+                            <div key={index} className="check-file-item">
+                              <div className="check-file-info">
+                                {file.type.startsWith('image/') ? <ImageIcon size={18} style={{ color: '#3b82f6' }} /> : <File size={18} style={{ color: '#64748b' }} />}
+                                <span style={{ fontSize: '0.8125rem' }}>{file.name} ({(file.size / 1024).toFixed(1)} KB)</span>
                               </div>
-                            );
-                          })}
+                              <button type="button" className="check-icon-btn" onClick={() => removeSelectedFile(index)}><X size={14} style={{ color: '#ef4444' }} /></button>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
@@ -3372,17 +3932,104 @@ useEffect(() => {
               </div>
               
               <div className="check-dialog-footer">
-                <Button type="button" variant="outline" onClick={() => { setShowModal(false); resetForm(); }}>
-                  Annuler
-                </Button>
-                <Button type="submit" disabled={uploading || compressing}>
+                <button type="button" className="check-btn check-btn-outline" onClick={() => { setShowModal(false); resetForm(); }}>Annuler</button>
+                <button type="submit" className="check-btn check-btn-primary" disabled={uploading || compressing}>
                   {(uploading || compressing) && <Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite', marginRight: '0.5rem' }} />}
                   {editingId ? 'Mettre à jour' : 'Créer la remise'}
-                </Button>
+                </button>
               </div>
             </form>
             
-            <button className="check-dialog-close" onClick={() => { setShowModal(false); resetForm(); }}>
+            <button className="check-dialog-close" onClick={() => { setShowModal(false); resetForm(); }}><X size={18} /></button>
+          </div>
+        </>
+      )}
+
+      {/* ==================== ENCAISSE CONFIRMATION DIALOG ==================== */}
+      {showEncaisseConfirm && (
+        <>
+          <div className="check-overlay" onClick={() => { setShowEncaisseConfirm(null); setNewReferenceInput(''); }} />
+          <div className="check-dialog encaisse-dialog">
+            <div className="check-dialog-header">
+              <h2 className="check-dialog-title">
+                <CheckIcon size={20} style={{ color: '#10b981' }} />
+                Confirmer l'encaissement
+              </h2>
+              <p className="check-dialog-description">
+                Veuillez confirmer l'encaissement de ce chèque.
+                Vous pouvez également modifier la référence si nécessaire.
+              </p>
+            </div>
+            
+            <div className="check-dialog-body">
+              <div className="encaisse-warning">
+                <AlertTriangle size={16} style={{ color: '#d97706' }} />
+                <div style={{ marginLeft: '8px' }}>
+                  <strong>Attention:</strong> Cette action est irréversible et ajoutera le montant du chèque au montant payé.
+                </div>
+              </div>
+              
+              <div className="check-info-message" style={{ marginBottom: '0.5rem' }}>
+                <Info size={16} />
+                <div style={{ flex: 1 }}>
+                  <strong>Détails de la remise :</strong><br />
+                  <strong>Référence actuelle:</strong> {showEncaisseConfirm.check.reference_remise || 'N/A'}<br />
+                  <strong>Client:</strong> {showEncaisseConfirm.check.client_remettant || 'N/A'}<br />
+                  <strong>Montant:</strong> {formatCurrency(showEncaisseConfirm.check.montant_total_dh)}<br />
+                  <strong>Source:</strong> {showEncaisseConfirm.check.source_type === 'activation' ? 'Activation GPS' : 'Vente'} #{showEncaisseConfirm.check.sale_id}
+                </div>
+              </div>
+              
+              <div className="check-form-group">
+                <label className="check-label">
+                  Nouvelle référence (optionnel)
+                </label>
+                <input
+                  type="text"
+                  className="check-input"
+                  value={newReferenceInput}
+                  onChange={(e) => setNewReferenceInput(e.target.value)}
+                  placeholder="Entrez une nouvelle référence ou laissez vide pour conserver l'actuelle"
+                />
+                <div className="reference-update-info">
+                  <Info size={12} style={{ marginRight: '4px' }} />
+                  Si vous modifiez la référence, elle sera mise à jour dans le système.
+                </div>
+              </div>
+            </div>
+            
+            <div className="check-dialog-footer">
+              <button 
+                className="check-btn check-btn-outline" 
+                onClick={() => { setShowEncaisseConfirm(null); setNewReferenceInput(''); }}
+                disabled={encaisseProcessing}
+              >
+                Annuler
+              </button>
+              <button 
+                className="check-btn check-btn-success" 
+                onClick={confirmEncaisse}
+                disabled={encaisseProcessing}
+              >
+                {encaisseProcessing ? (
+                  <>
+                    <Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite', marginRight: '0.5rem' }} />
+                    Traitement...
+                  </>
+                ) : (
+                  <>
+                    <CheckIcon size={16} />
+                    Confirmer l'encaissement
+                  </>
+                )}
+              </button>
+            </div>
+            
+            <button 
+              className="check-dialog-close" 
+              onClick={() => { setShowEncaisseConfirm(null); setNewReferenceInput(''); }}
+              disabled={encaisseProcessing}
+            >
               <X size={18} />
               <span className="sr-only">Fermer</span>
             </button>
@@ -3415,6 +4062,7 @@ useEffect(() => {
                 {showDeleteDialog.client_remettant && <div>👤 {showDeleteDialog.client_remettant}</div>}
                 {showDeleteDialog.montant_total_dh && <div>💰 {formatCurrency(showDeleteDialog.montant_total_dh)}</div>}
                 {showDeleteDialog.date_et_heure && <div>📅 {formatDate(showDeleteDialog.date_et_heure)}</div>}
+                {showDeleteDialog.source_type && <div>📋 Source: {showDeleteDialog.source_type === 'activation' ? 'Activation GPS' : 'Vente'}</div>}
               </div>
             </div>
             
@@ -3427,18 +4075,17 @@ useEffect(() => {
             )}
             
             <div className="check-dialog-footer">
-              <Button 
-                variant="outline" 
+              <button 
+                className="check-btn check-btn-outline" 
                 onClick={() => setShowDeleteDialog(null)}
                 disabled={deleting}
               >
                 Annuler
-              </Button>
-              <Button 
-                variant="danger" 
+              </button>
+              <button 
+                className="check-btn check-btn-danger-enhanced" 
                 onClick={handleDelete}
                 disabled={deleting}
-                className={deleting ? 'deleting' : ''}
               >
                 {deleting ? (
                   <>
@@ -3451,7 +4098,7 @@ useEffect(() => {
                     Supprimer définitivement
                   </>
                 )}
-              </Button>
+              </button>
             </div>
             <button 
               className="check-dialog-close" 
@@ -3499,7 +4146,6 @@ useEffect(() => {
                 </select>
               </div>
               
-              {/* Preview bank logo and name */}
               <div style={{ textAlign: 'center', padding: '10px', border: '1px solid #e2e8f0', borderRadius: '0.75rem', background: '#f8fafc' }}>
                 <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '8px' }}>Aperçu :</p>
                 {getBankLogo(selectedBank.name) && (
@@ -3525,13 +4171,13 @@ useEffect(() => {
             </div>
             
             <div className="check-dialog-footer">
-              <Button variant="outline" onClick={() => { setShowPrintModal(false); setPrintCheck(null); }}>
+              <button className="check-btn check-btn-outline" onClick={() => { setShowPrintModal(false); setPrintCheck(null); }}>
                 Annuler
-              </Button>
-              <Button onClick={confirmPrint} disabled={printing}>
+              </button>
+              <button className="check-btn check-btn-primary" onClick={confirmPrint} disabled={printing}>
                 {printing && <Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite', marginRight: '0.5rem' }} />}
                 Générer PDF
-              </Button>
+              </button>
             </div>
             
             <button className="check-dialog-close" onClick={() => { setShowPrintModal(false); setPrintCheck(null); }}>
@@ -3581,10 +4227,10 @@ useEffect(() => {
                     <p style={{ fontSize: '0.8125rem', marginBottom: '0.5rem' }}>
                       {selectedFiles.length} fichier(s) sélectionné(s) et compressé(s)
                     </p>
-                    <Button variant="success" onClick={handleFileUpload} disabled={uploading || compressing} style={{ fontSize: '0.75rem' }}>
+                    <button className="check-btn check-btn-success" onClick={handleFileUpload} disabled={uploading || compressing} style={{ fontSize: '0.75rem' }}>
                       {uploading ? <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} /> : <FileUp size={14} />}
                       <span style={{ marginLeft: '0.5rem' }}>Uploader</span>
-                    </Button>
+                    </button>
                   </div>
                 )}
               </div>
@@ -3622,9 +4268,9 @@ useEffect(() => {
             </div>
             
             <div className="check-dialog-footer">
-              <Button variant="outline" onClick={() => { setShowFilesModal(false); setSelectedFiles([]); }}>
+              <button className="check-btn check-btn-outline" onClick={() => { setShowFilesModal(false); setSelectedFiles([]); }}>
                 Fermer
-              </Button>
+              </button>
             </div>
             
             <button className="check-dialog-close" onClick={() => { setShowFilesModal(false); setSelectedFiles([]); }}>
@@ -3664,9 +4310,9 @@ useEffect(() => {
             </div>
             
             <div className="check-dialog-footer">
-              <Button variant="outline" onClick={() => setShowFilePreview(false)}>
+              <button className="check-btn check-btn-outline" onClick={() => setShowFilePreview(false)}>
                 Fermer
-              </Button>
+              </button>
             </div>
             
             <button className="check-dialog-close" onClick={() => setShowFilePreview(false)}>
@@ -3797,12 +4443,12 @@ useEffect(() => {
             </div>
             
             <div className="check-dialog-footer">
-              <Button variant="outline" onClick={clearFilters}>
+              <button className="check-btn check-btn-outline" onClick={clearFilters}>
                 Effacer tout
-              </Button>
-              <Button onClick={() => setShowFilterModal(false)}>
+              </button>
+              <button className="check-btn check-btn-primary" onClick={() => setShowFilterModal(false)}>
                 Appliquer les filtres
-              </Button>
+              </button>
             </div>
             
             <button className="check-dialog-close" onClick={() => setShowFilterModal(false)}>
@@ -3813,29 +4459,6 @@ useEffect(() => {
         </>
       )}
     </div>
-  );
-};
-
-// Button component for reuse
-const Button = ({ children, variant = 'default', size = 'default', className = '', disabled, onClick, type = 'button', style }) => {
-  const variantClass = variant === 'outline' ? 'check-btn-outline' :
-                       variant === 'ghost' ? 'check-btn-ghost' :
-                       variant === 'danger' ? 'check-btn-danger' :
-                       variant === 'success' ? 'check-btn-success' :
-                       'check-btn-primary';
-  
-  const sizeClass = size === 'icon' ? 'check-btn-icon' : 'check-btn-default';
-  
-  return (
-    <button 
-      type={type}
-      className={`check-btn ${variantClass} ${sizeClass} ${className}`}
-      disabled={disabled}
-      onClick={onClick}
-      style={style}
-    >
-      {children}
-    </button>
   );
 };
 
