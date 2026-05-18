@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
   Plus, Pencil, Trash2, Search, X, RefreshCw, AlertTriangle, 
@@ -6,7 +6,7 @@ import {
   Eye, Edit2, Save, Printer, Calendar, Smartphone, Hash, 
   CreditCard, Clock, ExternalLink, Loader, Package, Trash,
   User, Check, AlertCircle, Download, History, Receipt, List,
-  Filter
+  Filter, ChevronDown
 } from 'lucide-react';
 import { ExportMenu } from './ExportMenu';
 import ExcelJS from 'exceljs';
@@ -644,6 +644,105 @@ const styles = `
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
   
+  /* Searchable Select Styles */
+  .searchable-select {
+    position: relative;
+    width: 100%;
+  }
+  
+  .searchable-select-input {
+    width: 100%;
+    height: 2.5rem;
+    padding: 0.5rem 2rem 0.5rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    background: white;
+    color: #111827;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  
+  .searchable-select-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+  
+  .searchable-select-arrow {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: #6b7280;
+  }
+  
+  .searchable-select-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    z-index: 10;
+    max-height: 240px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  
+  .searchable-select-search {
+    padding: 0.5rem;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  
+  .searchable-select-search-input {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.375rem;
+    font-size: 0.813rem;
+    outline: none;
+  }
+  
+  .searchable-select-search-input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  }
+  
+  .searchable-select-options {
+    overflow-y: auto;
+    max-height: 180px;
+  }
+  
+  .searchable-select-option {
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    font-size: 0.813rem;
+    transition: background 0.2s;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  
+  .searchable-select-option:hover {
+    background: #f3f4f6;
+  }
+  
+  .searchable-select-option-selected {
+    background: #eff6ff;
+    color: #2563eb;
+  }
+  
+  .searchable-select-empty {
+    padding: 0.5rem 0.75rem;
+    text-align: center;
+    color: #9ca3af;
+    font-size: 0.813rem;
+  }
+  
   select.clients-input {
     cursor: pointer;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
@@ -1140,6 +1239,111 @@ const styles = `
   }
 `;
 
+// ==================== SEARCHABLE SELECT COMPONENT ====================
+const SearchableSelect = ({ 
+  options, 
+  value, 
+  onChange, 
+  placeholder = "Sélectionner un produit...",
+  disabled = false
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const containerRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const selectedOption = options.find(opt => opt.id === value);
+
+  const filteredOptions = options.filter(opt => 
+    opt.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (opt.marque?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+  );
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm('');
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelect = (option) => {
+    onChange(option.id);
+    setIsOpen(false);
+    setSearchTerm('');
+  };
+
+  return (
+    <div className="searchable-select" ref={containerRef}>
+      <div 
+        className="searchable-select-input"
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        style={{ 
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          backgroundColor: disabled ? '#f3f4f6' : 'white'
+        }}
+      >
+        {selectedOption ? (
+          <span>
+            {selectedOption.nom} {selectedOption.marque ? `- ${selectedOption.marque}` : ''}
+            {selectedOption.prix_vente && (
+              <span style={{ fontSize: '0.7rem', color: '#6b7280', marginLeft: '0.5rem' }}>
+                ({selectedOption.prix_vente} MAD)
+              </span>
+            )}
+          </span>
+        ) : (
+          <span style={{ color: '#9ca3af' }}>{placeholder}</span>
+        )}
+      </div>
+      <ChevronDown size={16} className="searchable-select-arrow" />
+      
+      {isOpen && !disabled && (
+        <div className="searchable-select-dropdown">
+          <div className="searchable-select-search">
+            <input
+              type="text"
+              className="searchable-select-search-input"
+              placeholder="Rechercher un produit..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              autoFocus
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          <div className="searchable-select-options">
+            {filteredOptions.length === 0 ? (
+              <div className="searchable-select-empty">
+                Aucun produit trouvé
+              </div>
+            ) : (
+              filteredOptions.map(option => (
+                <div
+                  key={option.id}
+                  className={`searchable-select-option ${value === option.id ? 'searchable-select-option-selected' : ''}`}
+                  onClick={() => handleSelect(option)}
+                >
+                  <div style={{ fontWeight: value === option.id ? 600 : 400 }}>
+                    {option.nom} {option.marque ? `- ${option.marque}` : ''}
+                  </div>
+                  {option.prix_vente && (
+                    <div style={{ fontSize: '0.7rem', color: '#6b7280' }}>
+                      Prix: {option.prix_vente} MAD
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ==================== HELPER FUNCTIONS ====================
 const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
 const safeNumber = (value) => { const n = Number(value); return isNaN(n) ? 0 : n; };
@@ -1395,10 +1599,11 @@ const exportClientActivationsToExcel = async (client, activationsData) => {
   }
 };
 
-// ==================== ACTIVATIONS DETAILS MODAL ====================
+// ==================== OPTIMIZED ACTIVATIONS DETAILS MODAL ====================
 const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   const [activationsData, setActivationsData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [generatingPdfTTC, setGeneratingPdfTTC] = useState(false);
   const [generatingPdfHT, setGeneratingPdfHT] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
@@ -1409,20 +1614,30 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   const [showPaid, setShowPaid] = useState(true);
   const [showPartial, setShowPartial] = useState(true);
   const [showUnpaid, setShowUnpaid] = useState(true);
+  
+  // Cache for payment data to avoid repeated fetches
+  const paymentCache = useRef({});
 
   useEffect(() => {
     const loadClientActivations = async () => {
       setLoading(true);
+      setLoadingProgress(0);
+      
       try {
         const token = localStorage.getItem('token');
         
-        const activationsResponse = await fetch(`${API_URL}/activations?client_id=${client.id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        // Step 1: Fetch activations and sales in parallel
+        setLoadingProgress(10);
+        const [activationsResponse, salesResponse] = await Promise.all([
+          fetch(`${API_URL}/activations?client_id=${client.id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          }),
+          fetch(`${API_URL}/ventes?client_id=${client.id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+        ]);
         
-        const salesResponse = await fetch(`${API_URL}/ventes?client_id=${client.id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        setLoadingProgress(30);
         
         let allActivations = [];
         let clientSales = [];
@@ -1438,37 +1653,58 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
           setSalesData(clientSales);
         }
         
-        // Fetch payment details for each activation
+        // Step 2: Get unique activation IDs for payment fetch
+        const uniqueActivationIds = [...new Set(allActivations.map(a => a.id))];
+        
+        setLoadingProgress(50);
+        
+        // Step 3: Fetch all payment data in parallel (batch request if API supports, otherwise parallel individual requests)
+        const paymentPromises = uniqueActivationIds.map(async (activationId) => {
+          // Check cache first
+          if (paymentCache.current[activationId]) {
+            return { activationId, data: paymentCache.current[activationId] };
+          }
+          
+          try {
+            const paymentResponse = await fetch(`${API_URL}/activations/${activationId}/payments`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            
+            if (paymentResponse.ok) {
+              const paymentData = await paymentResponse.json();
+              paymentCache.current[activationId] = paymentData;
+              return { activationId, data: paymentData };
+            }
+            return { activationId, data: null };
+          } catch (err) {
+            console.error('Error fetching payment for activation', activationId, err);
+            return { activationId, data: null };
+          }
+        });
+        
+        const paymentResults = await Promise.all(paymentPromises);
+        setLoadingProgress(70);
+        
+        // Create payment map for quick lookup
+        const paymentMap = {};
+        paymentResults.forEach(result => {
+          if (result.data) {
+            paymentMap[result.activationId] = result.data;
+          }
+        });
+        
+        // Step 4: Process all data
         const processedActions = [];
         const processedKeys = new Set();
         
         for (const activation of allActivations) {
           const associatedSale = clientSales.find(s => s.id === activation.vente_id);
+          const paymentInfo = paymentMap[activation.id] || {};
           
-          // Fetch payment history for this activation
-          let paymentHistory = [];
-          let activationPaymentStatus = 'unpaid';
-          let activationAmountPaid = 0;
-          let renewalAmountPaid = 0;
-          let activationOriginalPrice = safeNumber(activation.price);
-          let renewalTotal = 0;
-          
-          try {
-            const paymentResponse = await fetch(`${API_URL}/activations/${activation.id}/payments`, {
-              headers: { Authorization: `Bearer ${token}` }
-            });
-            if (paymentResponse.ok) {
-              const paymentData = await paymentResponse.json();
-              paymentHistory = paymentData.payment_history || [];
-              activationPaymentStatus = paymentData.payment_status || 'unpaid';
-              activationAmountPaid = safeNumber(paymentData.amount_paid);
-              activationOriginalPrice = safeNumber(paymentData.original_price || activation.price);
-              renewalTotal = safeNumber(paymentData.renewal_total);
-              renewalAmountPaid = safeNumber(paymentData.renewal_paid);
-            }
-          } catch (err) {
-            console.error('Error fetching payment history for activation', activation.id, err);
-          }
+          const paymentStatus = paymentInfo.payment_status || 'unpaid';
+          const amountPaid = safeNumber(paymentInfo.amount_paid);
+          const activationOriginalPrice = safeNumber(paymentInfo.original_price || activation.price);
+          const renewalAmountPaid = safeNumber(paymentInfo.renewal_paid);
           
           let totalActivationPriceHT = activationOriginalPrice;
           let saleTotalPriceHT = 0;
@@ -1500,16 +1736,16 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
             // Calculate payment status for this activation item
             let itemPaymentStatus = 'unpaid';
             let itemAmountPaid = 0;
-            if (activationPaymentStatus === 'paid') {
+            if (paymentStatus === 'paid') {
               itemPaymentStatus = 'paid';
               itemAmountPaid = activationPriceTTC;
-            } else if (activationPaymentStatus === 'partial') {
-              if (activationAmountPaid >= activationPriceTTC) {
+            } else if (paymentStatus === 'partial') {
+              if (amountPaid >= activationPriceTTC) {
                 itemPaymentStatus = 'paid';
                 itemAmountPaid = activationPriceTTC;
-              } else if (activationAmountPaid > 0) {
+              } else if (amountPaid > 0) {
                 itemPaymentStatus = 'partial';
-                itemAmountPaid = activationAmountPaid;
+                itemAmountPaid = amountPaid;
               }
             }
             
@@ -1536,28 +1772,29 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
               paymentStatus: itemPaymentStatus,
               amountPaid: itemAmountPaid,
               remainingAmount: activationPriceTTC - itemAmountPaid,
-              paymentHistory: paymentHistory
+              paymentHistory: paymentInfo.payment_history || []
             });
           }
           
+          // Process renewals
           if (activation.renewal_history && Array.isArray(activation.renewal_history)) {
-            activation.renewal_history.forEach((entry, idx) => {
+            for (const entry of activation.renewal_history) {
               if (entry.action === 'renewal') {
                 const renewalKey = `renewal_${activation.id}_${entry.date}_${entry.price}`;
                 if (!processedKeys.has(renewalKey)) {
                   processedKeys.add(renewalKey);
                   const renewalPriceHT = safeNumber(entry.price);
                   
-                  // Calculate payment status for renewal
                   let renewalPaymentStatus = 'unpaid';
                   let renewalItemAmountPaid = 0;
-                  if (activationPaymentStatus === 'paid') {
+                  if (paymentStatus === 'paid') {
                     renewalPaymentStatus = 'paid';
                     renewalItemAmountPaid = calculateTTC(renewalPriceHT);
-                  } else if (activationPaymentStatus === 'partial' && renewalAmountPaid > 0) {
-                    if (renewalAmountPaid >= calculateTTC(renewalPriceHT)) {
+                  } else if (paymentStatus === 'partial' && renewalAmountPaid > 0) {
+                    const renewalPriceTTC = calculateTTC(renewalPriceHT);
+                    if (renewalAmountPaid >= renewalPriceTTC) {
                       renewalPaymentStatus = 'paid';
-                      renewalItemAmountPaid = calculateTTC(renewalPriceHT);
+                      renewalItemAmountPaid = renewalPriceTTC;
                     } else if (renewalAmountPaid > 0) {
                       renewalPaymentStatus = 'partial';
                       renewalItemAmountPaid = renewalAmountPaid;
@@ -1565,7 +1802,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                   }
                   
                   processedActions.push({
-                    id: `${activation.id}_renewal_${idx}`,
+                    id: `${activation.id}_renewal_${Date.now()}_${Math.random()}`,
                     type: 'Renouvellement',
                     date: entry.date,
                     matricule: activation.matricule || '-',
@@ -1587,16 +1824,20 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                     paymentStatus: renewalPaymentStatus,
                     amountPaid: renewalItemAmountPaid,
                     remainingAmount: calculateTTC(renewalPriceHT) - renewalItemAmountPaid,
-                    paymentHistory: paymentHistory
+                    paymentHistory: paymentInfo.payment_history || []
                   });
                 }
               }
-            });
+            }
           }
         }
         
+        setLoadingProgress(90);
+        
+        // Sort by date
         processedActions.sort((a, b) => new Date(a.date) - new Date(b.date));
         setActivationsData(processedActions);
+        setLoadingProgress(100);
         
       } catch (err) {
         console.error('Error loading client activations:', err);
@@ -1609,8 +1850,15 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
     if (client?.id) {
       loadClientActivations();
     }
+    
+    // Cleanup
+    return () => {
+      // Optional: Clear cache on unmount if needed
+      // paymentCache.current = {};
+    };
   }, [client, showToast]);
 
+  // Rest of the component remains the same...
   const startEditPrice = (idx, currentPriceTTC) => {
     setEditingPrice(idx);
     setTempPrice(currentPriceTTC.toString());
@@ -1676,176 +1924,173 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   };
   
   const generatePDF = async (includeTVA = true) => {
-  try {
-    if (includeTVA) {
-      setGeneratingPdfTTC(true);
-    } else {
-      setGeneratingPdfHT(true);
-    }
-
-    const { jsPDF } = await import('jspdf');
-    const autoTable = (await import('jspdf-autotable')).default;
-
-    const doc = new jsPDF('p', 'mm', 'a4');
-
-    const companyInfo = getCompanyInfo();
-
-    let logoBase64 = null;
-
     try {
-      const response = await fetch('/logo.png');
-      const blob = await response.blob();
-      logoBase64 = await new Promise(resolve => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.readAsDataURL(blob);
-      });
-    } catch (e) {}
-
-    if (logoBase64) {
-      doc.addImage(logoBase64, 'PNG', 87.5, 10, 35, 30);
-    }
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text(companyInfo.name.toUpperCase(), 12, 50);
-    doc.setFont('times', 'normal');
-    doc.setFontSize(9.5);
-    const addressLines = doc.splitTextToSize(companyInfo.address, 70);
-    doc.text(addressLines, 12, 56);     
-    doc.text(`Tél: ${companyInfo.phone}`, 12, 68);
-    doc.text(`Email: ${companyInfo.email}`, 12, 73);
-
-    doc.setFont('helvetica', 'bold');
-    doc.text('RELEVÉ POUR :', 130, 50);
-    doc.setFont('times', 'bold');
-    doc.setFontSize(13);
-    doc.text(client.nom.toUpperCase(), 130, 57);
-    doc.setFont('times', 'normal');
-    doc.setFontSize(10);
-
-    let y = 63;
-    if (client.adresse) {
-      doc.text(client.adresse, 130, y);
-      y += 5;
-    }
-    if (client.telephone) {
-      doc.text(`Tél: ${client.telephone}`, 130, y);
-      y += 5;
-    }
-    doc.text(`DATE : ${new Date().toLocaleDateString('fr-FR')}`, 130, y + 5);
-
-    const formatMoney = (val) => `${Number(val || 0).toFixed(2)} DH`;
-
-    // Get filtered data based on selected payment statuses
-    const filteredData = getFilteredDataForPDF();
-    
-    const processedData = filteredData.map(item => {
-      let displayPrice;
       if (includeTVA) {
-        displayPrice = item.displayPriceTTC;
+        setGeneratingPdfTTC(true);
       } else {
-        displayPrice = item.activationPriceHT + (item.saleTotalPriceHT || 0);
+        setGeneratingPdfHT(true);
       }
-      return { ...item, displayPriceForPdf: displayPrice };
-    });
 
-    // Define color based on payment status
-    const getPriceColor = (paymentStatus) => {
-      switch (paymentStatus) {
-        case 'paid': return [5, 150, 105];     // Green
-        case 'partial': return [217, 119, 6];  // Orange
-        default: return [220, 38, 38];         // Red
+      const { jsPDF } = await import('jspdf');
+      const autoTable = (await import('jspdf-autotable')).default;
+
+      const doc = new jsPDF('p', 'mm', 'a4');
+
+      const companyInfo = getCompanyInfo();
+
+      let logoBase64 = null;
+
+      try {
+        const response = await fetch('/logo.png');
+        const blob = await response.blob();
+        logoBase64 = await new Promise(resolve => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(blob);
+        });
+      } catch (e) {}
+
+      if (logoBase64) {
+        doc.addImage(logoBase64, 'PNG', 87.5, 10, 35, 30);
       }
-    };
 
-    const rows = processedData.map(item => {
-      const priceColor = getPriceColor(item.paymentStatus);
-      return [
-        item.date ? new Date(item.date).toLocaleDateString('fr-FR') : '-',
-        item.type || '-',
-        item.matricule || '-',
-        PLAN_LABEL[item.plan] || item.plan || '-',
-        { content: formatMoney(item.displayPriceForPdf), styles: { textColor: priceColor, fontStyle: 'bold' } }
-      ];
-    });
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.text(companyInfo.name.toUpperCase(), 12, 50);
+      doc.setFont('times', 'normal');
+      doc.setFontSize(9.5);
+      const addressLines = doc.splitTextToSize(companyInfo.address, 70);
+      doc.text(addressLines, 12, 56);     
+      doc.text(`Tél: ${companyInfo.phone}`, 12, 68);
+      doc.text(`Email: ${companyInfo.email}`, 12, 73);
 
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    const titleText = includeTVA 
-      ? 'DÉTAIL DES ACTIVATIONS (Prix TTC - TVA incluse)'
-      : 'DÉTAIL DES ACTIVATIONS (Prix HT - TVA exclue)';
-    doc.text(titleText, 105, 108, { align: 'center' });
+      doc.setFont('helvetica', 'bold');
+      doc.text('RELEVÉ POUR :', 130, 50);
+      doc.setFont('times', 'bold');
+      doc.setFontSize(13);
+      doc.text(client.nom.toUpperCase(), 130, 57);
+      doc.setFont('times', 'normal');
+      doc.setFontSize(10);
 
-    autoTable(doc, {
-      startY: 116,
-      head: [[
-        { content: "Date", styles: { textColor: [59, 130, 246] } },
-        { content: "Type", styles: { textColor: [139, 92, 246] } },
-        { content: "Matricule", styles: { textColor: [16, 185, 129] } },
-        { content: "Plan", styles: { textColor: [245, 158, 11] } },
-        { content: includeTVA ? "Prix TTC" : "Prix HT", styles: { textColor: [239, 68, 68] } }
-      ]],
-      body: rows,
-      theme: 'grid',
-      styles: { font: 'times', fontSize: 9, cellPadding: 3, valign: 'middle' },
-      headStyles: { fillColor: [248, 250, 252], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', lineWidth: 0.3 },
-      columnStyles: {
-        0: { halign: 'center', cellWidth: 35 },
-        1: { halign: 'center', cellWidth: 40 },
-        2: { halign: 'center', cellWidth: 55 },
-        3: { halign: 'center', cellWidth: 30 },
-        4: { halign: 'right', cellWidth: 35 }
-      },
-      margin: { left: 10, right: 10 },
-      didDrawPage: () => {
-        doc.setDrawColor(200);
-        doc.rect(5, 5, 200, 287);
+      let y = 63;
+      if (client.adresse) {
+        doc.text(client.adresse, 130, y);
+        y += 5;
       }
-    });
+      if (client.telephone) {
+        doc.text(`Tél: ${client.telephone}`, 130, y);
+        y += 5;
+      }
+      doc.text(`DATE : ${new Date().toLocaleDateString('fr-FR')}`, 130, y + 5);
 
-    const total = processedData.reduce((s, i) => s + safeNumber(i.displayPriceForPdf), 0);
-    const finalY = doc.lastAutoTable.finalY + 15;
+      const formatMoney = (val) => `${Number(val || 0).toFixed(2)} DH`;
 
-    // Draw total box
-    doc.setFillColor(248, 250, 252);
-    doc.roundedRect(145, finalY - 9, 55, 14, 3, 3, 'FD');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    const totalLabel = includeTVA ? 'TOTAL TTC :' : 'TOTAL HT :';
-    doc.text(totalLabel, 150, finalY);
-    doc.setFont('times', 'bold');
-    doc.text(formatMoney(total), 192, finalY, { align: 'right' });
+      const filteredData = getFilteredDataForPDF();
+      
+      const processedData = filteredData.map(item => {
+        let displayPrice;
+        if (includeTVA) {
+          displayPrice = item.displayPriceTTC;
+        } else {
+          displayPrice = item.activationPriceHT + (item.saleTotalPriceHT || 0);
+        }
+        return { ...item, displayPriceForPdf: displayPrice };
+      });
 
-    if (!includeTVA) {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(100, 100, 100);
-      doc.text('* TVA (20%) non incluse dans ce relevé', 14, finalY + 10);
-      doc.setTextColor(0, 0, 0);
-    } else {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(100, 100, 100);
-      doc.text(`* TVA (20%) incluse - Taux applicable: ${TVA_RATE * 100}%`, 14, finalY + 10);
-      doc.setTextColor(0, 0, 0);
+      const getPriceColor = (paymentStatus) => {
+        switch (paymentStatus) {
+          case 'paid': return [5, 150, 105];
+          case 'partial': return [217, 119, 6];
+          default: return [220, 38, 38];
+        }
+      };
+
+      const rows = processedData.map(item => {
+        const priceColor = getPriceColor(item.paymentStatus);
+        return [
+          item.date ? new Date(item.date).toLocaleDateString('fr-FR') : '-',
+          item.type || '-',
+          item.matricule || '-',
+          PLAN_LABEL[item.plan] || item.plan || '-',
+          { content: formatMoney(item.displayPriceForPdf), styles: { textColor: priceColor, fontStyle: 'bold' } }
+        ];
+      });
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      const titleText = includeTVA 
+        ? 'DÉTAIL DES ACTIVATIONS (Prix TTC - TVA incluse)'
+        : 'DÉTAIL DES ACTIVATIONS (Prix HT - TVA exclue)';
+      doc.text(titleText, 105, 108, { align: 'center' });
+
+      autoTable(doc, {
+        startY: 116,
+        head: [[
+          { content: "Date", styles: { textColor: [59, 130, 246] } },
+          { content: "Type", styles: { textColor: [139, 92, 246] } },
+          { content: "Matricule", styles: { textColor: [16, 185, 129] } },
+          { content: "Plan", styles: { textColor: [245, 158, 11] } },
+          { content: includeTVA ? "Prix TTC" : "Prix HT", styles: { textColor: [239, 68, 68] } }
+        ]],
+        body: rows,
+        theme: 'grid',
+        styles: { font: 'times', fontSize: 9, cellPadding: 3, valign: 'middle' },
+        headStyles: { fillColor: [248, 250, 252], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', lineWidth: 0.3 },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 35 },
+          1: { halign: 'center', cellWidth: 40 },
+          2: { halign: 'center', cellWidth: 55 },
+          3: { halign: 'center', cellWidth: 30 },
+          4: { halign: 'right', cellWidth: 35 }
+        },
+        margin: { left: 10, right: 10 },
+        didDrawPage: () => {
+          doc.setDrawColor(200);
+          doc.rect(5, 5, 200, 287);
+        }
+      });
+
+      const total = processedData.reduce((s, i) => s + safeNumber(i.displayPriceForPdf), 0);
+      const finalY = doc.lastAutoTable.finalY + 15;
+
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(145, finalY - 9, 55, 14, 3, 3, 'FD');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      const totalLabel = includeTVA ? 'TOTAL TTC :' : 'TOTAL HT :';
+      doc.text(totalLabel, 150, finalY);
+      doc.setFont('times', 'bold');
+      doc.text(formatMoney(total), 192, finalY, { align: 'right' });
+
+      if (!includeTVA) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        doc.text('* TVA (20%) non incluse dans ce relevé', 14, finalY + 10);
+        doc.setTextColor(0, 0, 0);
+      } else {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`* TVA (20%) incluse - Taux applicable: ${TVA_RATE * 100}%`, 14, finalY + 10);
+        doc.setTextColor(0, 0, 0);
+      }
+
+      const fileNameSuffix = includeTVA ? 'TTC' : 'HT';
+      doc.save(`Releve_${client.nom.replace(/\s+/g, '_')}_${fileNameSuffix}.pdf`);
+      showToast(`PDF généré avec succès (${includeTVA ? 'TTC - TVA incluse' : 'HT - TVA exclue'})`, 'success');
+
+    } catch (err) {
+      console.error(err);
+      showToast('Erreur lors de la génération du PDF', 'error');
+    } finally {
+      if (includeTVA) {
+        setGeneratingPdfTTC(false);
+      } else {
+        setGeneratingPdfHT(false);
+      }
     }
-
-    const fileNameSuffix = includeTVA ? 'TTC' : 'HT';
-    doc.save(`Releve_${client.nom.replace(/\s+/g, '_')}_${fileNameSuffix}.pdf`);
-    showToast(`PDF généré avec succès (${includeTVA ? 'TTC - TVA incluse' : 'HT - TVA exclue'})`, 'success');
-
-  } catch (err) {
-    console.error(err);
-    showToast('Erreur lors de la génération du PDF', 'error');
-  } finally {
-    if (includeTVA) {
-      setGeneratingPdfTTC(false);
-    } else {
-      setGeneratingPdfHT(false);
-    }
-  }
-};
+  };
 
   const totalAmountTTC = activationsData.reduce((s, act) => s + safeNumber(act.displayPriceTTC), 0);
   const hasModifiedPrices = activationsData.some(act => act.displayPriceTTC !== (act.activationPriceTTC + (act.saleTotalPriceTTC || 0)));
@@ -1870,6 +2115,24 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
             <div className="clients-loading">
               <div className="clients-loading-spinner" />
               <p style={{ marginTop: '1rem' }}>Chargement des activations...</p>
+              {loadingProgress > 0 && loadingProgress < 100 && (
+                <div style={{ 
+                  width: '80%', 
+                  maxWidth: '300px', 
+                  margin: '1rem auto 0',
+                  height: '4px',
+                  background: '#e5e7eb',
+                  borderRadius: '2px',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{ 
+                    width: `${loadingProgress}%`, 
+                    height: '100%', 
+                    background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+                    transition: 'width 0.3s ease'
+                  }} />
+                </div>
+              )}
             </div>
           ) : activationsData.length === 0 ? (
             <div className="error-message">
@@ -2743,7 +3006,7 @@ const Clients = () => {
         />
       )}
 
-      {/* Activation Modal - Redesigned like Ajouter client form */}
+      {/* Activation Modal - With Searchable Product Select */}
       {activationModal.isOpen && (
         <>
           <div className="clients-overlay" onClick={() => setActivationModal(prev => ({ ...prev, isOpen: false }))} />
@@ -2887,16 +3150,12 @@ const Clients = () => {
                       <div className="form-grid">
                         <div className="clients-form-group">
                           <label className="clients-label clients-label-required">Produit</label>
-                          <select 
-                            value={item.produit_id} 
-                            onChange={e => updateInstallationProduct(item.id, 'produit_id', e.target.value)} 
-                            className="clients-input"
-                          >
-                            <option value="">-- Sélectionner un produit --</option>
-                            {activationProducts.map(p => (
-                              <option key={p.id} value={p.id}>{p.nom} {p.marque ? `- ${p.marque}` : ''}</option>
-                            ))}
-                          </select>
+                          <SearchableSelect
+                            options={activationProducts}
+                            value={item.produit_id}
+                            onChange={(productId) => updateInstallationProduct(item.id, 'produit_id', productId)}
+                            placeholder="Rechercher un produit..."
+                          />
                         </div>
                         <div className="clients-form-group">
                           <label className="clients-label clients-label-required">Quantité</label>
