@@ -2908,6 +2908,14 @@ const Check = () => {
     const token = localStorage.getItem('token');
     const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
     
+    // Log the request details for debugging
+    console.log('Request URL:', `${API_URL}/checks/${check.id}/mark-encaisse`);
+    console.log('Payload:', { 
+      sale_id: check.sale_id, 
+      payment_id: check.payment_id,
+      new_reference: newReference !== check.reference_remise ? newReference : undefined
+    });
+    
     const payload = {
       sale_id: check.sale_id,
       payment_id: check.payment_id
@@ -2921,14 +2929,23 @@ const Check = () => {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       },
       body: JSON.stringify(payload)
     });
     
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || "Erreur lors de l'encaissement");
+      const errorText = await response.text();
+      console.error('Error response:', errorText);
+      let errorMessage;
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.message || errorData.error || `Erreur ${response.status}`;
+      } catch {
+        errorMessage = errorText || `Erreur ${response.status}`;
+      }
+      throw new Error(errorMessage);
     }
     
     const data = await response.json();

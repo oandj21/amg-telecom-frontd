@@ -1,5 +1,6 @@
-// Dashboard.jsx
-import { useMemo, useEffect, useState } from 'react';
+// Dashboard.jsx - Complete file with Saved Reports and Edit Functionality with Toast Notifications
+// UPDATED: Auto-refresh every 30 seconds (values change automatically), cards layout 4 per row
+import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -12,7 +13,7 @@ import {
   Target, Rocket, Sparkles, Crown, Medal, Trophy, Briefcase,
   Building2, CircleDollarSign, Receipt, ClipboardList, Timer,
   CalendarCheck, CheckSquare, ClockAlert, AlertOctagon, Gauge,
-  Printer, X, Loader, Trash2
+  Printer, X, Loader, Trash2, FolderOpen, Edit, Database, Cloud, Save, Power
 } from 'lucide-react';
 import { 
   BarChart, Bar, CartesianGrid, Tooltip, XAxis, YAxis, ResponsiveContainer, 
@@ -28,10 +29,154 @@ import {
   fetchClients,
   fetchGpsDevices,
   fetchVehicles,
-  fetchActivations
+  fetchActivations,
+  fetchDepenses,        // added to fetch expenses
+  selectDepenses        // added to read expenses
 } from './Store/store';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+
+// ==================== API CONFIGURATION ====================
+const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
+
+// ==================== TOAST COMPONENT (Styled like Technician) ====================
+const Toast = ({ message, type, onClose }) => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onClose();
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  const getStyles = () => {
+    switch (type) {
+      case 'success':
+        return {
+          background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+          icon: <CheckCircle size={18} />,
+          borderLeftColor: '#10b981'
+        };
+      case 'error':
+        return {
+          background: 'white',
+          icon: <XCircle size={18} style={{ color: '#ef4444' }} />,
+          borderLeftColor: '#ef4444',
+          textColor: '#334155'
+        };
+      case 'warning':
+        return {
+          background: 'white',
+          icon: <AlertTriangle size={18} style={{ color: '#f59e0b' }} />,
+          borderLeftColor: '#f59e0b',
+          textColor: '#334155'
+        };
+      default:
+        return {
+          background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+          icon: <CheckCircle size={18} />,
+          borderLeftColor: '#3b82f6'
+        };
+    }
+  };
+
+  const styles = getStyles();
+  const isColored = type === 'success' || type === 'info';
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        bottom: '20px',
+        right: '20px',
+        zIndex: 9999,
+        animation: 'toastSlideIn 0.3s ease-out, toastFadeOut 0.3s ease-out 2.7s forwards'
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          background: styles.background,
+          color: isColored ? 'white' : styles.textColor,
+          padding: '12px 16px',
+          borderRadius: '12px',
+          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.02)',
+          minWidth: '300px',
+          maxWidth: '400px',
+          fontWeight: '500',
+          fontSize: '0.813rem',
+          cursor: 'pointer',
+          transition: 'transform 0.2s ease',
+          borderLeft: `4px solid ${styles.borderLeftColor}`,
+        }}
+        onClick={onClose}
+        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          {styles.icon}
+        </div>
+        <div style={{ flex: 1, fontSize: '0.813rem' }}>
+          {message}
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: isColored ? 'rgba(255,255,255,0.7)' : '#94a3b8',
+            cursor: 'pointer',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '6px',
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.background = isColored ? 'rgba(255,255,255,0.2)' : '#f1f5f9'}
+          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+        >
+          <X size={14} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ==================== CUSTOM HOOK FOR TOAST ====================
+const useToast = () => {
+  const [toasts, setToasts] = useState([]);
+
+  const showToast = (message, type = 'success') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 3000);
+  };
+
+  const ToastContainer = () => (
+    <>
+      {toasts.map(toast => (
+        <Toast
+          key={toast.id}
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+        />
+      ))}
+    </>
+  );
+
+  return { showToast, ToastContainer };
+};
 
 // ==================== MODERN STYLES ====================
 const styles = `
@@ -337,6 +482,16 @@ const styles = `
     background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
     transform: translateY(-1px);
     box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+  }
+  
+  .btn-secondary {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    color: white;
+  }
+  
+  .btn-secondary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
   }
   
   .badge {
@@ -727,6 +882,137 @@ const styles = `
     justify-content: flex-end;
   }
   
+  /* Saved Reports Grid */
+  .saved-reports-section {
+    margin-top: 2rem;
+    padding: 1.25rem;
+    background: white;
+    border-radius: 1.25rem;
+    border: 1px solid #e2e8f0;
+  }
+  
+  .saved-reports-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+  
+  .saved-report-card {
+    background: #f8fafc;
+    border-radius: 1rem;
+    padding: 1rem;
+    border: 1px solid #e2e8f0;
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  
+  .saved-report-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border-color: #3b82f6;
+  }
+  
+  .saved-report-title {
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+  }
+  
+  .saved-report-meta {
+    font-size: 0.7rem;
+    color: #64748b;
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+  }
+  
+  .action-btn {
+    background: transparent;
+    border: none;
+    padding: 0.25rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    color: #64748b;
+    transition: all 0.2s;
+  }
+  
+  .action-btn:hover {
+    background: #e2e8f0;
+  }
+  
+  .action-btn.edit:hover {
+    color: #8b5cf6;
+  }
+  
+  .action-btn.delete:hover {
+    color: #ef4444;
+  }
+  
+  /* Edit Modal */
+  .edit-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease-out;
+  }
+  
+  .edit-modal-container {
+    background: white;
+    border-radius: 1.5rem;
+    width: 95%;
+    max-width: 1000px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    animation: slideInUp 0.3s ease-out;
+  }
+  
+  .edit-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid #e2e8f0;
+    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  }
+  
+  .edit-modal-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #1e293b;
+  }
+  
+  .edit-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+  }
+  
+  .edit-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #e2e8f0;
+    background: #f8fafc;
+  }
+  
   @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
@@ -743,8 +1029,40 @@ const styles = `
     }
   }
   
+  @keyframes toastSlideIn {
+    from {
+      opacity: 0;
+      transform: translateX(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  
+  @keyframes toastFadeOut {
+    to {
+      opacity: 0;
+      transform: translateX(100%);
+    }
+  }
+  
   .dashboard-card {
     animation: slideInUp 0.4s ease-out;
+  }
+  
+  .spinner {
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid #e2e8f0;
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: inline-block;
+  }
+  
+  .spinning {
+    animation: spin 0.8s linear infinite;
   }
 `;
 
@@ -784,9 +1102,14 @@ const getCompanyInfo = () => {
 
 const formatMoney = (val) => `${Number(val || 0).toFixed(2)} DH`;
 
-// Helper function to split text into multiple lines for PDF
-const splitTextToLines = (doc, text, maxWidth) => {
-  return doc.splitTextToSize(text, maxWidth);
+// Helper function for blob to base64
+const blobToBase64 = (blob) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 };
 
 // ==================== COMPONENTS ====================
@@ -894,18 +1217,45 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-// Multi-Row Report Modal with Add Row Button
-const MultiRowReportModal = ({ isOpen, onClose }) => {
-  const [rows, setRows] = useState([
-    { id: Date.now(), date: new Date().toISOString().slice(0, 10), nom: '', price: 0 }
-  ]);
-  const [generating, setGenerating] = useState(false);
+// ==================== EDIT REPORT MODAL ====================
+const EditReportModal = ({ isOpen, onClose, report, onSave, showToast }) => {
+  const [rows, setRows] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [numberOfLines, setNumberOfLines] = useState(1);
+
+  useEffect(() => {
+    if (report && report.rows) {
+      const parsedRows = typeof report.rows === 'string' ? JSON.parse(report.rows) : report.rows;
+      setRows(parsedRows.map(row => ({
+        id: Date.now() + Math.random(),
+        date: row.date || new Date().toISOString().slice(0, 10),
+        nom: row.nom || row.clientName || '',
+        price: row.price || 0
+      })));
+    }
+  }, [report]);
 
   const addRow = () => {
     setRows([
       ...rows,
       { id: Date.now(), date: new Date().toISOString().slice(0, 10), nom: '', price: 0 }
     ]);
+  };
+
+  const createMultipleRows = () => {
+    const num = parseInt(numberOfLines);
+    if (isNaN(num) || num <= 0) return;
+    
+    const newRows = [];
+    for (let i = 0; i < num; i++) {
+      newRows.push({
+        id: Date.now() + i,
+        date: new Date().toISOString().slice(0, 10),
+        nom: '',
+        price: 0
+      });
+    }
+    setRows([...rows, ...newRows]);
   };
 
   const updateRow = (id, field, value) => {
@@ -920,272 +1270,279 @@ const MultiRowReportModal = ({ isOpen, onClose }) => {
     }
   };
 
-  const resetForm = () => {
-    setRows([{ id: Date.now(), date: new Date().toISOString().slice(0, 10), nom: '', price: 0 }]);
+  const calculateTotal = () => {
+    return rows.reduce((sum, row) => sum + safeNumber(row.price), 0);
   };
 
- const generatePDF = async () => {
-  const validRows = rows.filter(row => row.nom && row.nom.trim() && row.price > 0);
-  if (validRows.length === 0) {
-    alert('Veuillez ajouter au moins une ligne valide (nom et prix requis)');
-    return;
-  }
+  const handleSave = async () => {
+    const validRows = rows.filter(row => row.nom && row.nom.trim() && row.price > 0);
+    if (validRows.length === 0) {
+      showToast('Veuillez ajouter au moins une ligne valide', 'warning');
+      return;
+    }
 
-  setGenerating(true);
+    setSaving(true);
 
-  try {
-    // 1. Initialize Document Geometry (Clean layout format)
-    const doc = new jsPDF('p', 'mm', 'a4');
-    const companyInfo = getCompanyInfo();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 15; 
-    const contentWidth = pageWidth - (margin * 2);
-    let yPos = 20;
-
-    // 2. Async Logo Extraction
-    let logoBase64 = null;
     try {
-      const response = await fetch('/logo.png');
-      if (response.ok) {
-        const blob = await response.blob();
-        logoBase64 = await new Promise(resolve => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result);
-          reader.readAsDataURL(blob);
-        });
-      }
-    } catch (e) {}
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const companyInfo = getCompanyInfo();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 15;
+      let yPos = 20;
 
-    // ==================== ASYMMETRIC HEADER ====================
-    if (logoBase64) {
-      doc.addImage(logoBase64, 'PNG', margin, yPos - 2, 40, 25);
-    } else {
-      // Elegant fallback typography badge if no logo is provided
-      doc.setFillColor(15, 23, 42);
-      doc.rect(margin, yPos, 8, 8, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.setTextColor(15, 23, 42);
-      doc.text(companyInfo.name.substring(0, 3).toUpperCase(), margin + 11, yPos + 6.5);
-    }
-
-    // Right-Aligned Document Meta Info block
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(20);
-    doc.setTextColor(30, 58, 138); // Deep Premium Navy Blue (#1e3a8a)
-    doc.text("RAPPORT", pageWidth - margin, yPos + 4, { align: 'right' });
-    
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(100, 116, 139);
-    doc.text(`Édition: ${new Date().toLocaleDateString('fr-FR')}`, pageWidth - margin, yPos + 10, { align: 'right' });
-
-    yPos += 24;
-
-    // ==================== TWO-COLUMN ADDRESS GRID ====================
-    // Left Side: From (Company)
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(30, 58, 138);
-    doc.text("ÉMETTEUR", margin, yPos);
-    
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(15, 23, 42);
-    doc.text(companyInfo.name, margin, yPos + 5.5);
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(71, 85, 105);
-    
-    let companyY = yPos + 11;
-    const splitAddress = doc.splitTextToSize(companyInfo.address, contentWidth * 0.45);
-    splitAddress.forEach(line => {
-      doc.text(line, margin, companyY);
-      companyY += 4.5;
-    });
-    doc.text(`Tél: ${companyInfo.phone}`, margin, companyY);
-    doc.text(`Email: ${companyInfo.email}`, margin, companyY + 4.5);
-
-    // Right Side: Tax / Legal Structure Info
-    const rightColX = pageWidth * 0.55;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(30, 58, 138);
-    doc.text("REGISTRES LÉGAUX", rightColX, yPos);
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(71, 85, 105);
-    doc.text(`ICE: ${companyInfo.ice || '-'}`, rightColX, yPos + 5.5);
-    doc.text(`RC: ${companyInfo.rc || '-'}`, rightColX, yPos + 10);
-    doc.text(`Patente: ${companyInfo.patente || '-'}`, rightColX, yPos + 14.5);
-
-    yPos = Math.max(companyY + 12, yPos + 22);
-
-    // ==================== PREMIUM MINIMAL TABLE ====================
-    const tableRows = validRows.map(row => [
-      new Date(row.date).toLocaleDateString('fr-FR'),
-      row.nom,
-      formatMoney(row.price)
-    ]);
-
-    const totalHT = validRows.reduce((sum, row) => sum + safeNumber(row.price), 0);
-    const totalTVA = totalHT * TVA_RATE;
-    const totalTTC = totalHT + totalTVA;
-
-    autoTable(doc, {
-      startY: yPos,
-      theme: 'plain', // Minimalist layout line grid style
-      head: [['Date', 'Désignation', 'Montant HT']],
-      body: tableRows,
-      margin: { left: margin, right: margin },
-      styles: {
-        font: 'helvetica',
-        fontSize: 9,
-        cellPadding: 5,
-        textColor: [30, 41, 59]
-      },
-      headStyles: {
-        textColor: [30, 58, 138],
-        fontStyle: 'bold',
-        lineWidth: { bottom: 1 },
-        drawColor: [30, 58, 138] // Solid sharp navy baseline accent under head
-      },
-      columnStyles: {
-        0: { halign: 'left', cellWidth: 35 },
-        1: { halign: 'left' },
-        2: { halign: 'right', cellWidth: 40 }
-      },
-      didParseCell: (data) => {
-        // Soft border lines beneath individual rows instead of alternating block colors
-        if (data.section === 'body') {
-          data.cell.styles.lineWidth = { bottom: 0.2 };
-          data.cell.styles.drawColor = [241, 245, 249];
+      let logoBase64 = null;
+      try {
+        const response = await fetch('/logo.png');
+        if (response.ok) {
+          const blob = await response.blob();
+          logoBase64 = await blobToBase64(blob);
         }
+      } catch (e) {}
+
+      if (logoBase64) {
+        doc.addImage(logoBase64, 'PNG', margin, yPos - 2, 40, 25);
+      } else {
+        doc.setFillColor(15, 23, 42);
+        doc.rect(margin, yPos, 8, 8, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(15, 23, 42);
+        doc.text(companyInfo.name.substring(0, 3).toUpperCase(), margin + 11, yPos + 6.5);
       }
-    });
 
-    let finalY = doc.lastAutoTable.finalY + 10;
-
-    // Safety multi-page check
-    if (finalY + 40 > pageHeight) {
-      doc.addPage();
-      finalY = margin + 15;
-    }
-
-    // ==================== ASYMMETRIC BILLING FINALS ====================
-    const calcX = pageWidth - margin - 65;
-    doc.setFontSize(9);
-    
-    // Subtotal
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 116, 139);
-    doc.text("Sous-total HT", calcX, finalY);
-    doc.text(formatMoney(totalHT), pageWidth - margin, finalY, { align: 'right' });
-    
-    // Tax line
-    finalY += 5;
-    doc.text(`TVA (${TVA_RATE * 100}%)`, calcX, finalY);
-    doc.text(formatMoney(totalTVA), pageWidth - margin, finalY, { align: 'right' });
-
-    // Premium Underlined Total TTC Frame
-    finalY += 6;
-    doc.setDrawColor(226, 232, 240);
-    doc.setLineWidth(0.5);
-    doc.line(calcX, finalY, pageWidth - margin, finalY);
-    
-    finalY += 6;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(30, 58, 138);
-    doc.text("Montant Total TTC", calcX, finalY);
-    doc.text(formatMoney(totalTTC), pageWidth - margin, finalY, { align: 'right' });
-
-    // ==================== BANK LAYOUT LINK ====================
-    if (companyInfo.bank_name || companyInfo.rib) {
-      finalY += 18;
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.5);
-      doc.setTextColor(148, 163, 184);
-      doc.text("RÈGLEMENT ET COORDONNÉES BANCAIRES", margin, finalY);
+      doc.setFontSize(20);
+      doc.setTextColor(30, 58, 138);
+      doc.text("RAPPORT", pageWidth - margin, yPos + 4, { align: 'right' });
       
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Édition: ${new Date().toLocaleDateString('fr-FR')}`, pageWidth - margin, yPos + 10, { align: 'right' });
+
+      yPos += 24;
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(30, 58, 138);
+      doc.text("ÉMETTEUR", margin, yPos);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(15, 23, 42);
+      doc.text(companyInfo.name, margin, yPos + 5.5);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
       doc.setTextColor(71, 85, 105);
       
-      let bankInfoLine = "";
-      if (companyInfo.bank_name) bankInfoLine += `Établissement: ${companyInfo.bank_name}`;
-      if (companyInfo.rib) bankInfoLine += `   •   RIB: ${companyInfo.rib}`;
-      doc.text(bankInfoLine, margin, finalY + 4.5);
+      let companyY = yPos + 11;
+      const splitAddress = doc.splitTextToSize(companyInfo.address, pageWidth - (margin * 2));
+      splitAddress.forEach(line => {
+        doc.text(line, margin, companyY);
+        companyY += 4.5;
+      });
+      doc.text(`Tél: ${companyInfo.phone}`, margin, companyY);
+      doc.text(`Email: ${companyInfo.email}`, margin, companyY + 4.5);
+
+      yPos = companyY + 16;
+
+      const tableRows = validRows.map(row => [
+        new Date(row.date).toLocaleDateString('fr-FR'),
+        row.nom,
+        formatMoney(row.price)
+      ]);
+
+      const totalHT = validRows.reduce((sum, row) => sum + safeNumber(row.price), 0);
+
+      autoTable(doc, {
+        startY: yPos,
+        theme: 'plain',
+        head: [['Date', 'Désignation', 'Montant HT']],
+        body: tableRows,
+        margin: { left: margin, right: margin },
+        styles: {
+          font: 'helvetica',
+          fontSize: 9,
+          cellPadding: 5,
+          textColor: [30, 41, 59]
+        },
+        headStyles: {
+          textColor: [30, 58, 138],
+          fontStyle: 'bold',
+          lineWidth: { bottom: 1 },
+          drawColor: [30, 58, 138]
+        },
+        columnStyles: {
+          0: { halign: 'left', cellWidth: 35 },
+          1: { halign: 'left' },
+          2: { halign: 'right', cellWidth: 40 }
+        },
+        didParseCell: (data) => {
+          if (data.section === 'body') {
+            data.cell.styles.lineWidth = { bottom: 0.2 };
+            data.cell.styles.drawColor = [241, 245, 249];
+          }
+        }
+      });
+
+      let finalY = doc.lastAutoTable.finalY + 10;
+
+      if (finalY + 30 > pageHeight) {
+        doc.addPage();
+        finalY = margin + 15;
+      }
+
+      const calcX = pageWidth - margin - 65;
+      doc.setFontSize(9);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139);
+      doc.text("Sous-total HT", calcX, finalY);
+      doc.text(formatMoney(totalHT), pageWidth - margin, finalY, { align: 'right' });
+
+      finalY += 6;
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.5);
+      doc.line(calcX, finalY, pageWidth - margin, finalY);
+      
+      finalY += 6;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(30, 58, 138);
+      doc.text("Montant Total HT", calcX, finalY);
+      doc.text(formatMoney(totalHT), pageWidth - margin, finalY, { align: 'right' });
+
+      if (companyInfo.bank_name || companyInfo.rib) {
+        finalY += 18;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(148, 163, 184);
+        doc.text("RÈGLEMENT ET COORDONNÉES BANCAIRES", margin, finalY);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(71, 85, 105);
+        
+        let bankInfoLine = "";
+        if (companyInfo.bank_name) bankInfoLine += `Établissement: ${companyInfo.bank_name}`;
+        if (companyInfo.rib) bankInfoLine += `   •   RIB: ${companyInfo.rib}`;
+        doc.text(bankInfoLine, margin, finalY + 4.5);
+      }
+
+      const footerY = pageHeight - 10;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(164, 175, 190);
+      doc.text(`${companyInfo.name} — Document généré informatiquement.`, margin, footerY);
+
+      const fileName = `Rapport_Activations_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.pdf`;
+      const pdfBlob = doc.output('blob');
+      const pdfBase64 = await blobToBase64(pdfBlob);
+      
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/reports/${report.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          file_name: fileName,
+          pdf_data: pdfBase64,
+          rows: validRows,
+          total_ht: totalHT
+        })
+      });
+      
+      if (response.ok) {
+        onSave();
+        onClose();
+        showToast('Rapport modifié avec succès', 'success');
+      } else {
+        showToast('Erreur lors de la sauvegarde', 'error');
+      }
+    } catch (err) {
+      console.error('Error saving report:', err);
+      showToast('Erreur lors de la sauvegarde', 'error');
+    } finally {
+      setSaving(false);
     }
-
-    // Minimal Subtle Footer Text
-    const footerY = pageHeight - 10;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(164, 175, 190);
-    doc.text(`${companyInfo.name} — Document généré informatiquement.`, margin, footerY);
-
-    // Save handling execution
-    const fileName = `Rapport_Activations_${new Date().toISOString().slice(0, 10)}.pdf`;
-    doc.save(fileName);
-
-    resetForm();
-    onClose();
-  } catch (err) {
-    console.error('Error generating PDF:', err);
-    alert('Erreur lors de la génération du PDF');
-  } finally {
-    setGenerating(false);
-  }
-};
+  };
 
   if (!isOpen) return null;
 
   return (
-    <div className="report-modal-overlay" onClick={onClose}>
-      <div className="report-modal" onClick={e => e.stopPropagation()}>
-        <div className="report-modal-header">
-          <h2 className="report-modal-title">
-            <FileText size={20} className="text-blue-600" />
-            Rapport d'Activation Multi-lignes
-          </h2>
-          <button onClick={onClose} className="btn btn-ghost" style={{ padding: '0.5rem' }}>
+    <div className="edit-modal-overlay" onClick={onClose}>
+      <div className="edit-modal-container" onClick={e => e.stopPropagation()}>
+        <div className="edit-modal-header">
+          <div className="edit-modal-title">
+            <Edit size={20} style={{ color: '#8b5cf6' }} />
+            <span>Modifier le rapport - {report?.file_name?.slice(0, 40)}</span>
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0.5rem' }}>
             <X size={20} />
           </button>
         </div>
-
-        <div className="report-modal-body">
-          {/* Company Info Bar */}
-          <div className="company-info-bar">
-            <div style={{ fontWeight: 'bold' }}>{getCompanyInfo().name}</div>
-            <div style={{ fontSize: '0.65rem', opacity: 0.8, whiteSpace: 'normal', wordBreak: 'break-word' }}>{getCompanyInfo().address}</div>
-            <div style={{ fontSize: '0.65rem', opacity: 0.8 }}>Tél: {getCompanyInfo().phone}</div>
-          </div>
-
-          {/* Add Row Button */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <span style={{ fontSize: '0.875rem', fontWeight: 500, color: '#475569' }}>Liste des activations</span>
-            <button onClick={addRow} className="btn btn-outline" style={{ padding: '0.375rem 0.875rem', fontSize: '0.75rem' }}>
-              <Plus size={14} /> Ajouter ligne
+        <div className="edit-modal-body">
+          {/* Bulk Creation */}
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '0.75rem', 
+            marginBottom: '1rem',
+            padding: '0.75rem',
+            background: '#f8fafc',
+            borderRadius: '0.75rem',
+            flexWrap: 'wrap'
+          }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 500, color: '#475569' }}>
+              📝 Création rapide:
+            </span>
+            <input
+              type="number"
+              min="1"
+              max="50"
+              value={numberOfLines}
+              onChange={(e) => setNumberOfLines(e.target.value)}
+              style={{
+                width: '80px',
+                padding: '0.375rem 0.5rem',
+                border: '1px solid #cbd5e1',
+                borderRadius: '0.5rem',
+                fontSize: '0.875rem',
+                textAlign: 'center'
+              }}
+            />
+            <button
+              onClick={createMultipleRows}
+              className="btn btn-primary"
+              style={{ padding: '0.375rem 0.875rem', fontSize: '0.75rem' }}
+            >
+              <Zap size={14} /> Créer {numberOfLines} ligne{parseInt(numberOfLines) > 1 ? 's' : ''}
             </button>
+            <button onClick={addRow} className="btn btn-outline" style={{ padding: '0.375rem 0.875rem', fontSize: '0.75rem' }}>
+              <Plus size={14} /> Ajouter 1 ligne
+            </button>
+            <div style={{ fontSize: '0.7rem', color: '#64748b', marginLeft: 'auto' }}>
+              📋 {rows.length} ligne(s)
+            </div>
           </div>
 
-          {/* Rows Table */}
-          <div className="report-table-container">
+          {/* Table */}
+          <div className="report-table-container" style={{ marginTop: 0, maxHeight: '400px', overflowY: 'auto' }}>
             <table className="report-table">
               <thead>
-                <tr>
-                  <th style={{ width: '30%' }}>Date</th>
+                <tr style={{ position: 'sticky', top: 0, background: '#f1f5f9' }}>
+                  <th style={{ width: '25%' }}>Date</th>
                   <th style={{ width: '45%' }}>Nom du client</th>
-                  <th style={{ width: '20%' }}>Prix HT (MAD)</th>
+                  <th style={{ width: '25%' }}>Prix HT (MAD)</th>
                   <th style={{ width: '5%' }}></th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
+                {rows.map((row, index) => (
                   <tr key={row.id}>
                     <td>
                       <input
@@ -1202,7 +1559,7 @@ const MultiRowReportModal = ({ isOpen, onClose }) => {
                         className="report-input"
                         value={row.nom}
                         onChange={e => updateRow(row.id, 'nom', e.target.value)}
-                        placeholder="Nom du client"
+                        placeholder={`Client ${index + 1}`}
                         style={{ fontSize: '0.75rem' }}
                       />
                     </td>
@@ -1211,7 +1568,7 @@ const MultiRowReportModal = ({ isOpen, onClose }) => {
                         type="number"
                         step="0.01"
                         className="report-input"
-                        value={row.price}
+                        value={row.price||""}
                         onChange={e => updateRow(row.id, 'price', parseFloat(e.target.value) || 0)}
                         placeholder="0.00"
                         style={{ fontSize: '0.75rem', textAlign: 'right' }}
@@ -1220,9 +1577,9 @@ const MultiRowReportModal = ({ isOpen, onClose }) => {
                     <td style={{ textAlign: 'center' }}>
                       <button
                         onClick={() => removeRow(row.id)}
-                        className="btn btn-ghost"
-                        style={{ padding: '0.25rem', color: '#ef4444' }}
+                        className="action-btn"
                         disabled={rows.length === 1}
+                        style={{ color: '#ef4444' }}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -1234,6 +1591,421 @@ const MultiRowReportModal = ({ isOpen, onClose }) => {
           </div>
 
           {/* Summary */}
+          <div className="summary-box">
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Total HT</div>
+              <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#059669' }}>
+                {formatMoney(calculateTotal())}
+              </div>
+              <div style={{ fontSize: '0.65rem', color: '#64748b' }}>
+                ({rows.filter(r => r.nom?.trim() && r.price > 0).length} ligne(s) renseignée(s))
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="edit-modal-footer">
+          <button onClick={onClose} className="btn btn-outline" disabled={saving}>
+            Annuler
+          </button>
+          <button onClick={handleSave} className="btn btn-primary" disabled={saving}>
+            {saving ? <Loader size={16} className="spinner" /> : <Save size={16} />}
+            {saving ? 'Sauvegarde...' : 'Sauvegarder les modifications'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==================== MULTI-ROW REPORT MODAL (CREATE) ====================
+const MultiRowReportModal = ({ isOpen, onClose, showToast }) => {
+  const [rows, setRows] = useState([
+    { id: Date.now(), date: new Date().toISOString().slice(0, 10), nom: '', price: 0 }
+  ]);
+  const [generating, setGenerating] = useState(false);
+  const [numberOfLines, setNumberOfLines] = useState(1);
+
+  const addRow = () => {
+    setRows([
+      ...rows,
+      { id: Date.now(), date: new Date().toISOString().slice(0, 10), nom: '', price: 0 }
+    ]);
+  };
+
+  const createMultipleRows = () => {
+    const num = parseInt(numberOfLines);
+    if (isNaN(num) || num <= 0) {
+      showToast('Veuillez entrer un nombre valide (1 ou plus)', 'warning');
+      return;
+    }
+    
+    const newRows = [];
+    for (let i = 0; i < num; i++) {
+      newRows.push({
+        id: Date.now() + i,
+        date: new Date().toISOString().slice(0, 10),
+        nom: '',
+        price: 0
+      });
+    }
+    setRows(newRows);
+  };
+
+  const updateRow = (id, field, value) => {
+    setRows(rows.map(row => 
+      row.id === id ? { ...row, [field]: value } : row
+    ));
+  };
+
+  const removeRow = (id) => {
+    if (rows.length > 1) {
+      setRows(rows.filter(row => row.id !== id));
+    }
+  };
+
+  const resetForm = () => {
+    setRows([{ id: Date.now(), date: new Date().toISOString().slice(0, 10), nom: '', price: 0 }]);
+    setNumberOfLines(1);
+  };
+
+  const generatePDF = async () => {
+    const validRows = rows.filter(row => row.nom && row.nom.trim() && row.price > 0);
+    if (validRows.length === 0) {
+      showToast('Veuillez ajouter au moins une ligne valide (nom et prix requis)', 'warning');
+      return;
+    }
+
+    setGenerating(true);
+
+    try {
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const companyInfo = getCompanyInfo();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 15; 
+      const contentWidth = pageWidth - (margin * 2);
+      let yPos = 20;
+
+      let logoBase64 = null;
+      try {
+        const response = await fetch('/logo.png');
+        if (response.ok) {
+          const blob = await response.blob();
+          logoBase64 = await blobToBase64(blob);
+        }
+      } catch (e) {}
+
+      if (logoBase64) {
+        doc.addImage(logoBase64, 'PNG', margin, yPos - 2, 40, 25);
+      } else {
+        doc.setFillColor(15, 23, 42);
+        doc.rect(margin, yPos, 8, 8, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(15, 23, 42);
+        doc.text(companyInfo.name.substring(0, 3).toUpperCase(), margin + 11, yPos + 6.5);
+      }
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(20);
+      doc.setTextColor(30, 58, 138);
+      doc.text("RAPPORT", pageWidth - margin, yPos + 4, { align: 'right' });
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Édition: ${new Date().toLocaleDateString('fr-FR')}`, pageWidth - margin, yPos + 10, { align: 'right' });
+
+      yPos += 24;
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(30, 58, 138);
+      doc.text("ÉMETTEUR", margin, yPos);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(15, 23, 42);
+      doc.text(companyInfo.name, margin, yPos + 5.5);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(71, 85, 105);
+      
+      let companyY = yPos + 11;
+      const splitAddress = doc.splitTextToSize(companyInfo.address, contentWidth);
+      splitAddress.forEach(line => {
+        doc.text(line, margin, companyY);
+        companyY += 4.5;
+      });
+      doc.text(`Tél: ${companyInfo.phone}`, margin, companyY);
+      doc.text(`Email: ${companyInfo.email}`, margin, companyY + 4.5);
+
+      yPos = companyY + 16;
+
+      const tableRows = validRows.map(row => [
+        new Date(row.date).toLocaleDateString('fr-FR'),
+        row.nom,
+        formatMoney(row.price)
+      ]);
+
+      const totalHT = validRows.reduce((sum, row) => sum + safeNumber(row.price), 0);
+
+      autoTable(doc, {
+        startY: yPos,
+        theme: 'plain',
+        head: [['Date', 'Désignation', 'Montant HT']],
+        body: tableRows,
+        margin: { left: margin, right: margin },
+        styles: {
+          font: 'helvetica',
+          fontSize: 9,
+          cellPadding: 5,
+          textColor: [30, 41, 59]
+        },
+        headStyles: {
+          textColor: [30, 58, 138],
+          fontStyle: 'bold',
+          lineWidth: { bottom: 1 },
+          drawColor: [30, 58, 138]
+        },
+        columnStyles: {
+          0: { halign: 'left', cellWidth: 35 },
+          1: { halign: 'left' },
+          2: { halign: 'right', cellWidth: 40 }
+        },
+        didParseCell: (data) => {
+          if (data.section === 'body') {
+            data.cell.styles.lineWidth = { bottom: 0.2 };
+            data.cell.styles.drawColor = [241, 245, 249];
+          }
+        }
+      });
+
+      let finalY = doc.lastAutoTable.finalY + 10;
+
+      if (finalY + 30 > pageHeight) {
+        doc.addPage();
+        finalY = margin + 15;
+      }
+
+      const calcX = pageWidth - margin - 65;
+      doc.setFontSize(9);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139);
+      doc.text("Sous-total HT", calcX, finalY);
+      doc.text(formatMoney(totalHT), pageWidth - margin, finalY, { align: 'right' });
+
+      finalY += 6;
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.5);
+      doc.line(calcX, finalY, pageWidth - margin, finalY);
+      
+      finalY += 6;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(30, 58, 138);
+      doc.text("Montant Total HT", calcX, finalY);
+      doc.text(formatMoney(totalHT), pageWidth - margin, finalY, { align: 'right' });
+
+      if (companyInfo.bank_name || companyInfo.rib) {
+        finalY += 18;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(148, 163, 184);
+        doc.text("RÈGLEMENT ET COORDONNÉES BANCAIRES", margin, finalY);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(71, 85, 105);
+        
+        let bankInfoLine = "";
+        if (companyInfo.bank_name) bankInfoLine += `Établissement: ${companyInfo.bank_name}`;
+        if (companyInfo.rib) bankInfoLine += `   •   RIB: ${companyInfo.rib}`;
+        doc.text(bankInfoLine, margin, finalY + 4.5);
+      }
+
+      const footerY = pageHeight - 10;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(164, 175, 190);
+      doc.text(`${companyInfo.name} — Document généré informatiquement.`, margin, footerY);
+
+      const fileName = `Rapport_Activations_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.pdf`;
+      const pdfBlob = doc.output('blob');
+      const pdfBase64 = await blobToBase64(pdfBlob);
+      
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/reports`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          file_name: fileName,
+          pdf_data: pdfBase64,
+          rows: validRows,
+          total_ht: totalHT
+        })
+      });
+      
+      if (response.ok) {
+        showToast('Rapport sauvegardé avec succès', 'success');
+        resetForm();
+        onClose();
+        // Trigger refresh in parent
+        window.dispatchEvent(new Event('reportSaved'));
+      } else {
+        showToast('Erreur lors de la sauvegarde', 'error');
+      }
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      showToast('Erreur lors de la génération du PDF', 'error');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="report-modal-overlay" onClick={onClose}>
+      <div className="report-modal" onClick={e => e.stopPropagation()}>
+        <div className="report-modal-header">
+          <h2 className="report-modal-title">
+            <FileText size={20} className="text-blue-600" />
+            Rapport d'Activation Multi-lignes
+          </h2>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0.5rem' }}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="report-modal-body">
+          <div className="company-info-bar">
+            <div style={{ fontWeight: 'bold' }}>{getCompanyInfo().name}</div>
+            <div style={{ fontSize: '0.65rem', opacity: 0.8, whiteSpace: 'normal', wordBreak: 'break-word' }}>{getCompanyInfo().address}</div>
+            <div style={{ fontSize: '0.65rem', opacity: 0.8 }}>Tél: {getCompanyInfo().phone}</div>
+          </div>
+
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '0.75rem', 
+            marginBottom: '1rem',
+            padding: '0.75rem',
+            background: '#f8fafc',
+            borderRadius: '0.75rem',
+            flexWrap: 'wrap'
+          }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 500, color: '#475569' }}>
+              📝 Nombre de lignes:
+            </span>
+            <input
+              type="number"
+              min="1"
+              max="50"
+              value={numberOfLines}
+              onChange={(e) => setNumberOfLines(e.target.value)}
+              style={{
+                width: '80px',
+                padding: '0.375rem 0.5rem',
+                border: '1px solid #cbd5e1',
+                borderRadius: '0.5rem',
+                fontSize: '0.875rem',
+                textAlign: 'center'
+              }}
+            />
+            <button
+              onClick={createMultipleRows}
+              className="btn btn-primary"
+              style={{ padding: '0.375rem 0.875rem', fontSize: '0.75rem' }}
+            >
+              <Zap size={14} /> Créer {numberOfLines} ligne{parseInt(numberOfLines) > 1 ? 's' : ''}
+            </button>
+            <div style={{ flex: 1 }}></div>
+            <button
+              onClick={addRow}
+              className="btn btn-outline"
+              style={{ padding: '0.375rem 0.875rem', fontSize: '0.75rem' }}
+            >
+              <Plus size={14} /> Ajouter 1 ligne
+            </button>
+          </div>
+
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            marginBottom: '0.75rem',
+            fontSize: '0.7rem',
+            color: '#64748b'
+          }}>
+            <span>📋 {rows.length} ligne(s) au total</span>
+            <span>💡 Cliquez sur Créer X lignes pour générer automatiquement plusieurs lignes vides</span>
+          </div>
+
+          <div className="report-table-container" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+            <table className="report-table">
+              <thead>
+                <tr style={{ position: 'sticky', top: 0, background: '#f1f5f9' }}>
+                  <th style={{ width: '25%' }}>Date</th>
+                  <th style={{ width: '45%' }}>Nom du client</th>
+                  <th style={{ width: '25%' }}>Prix HT (MAD)</th>
+                  <th style={{ width: '5%' }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, index) => (
+                  <tr key={row.id}>
+                    <td>
+                      <input
+                        type="date"
+                        className="report-input"
+                        value={row.date}
+                        onChange={e => updateRow(row.id, 'date', e.target.value)}
+                        style={{ fontSize: '0.75rem' }}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        className="report-input"
+                        value={row.nom}
+                        onChange={e => updateRow(row.id, 'nom', e.target.value)}
+                        placeholder={`Client ${index + 1}`}
+                        style={{ fontSize: '0.75rem' }}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="report-input"
+                        value={row.price||""}
+                        onChange={e => updateRow(row.id, 'price', parseFloat(e.target.value) || 0)}
+                        placeholder="0.00"
+                        style={{ fontSize: '0.75rem', textAlign: 'right' }}
+                      />
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <button
+                        onClick={() => removeRow(row.id)}
+                        className="action-btn"
+                        disabled={rows.length === 1}
+                        style={{ color: '#ef4444' }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
           {rows.filter(r => r.price > 0).length > 0 && (
             <div className="summary-box">
               <div style={{ textAlign: 'right' }}>
@@ -1242,7 +2014,7 @@ const MultiRowReportModal = ({ isOpen, onClose }) => {
                   {formatMoney(rows.filter(r => r.price > 0).reduce((sum, r) => sum + safeNumber(r.price), 0))}
                 </div>
                 <div style={{ fontSize: '0.65rem', color: '#64748b' }}>
-                  TVA 20%: {formatMoney(rows.filter(r => r.price > 0).reduce((sum, r) => sum + safeNumber(r.price), 0) * TVA_RATE)}
+                  ({rows.filter(r => r.price > 0).length} ligne(s) renseignée(s))
                 </div>
               </div>
             </div>
@@ -1263,6 +2035,214 @@ const MultiRowReportModal = ({ isOpen, onClose }) => {
   );
 };
 
+// ==================== SAVED REPORTS SECTION ====================
+const SavedReportsSection = ({ onEditReport, showToast }) => {
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(null);
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, reportId: null, reportName: '' });
+
+  const loadReports = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/reports`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setReports(data.reports || []);
+      }
+    } catch (error) {
+      console.error('Error loading reports:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadReports();
+    
+    // Listen for report saved events
+    const handleReportSaved = () => loadReports();
+    window.addEventListener('reportSaved', handleReportSaved);
+    return () => window.removeEventListener('reportSaved', handleReportSaved);
+  }, []);
+
+  const handleDelete = async () => {
+    const { reportId } = deleteModal;
+    if (!reportId) return;
+    
+    setDeleting(reportId);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/reports/${reportId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        await loadReports();
+        showToast('Rapport supprimé avec succès', 'success');
+      } else {
+        showToast('Erreur lors de la suppression', 'error');
+      }
+    } catch (error) {
+      console.error('Error deleting report:', error);
+      showToast('Erreur lors de la suppression', 'error');
+    } finally {
+      setDeleting(null);
+      setDeleteModal({ isOpen: false, reportId: null, reportName: '' });
+    }
+  };
+
+  const downloadReport = async (report, e) => {
+    e.stopPropagation();
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/download-report/${report.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = report.file_name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        showToast('Rapport téléchargé avec succès', 'success');
+      } else {
+        showToast('Erreur lors du téléchargement', 'error');
+      }
+    } catch (error) {
+      console.error('Download error:', error);
+      showToast('Erreur lors du téléchargement', 'error');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="saved-reports-section">
+        <div className="section-title">
+          <FolderOpen size={18} style={{ color: '#3b82f6' }} />
+          Rapports sauvegardés
+        </div>
+        <div style={{ textAlign: 'center', padding: '2rem' }}>
+          <div className="loading-spinner" style={{ width: '2rem', height: '2rem' }}></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (reports.length === 0) {
+    return (
+      <div className="saved-reports-section">
+        <div className="section-title">
+          <FolderOpen size={18} style={{ color: '#3b82f6' }} />
+          Rapports sauvegardés
+        </div>
+        <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
+          <FileText size={32} style={{ marginBottom: '0.5rem' }} />
+          <p>Aucun rapport sauvegardé</p>
+          <p style={{ fontSize: '0.75rem' }}>Utilisez "Rapport Manuel" pour créer votre premier rapport</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="saved-reports-section">
+      <div className="section-title">
+        <FolderOpen size={18} style={{ color: '#3b82f6' }} />
+        Rapports sauvegardés
+        <span style={{ marginLeft: 'auto', fontSize: '0.7rem', background: '#e2e8f0', padding: '0.25rem 0.5rem', borderRadius: '1rem' }}>
+          {reports.length} rapport(s)
+        </span>
+      </div>
+      <div className="saved-reports-grid">
+        {reports.map((report) => (
+          <div key={report.id} className="saved-report-card">
+            <div className="saved-report-title">
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FileText size={14} style={{ color: '#3b82f6' }} />
+                {report.file_name.length > 35 ? report.file_name.slice(0, 32) + '...' : report.file_name}
+              </span>
+              <div style={{ display: 'flex', gap: '0.25rem' }}>
+                <button 
+                  className="action-btn edit" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEditReport(report);
+                  }}
+                  title="Modifier"
+                >
+                  <Edit size={14} />
+                </button>
+                <button 
+                  className="action-btn" 
+                  onClick={(e) => downloadReport(report, e)}
+                  title="Télécharger"
+                >
+                  <Download size={14} />
+                </button>
+                <button 
+                  className="action-btn" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteModal({ isOpen: true, reportId: report.id, reportName: report.file_name });
+                  }}
+                  title="Supprimer"
+                  style={{ color: '#ef4444' }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+            <div style={{ fontSize: '0.7rem', color: '#475569' }}>
+              <div>📊 Total HT: <strong>{formatMoney(report.total_ht || 0)}</strong></div>
+              <div>📋 {report.rows?.length || 0} ligne(s)</div>
+            </div>
+            <div className="saved-report-meta">
+              <span><Calendar size={10} /> {new Date(report.created_at).toLocaleDateString('fr-FR')}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteModal.isOpen && (
+        <div className="report-modal-overlay" onClick={() => setDeleteModal({ isOpen: false, reportId: null, reportName: '' })}>
+          <div className="report-modal" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
+            <div className="report-modal-header">
+              <h2 className="report-modal-title">
+                <AlertTriangle size={20} style={{ color: '#ef4444' }} />
+                Confirmer la suppression
+              </h2>
+              <button onClick={() => setDeleteModal({ isOpen: false, reportId: null, reportName: '' })} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="report-modal-body">
+              <p>Êtes-vous sûr de vouloir supprimer le rapport <strong>{deleteModal.reportName?.slice(0, 50)}</strong> ?</p>
+              <p style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '0.5rem' }}>Cette action est irréversible.</p>
+            </div>
+            <div className="report-modal-footer">
+              <button onClick={() => setDeleteModal({ isOpen: false, reportId: null, reportName: '' })} className="btn btn-outline">
+                Annuler
+              </button>
+              <button onClick={handleDelete} className="btn btn-primary" style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)' }} disabled={deleting === deleteModal.reportId}>
+                {deleting === deleteModal.reportId ? <Loader size={16} className="spinning" /> : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ==================== MAIN DASHBOARD ====================
 const Dashboard = () => {
   const dispatch = useDispatch();
@@ -1270,6 +2250,12 @@ const Dashboard = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [timeRange, setTimeRange] = useState('week');
   const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [editReport, setEditReport] = useState(null);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+  const [lastAutoUpdate, setLastAutoUpdate] = useState(new Date());
+  const isRefreshingRef = useRef(false);
+  
+  const { showToast, ToastContainer } = useToast();
   
   // Redux Selectors
   const { list: products, loading: productsLoading } = useSelector((state) => state.products);
@@ -1278,60 +2264,174 @@ const Dashboard = () => {
   const { list: gpsDevices } = useSelector((state) => state.gpsDevices);
   const { list: vehicles } = useSelector((state) => state.vehicles);
   const { list: activations } = useSelector((state) => state.activations);
+  const { list: depenses } = useSelector(selectDepenses);   // added to fetch expenses
   const { user } = useSelector((state) => state.auth);
   
-  // Refresh Data
-  const refreshData = async () => {
+  // Refresh Data - memoized with useCallback to avoid dependency loops
+  const refreshData = useCallback(async () => {
+    // Prevent overlapping refresh calls
+    if (isRefreshingRef.current) return;
+    isRefreshingRef.current = true;
     setRefreshing(true);
-    await Promise.all([
-      dispatch(fetchProducts()),
-      dispatch(fetchSales()),
-      dispatch(fetchDashboardStats()),
-      dispatch(fetchSaleStats()),
-      dispatch(fetchClients()),
-      dispatch(fetchGpsDevices()),
-      dispatch(fetchVehicles()),
-      dispatch(fetchActivations())
-    ]);
-    setTimeout(() => setRefreshing(false), 500);
-  };
+    try {
+      await Promise.all([
+        dispatch(fetchProducts()),
+        dispatch(fetchSales()),
+        dispatch(fetchDashboardStats()),
+        dispatch(fetchSaleStats()),
+        dispatch(fetchClients()),
+        dispatch(fetchGpsDevices()),
+        dispatch(fetchVehicles()),
+        dispatch(fetchActivations()),
+        dispatch(fetchDepenses())      // added
+      ]);
+      setLastAutoUpdate(new Date());
+    } catch (error) {
+      console.error("Auto-refresh error:", error);
+    } finally {
+      setRefreshing(false);
+      isRefreshingRef.current = false;
+    }
+  }, [dispatch]);
   
+  // Initial load
   useEffect(() => {
     refreshData();
-  }, [dispatch]);
+  }, [refreshData]);
+  
+  // Auto-refresh interval (every 30 seconds)
+  useEffect(() => {
+    if (!autoRefreshEnabled) return;
+    const intervalId = setInterval(() => {
+      // Only refresh if the tab is visible to save resources
+      if (!document.hidden) {
+        refreshData();
+      }
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(intervalId);
+  }, [autoRefreshEnabled, refreshData]);
+  
+  // Listen for page visibility to avoid unnecessary background refreshes
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && autoRefreshEnabled) {
+        // Optionally refresh immediately when tab becomes visible
+        refreshData();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [autoRefreshEnabled, refreshData]);
+  
+  // Listen for report saved events to refresh
+  useEffect(() => {
+    const handleReportSaved = () => refreshData();
+    window.addEventListener('reportSaved', handleReportSaved);
+    return () => window.removeEventListener('reportSaved', handleReportSaved);
+  }, [refreshData]);
   
   // ==================== COMPUTED STATISTICS ====================
   
-  const revenueStats = useMemo(() => {
+  // Revenue, Expenses and Profit Statistics
+  const financialStats = useMemo(() => {
     const salesArray = Array.isArray(sales) ? sales : [];
+    const activationsArray = Array.isArray(activations) ? activations : [];
+    const depensesArray = Array.isArray(depenses) ? depenses : [];
+    
     const today = new Date();
     const currentMonth = today.toISOString().slice(0, 7);
     const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().slice(0, 7);
     
-    const currentMonthSales = salesArray.filter(s => s && s.created_at && s.created_at.slice(0, 7) === currentMonth);
-    const lastMonthSales = salesArray.filter(s => s && s.created_at && s.created_at.slice(0, 7) === lastMonth);
+    // --- CHIFFRE D'AFFAIRES (expected revenue) ---
+    // Sales: total invoice amount
+    const currentMonthSalesTotal = salesArray
+      .filter(s => s && s.created_at && s.created_at.slice(0, 7) === currentMonth)
+      .reduce((sum, s) => sum + safeNumber(s?.total), 0);
+    const lastMonthSalesTotal = salesArray
+      .filter(s => s && s.created_at && s.created_at.slice(0, 7) === lastMonth)
+      .reduce((sum, s) => sum + safeNumber(s?.total), 0);
     
-    const currentRevenue = currentMonthSales.reduce((sum, s) => sum + safeNumber(s?.total), 0);
-    const lastRevenue = lastMonthSales.reduce((sum, s) => sum + safeNumber(s?.total), 0);
+    // Activations: original price + all renewal prices (total expected revenue)
+    // Helper to compute total expected revenue for an activation
+    const getActivationTotalExpected = (act) => {
+      let total = safeNumber(act.price); // original price
+      if (act.renewal_history && Array.isArray(act.renewal_history)) {
+        act.renewal_history.forEach(entry => {
+          if (entry.action === 'renewal' && entry.price) {
+            total += safeNumber(entry.price);
+          }
+        });
+      }
+      return total;
+    };
     
-    let growth = 0;
-    if (lastRevenue > 0) growth = ((currentRevenue - lastRevenue) / lastRevenue) * 100;
-    else if (currentRevenue > 0) growth = 100;
+    const currentMonthActivationsExpected = activationsArray
+      .filter(a => a && a.created_at && a.created_at.slice(0, 7) === currentMonth)
+      .reduce((sum, a) => sum + getActivationTotalExpected(a), 0);
+    const lastMonthActivationsExpected = activationsArray
+      .filter(a => a && a.created_at && a.created_at.slice(0, 7) === lastMonth)
+      .reduce((sum, a) => sum + getActivationTotalExpected(a), 0);
     
-    const pendingRevenue = salesArray.filter(s => s && s.payment_status !== 'paid').reduce((sum, s) => sum + safeNumber(s?.remaining_amount), 0);
+    const totalExpectedRevenueCurrent = currentMonthSalesTotal + currentMonthActivationsExpected;
+    const totalExpectedRevenueLast = lastMonthSalesTotal + lastMonthActivationsExpected;
+    
+    let revenueGrowth = 0;
+    if (totalExpectedRevenueLast > 0) revenueGrowth = ((totalExpectedRevenueCurrent - totalExpectedRevenueLast) / totalExpectedRevenueLast) * 100;
+    else if (totalExpectedRevenueCurrent > 0) revenueGrowth = 100;
+    
+    // --- ACTUAL PAID REVENUE (for profit calculation) ---
+    const currentMonthSalesPaid = salesArray
+      .filter(s => s && s.created_at && s.created_at.slice(0, 7) === currentMonth)
+      .reduce((sum, s) => sum + safeNumber(s?.amount_paid), 0);
+    const currentMonthActivationsPaid = activationsArray
+      .filter(a => a && a.created_at && a.created_at.slice(0, 7) === currentMonth)
+      .reduce((sum, a) => sum + safeNumber(a?.amount_paid), 0);
+    const totalPaidRevenueCurrent = currentMonthSalesPaid + currentMonthActivationsPaid;
+    const lastMonthSalesPaid = salesArray
+      .filter(s => s && s.created_at && s.created_at.slice(0, 7) === lastMonth)
+      .reduce((sum, s) => sum + safeNumber(s?.amount_paid), 0);
+    const lastMonthActivationsPaid = activationsArray
+      .filter(a => a && a.created_at && a.created_at.slice(0, 7) === lastMonth)
+      .reduce((sum, a) => sum + safeNumber(a?.amount_paid), 0);
+    const totalPaidRevenueLast = lastMonthSalesPaid + lastMonthActivationsPaid;
+    
+    // --- EXPENSES ---
+    const currentMonthExpenses = depensesArray
+      .filter(d => d && d.date && d.date.slice(0, 7) === currentMonth)
+      .reduce((sum, d) => sum + safeNumber(d?.amount), 0);
+    const lastMonthExpenses = depensesArray
+      .filter(d => d && d.date && d.date.slice(0, 7) === lastMonth)
+      .reduce((sum, d) => sum + safeNumber(d?.amount), 0);
+    
+    // --- PROFIT (Paid Revenue - Expenses) ---
+    const profitCurrent = totalPaidRevenueCurrent - currentMonthExpenses;
+    const profitLast = totalPaidRevenueLast - lastMonthExpenses;
+    
+    let profitGrowth = 0;
+    if (profitLast > 0) profitGrowth = ((profitCurrent - profitLast) / profitLast) * 100;
+    else if (profitCurrent > 0) profitGrowth = 100;
+    
+    // Additional metrics
+    const pendingRevenue = salesArray
+      .filter(s => s && s.payment_status !== 'paid')
+      .reduce((sum, s) => sum + safeNumber(s?.remaining_amount), 0);
     const collectedRevenue = salesArray.reduce((sum, s) => sum + safeNumber(s?.amount_paid), 0);
     
     let averageOrderValue = 0;
-    if (salesArray.length > 0) averageOrderValue = currentRevenue / salesArray.length;
+    if (salesArray.length > 0) averageOrderValue = currentMonthSalesTotal / salesArray.length;
     
     return {
-      currentRevenue: safeRound(currentRevenue),
-      growth: safeRound(growth),
+      currentRevenue: safeRound(totalExpectedRevenueCurrent),
+      growth: safeRound(revenueGrowth),
       pendingRevenue: safeRound(pendingRevenue),
       collectedRevenue: safeRound(collectedRevenue),
-      averageOrderValue: safeRound(averageOrderValue)
+      averageOrderValue: safeRound(averageOrderValue),
+      currentProfit: safeRound(profitCurrent),
+      profitGrowth: safeRound(profitGrowth),
+      expensesCurrent: safeRound(currentMonthExpenses)
     };
-  }, [sales]);
+  }, [sales, activations, depenses]);
   
   const gpsStats = useMemo(() => {
     const devices = Array.isArray(gpsDevices) ? gpsDevices : [];
@@ -1451,6 +2551,16 @@ const Dashboard = () => {
   
   const isLoading = (productsLoading || salesLoading) && (!products?.length && !sales?.length);
   
+  const handleEditReport = (report) => {
+    setEditReport(report);
+  };
+  
+  const handleReportSaved = () => {
+    setEditReport(null);
+    refreshData();
+    window.dispatchEvent(new Event('reportSaved'));
+  };
+  
   if (isLoading && !products?.length && !sales?.length) {
     return (
       <div className="dashboard-container">
@@ -1491,7 +2601,18 @@ const Dashboard = () => {
                 <button className={`time-range-btn ${timeRange === 'month' ? 'time-range-btn-active' : ''}`} onClick={() => setTimeRange('month')}>Mois</button>
                 <button className={`time-range-btn ${timeRange === 'year' ? 'time-range-btn-active' : ''}`} onClick={() => setTimeRange('year')}>Année</button>
               </div>
-              <button onClick={refreshData} className="btn btn-outline" disabled={refreshing}><RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} /> Actualiser</button>
+              <button onClick={refreshData} className="btn btn-outline" disabled={refreshing}>
+                <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} /> 
+                Actualiser
+              </button>
+              <button 
+                onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)} 
+                className="btn btn-outline"
+                style={{ background: autoRefreshEnabled ? '#e0f2fe' : 'white', borderColor: autoRefreshEnabled ? '#3b82f6' : '#e2e8f0' }}
+                title={autoRefreshEnabled ? "Mise à jour automatique activée (30s)" : "Mise à jour automatique désactivée"}
+              >
+                <Power size={14} /> {autoRefreshEnabled ? "Live ON" : "Auto OFF"}
+              </button>
               <button onClick={() => navigate('/ventes')} className="btn btn-primary"><Plus size={16} /> Nouvelle vente</button>
             </>
           }
@@ -1507,20 +2628,59 @@ const Dashboard = () => {
           ))}
         </div>
         
-        {/* Main Stats Cards */}
+        {/* Main Stats Cards - 4 per row layout */}
         <div className="stats-grid">
-          <StatCard label="CHIFFRE D'AFFAIRES" value={revenueStats.currentRevenue} icon={DollarSign} color="blue" subtitle={`💰 Collecté: ${revenueStats.collectedRevenue.toLocaleString()} MAD`} trend={revenueStats.growth > 0 ? 'up' : (revenueStats.growth < 0 ? 'down' : undefined)} trendValue={revenueStats.growth !== 0 ? Math.abs(revenueStats.growth) : undefined} onClick={() => navigate('/ventes')} />
-          <StatCard label="VENTES" value={sales?.length || 0} icon={ShoppingCart} color="green" subtitle={`📊 Panier moyen: ${revenueStats.averageOrderValue.toLocaleString()} MAD`} onClick={() => navigate('/ventes')} />
-          <StatCard label="PRODUITS" value={products?.length || 0} icon={Package} color="purple" subtitle={`⭐ ${productDistribution.length || 0} références vendues`} onClick={() => navigate('/produits')} />
-          <StatCard label="CLIENTS" value={clients?.length || 0} icon={Users} color="orange" subtitle={`👥 +${Math.floor((clients?.length || 0) * 0.12)} nouveaux ce mois`} onClick={() => navigate('/clients')} />
+          <StatCard 
+            label="CHIFFRE D'AFFAIRES" 
+            value={financialStats.currentRevenue} 
+            icon={DollarSign} 
+            color="blue" 
+            subtitle={`💰 Collecté: ${financialStats.collectedRevenue.toLocaleString()} MAD`} 
+            trend={financialStats.growth > 0 ? 'up' : (financialStats.growth < 0 ? 'down' : undefined)} 
+            trendValue={financialStats.growth !== 0 ? Math.abs(financialStats.growth) : undefined} 
+            onClick={() => navigate('/ventes')} 
+          />
+          <StatCard 
+            label="PROFIT NET" 
+            value={financialStats.currentProfit} 
+            icon={TrendingUp} 
+            color="green" 
+            subtitle={`📉 Dépenses: ${financialStats.expensesCurrent.toLocaleString()} MAD`} 
+            trend={financialStats.profitGrowth > 0 ? 'up' : (financialStats.profitGrowth < 0 ? 'down' : undefined)} 
+            trendValue={financialStats.profitGrowth !== 0 ? Math.abs(financialStats.profitGrowth) : undefined} 
+            onClick={() => navigate('/depenses')} 
+          />
+          <StatCard 
+            label="VENTES" 
+            value={sales?.length || 0} 
+            icon={ShoppingCart} 
+            color="green" 
+            subtitle={`📊 Panier moyen: ${financialStats.averageOrderValue.toLocaleString()} MAD`} 
+            onClick={() => navigate('/ventes')} 
+          />
+          <StatCard 
+            label="PRODUITS" 
+            value={products?.length || 0} 
+            icon={Package} 
+            color="purple" 
+            subtitle={`⭐ ${productDistribution.length || 0} références vendues`} 
+            onClick={() => navigate('/produits')} 
+          />
         </div>
         
         {/* KPI Cards Row */}
         <div className="kpi-grid">
           <KpiCard title="Appareils GPS" value={gpsStats.total} subtitle={`${gpsStats.available} disponibles • ${gpsStats.assigned} assignés`} icon={MapPin} onClick={() => navigate('/produits')} />
           <KpiCard title="Activations actives" value={activationStats.active} subtitle={`⚠️ ${activationStats.expiringSoon} expirent bientôt`} icon={Zap} onClick={() => navigate('/Activation')} />
-          <KpiCard title="Véhicules équipés" value={vehicles?.length || 0} subtitle={`🚗 +${Math.floor((vehicles?.length || 0) * 0.08)} ce trimestre`} icon={Car} onClick={() => navigate('/vehicules')} />
           <KpiCard title="Taux d'utilisation GPS" value={`${gpsStats.utilizationRate}%`} subtitle={`📈 ${gpsStats.utilizationRate >= 70 ? 'Excellent' : 'À améliorer'}`} icon={Gauge} />
+            <StatCard 
+            label="CLIENTS" 
+            value={clients?.length || 0} 
+            icon={Users} 
+            color="orange" 
+            subtitle={`👥 +${Math.floor((clients?.length || 0) * 0.12)} nouveaux ce mois`} 
+            onClick={() => navigate('/clients')} 
+          />
         </div>
         
         {/* Revenue Chart */}
@@ -1564,7 +2724,7 @@ const Dashboard = () => {
                 <div style={{ background: 'linear-gradient(135deg, #fed7aa 0%, #fdba74 100%)', borderRadius: '0.75rem', padding: '0.75rem', textAlign: 'center' }}><div className="text-lg font-bold text-orange-700">{paymentDistribution[1]?.value || 0}</div><div className="text-xs text-orange-600">Partielles</div></div>
                 <div style={{ background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)', borderRadius: '0.75rem', padding: '0.75rem', textAlign: 'center' }}><div className="text-lg font-bold text-red-700">{paymentDistribution[2]?.value || 0}</div><div className="text-xs text-red-600">Impayées</div></div>
               </div>
-              {revenueStats.pendingRevenue > 0 && (<div className="info-box" style={{ marginTop: '1rem', background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)' }}><div className="text-sm font-semibold text-yellow-800">💰 En attente de paiement</div><div className="text-xl font-bold text-yellow-900">{revenueStats.pendingRevenue.toLocaleString()} MAD</div></div>)}
+              {financialStats.pendingRevenue > 0 && (<div className="info-box" style={{ marginTop: '1rem', background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)' }}><div className="text-sm font-semibold text-yellow-800">💰 En attente de paiement</div><div className="text-xl font-bold text-yellow-900">{financialStats.pendingRevenue.toLocaleString()} MAD</div></div>)}
             </div>
           </div>
           
@@ -1624,16 +2784,39 @@ const Dashboard = () => {
           </div>
         </div>
         
-        {/* Footer */}
+        {/* Saved Reports Section */}
+        <SavedReportsSection onEditReport={handleEditReport} showToast={showToast} />
+        
+        {/* Footer with auto-refresh info */}
         <div className="text-center text-xs text-gray-400 border-t border-gray-100 pt-4 mt-2">
-          <div className="flex justify-center gap-4 mb-2"><span>📊 Données en temps réel</span><span>🔄 Dernière mise à jour: {new Date().toLocaleTimeString('fr-FR')}</span><span>✅ {sales?.length || 0} ventes enregistrées</span></div>
+          <div className="flex justify-center gap-4 mb-2 flex-wrap">
+            <span>📊 Données en temps réel</span>
+            <span>🔄 Dernière mise à jour auto: {lastAutoUpdate.toLocaleTimeString('fr-FR')}</span>
+            <span>✅ {sales?.length || 0} ventes enregistrées</span>
+            {autoRefreshEnabled && <span className="text-green-500">🔴 Live updates (30s)</span>}
+            {!autoRefreshEnabled && <span className="text-gray-400">⏸ Mise à jour auto désactivée</span>}
+          </div>
           <div>© 2024 - Tableau de bord commercial</div>
         </div>
         
       </div>
 
-      {/* Multi-Row Report Modal */}
-      <MultiRowReportModal isOpen={reportModalOpen} onClose={() => setReportModalOpen(false)} />
+      {/* Toast Container */}
+      <ToastContainer />
+
+      {/* Multi-Row Report Modal (Create) */}
+      <MultiRowReportModal isOpen={reportModalOpen} onClose={() => setReportModalOpen(false)} showToast={showToast} />
+      
+      {/* Edit Report Modal */}
+      {editReport && (
+        <EditReportModal 
+          isOpen={!!editReport} 
+          onClose={() => setEditReport(null)} 
+          report={editReport}
+          onSave={handleReportSaved}
+          showToast={showToast}
+        />
+      )}
     </>
   );
 };

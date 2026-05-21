@@ -3330,14 +3330,6 @@ const Sales = () => {
         subtitle={`${filteredSales.length} ventes · ${safeToFixed(totalRevenue)} MAD encaissés`} 
         actions={
           <>
-            <button 
-              onClick={() => setShowCacheImage(!showCacheImage)} 
-              className={`invoice-image-toggle ${showCacheImage ? 'active' : ''}`}
-              title={showCacheImage ? "Masquer l'image cache.png" : "Afficher l'image cache.png"}
-            >
-              {showCacheImage ? <EyeOff size={16} /> : <ImageIcon size={16} />}
-              {showCacheImage ? "Masquer cache" : "Afficher cache"}
-            </button>
             <ExportMenu 
               title="Liste des ventes" 
               rows={filteredSales} 
@@ -3351,9 +3343,6 @@ const Sales = () => {
                 { header: 'Total (MAD)', accessor: s => safeToFixed(s.total) }
               ]} 
             />
-            <button onClick={() => { reset(); setOpen(true); }} className="modern-btn modern-btn-primary">
-              <Plus size={16} /> Nouvelle Vente
-            </button>
           </>
         } 
       />
@@ -3437,12 +3426,6 @@ const Sales = () => {
                             <button onClick={() => setView(sale)} className="sales-btn-icon" title="Voir détails">
                               <Eye size={16} style={{ color: '#232224' }}/>
                             </button>
-                            <button onClick={() => printInvoice(sale)} className="sales-btn-icon" title="Aperçu facture">
-                              <FileText size={16} style={{ color: '#8b5cf6' }} />
-                            </button>
-                            <button onClick={() => downloadPDF(sale)} className="sales-btn-icon" title="Télécharger PDF">
-                              <Download size={16} style={{ color: '#3e5dfb' }}/>
-                            </button>
                             <button 
                               onClick={() => { setSelectedSaleForHistory(sale); setShowPaymentHistory(true); }} 
                               className="sales-btn-icon" 
@@ -3471,7 +3454,7 @@ const Sales = () => {
                               </>
                             )}
                           </div>
-                         </td>
+                          </td>
                       </tr>
                     );
                   })}
@@ -3627,12 +3610,6 @@ const Sales = () => {
             </div>
 
             <div className="sales-dialog-footer">
-              <button onClick={() => downloadPDF(view)} className="sales-btn-outline">
-                <Download size={16} /> PDF
-              </button>
-              <button onClick={() => printInvoice(view)} className="sales-btn-primary">
-                <Printer size={16} /> Imprimer
-              </button>
               <button onClick={() => setView(null)} className="sales-btn-outline">
                 Fermer
               </button>
@@ -3812,7 +3789,7 @@ const Sales = () => {
                               <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
                                 Catégorie: {item.categorie}
                               </div>
-                             </td>
+                              </td>
                             <td>
                               <input 
                                 type="number" 
@@ -3821,7 +3798,7 @@ const Sales = () => {
                                 onChange={(e) => updateQuantity(item.productId, e.target.value)} 
                                 className="modern-item-input" 
                               />
-                             </td>
+                              </td>
                             <td>
                               <input 
                                 type="number" 
@@ -3830,7 +3807,7 @@ const Sales = () => {
                                 step="0.01" 
                                 className="modern-item-input" 
                               />
-                             </td>
+                              </td>
                             <td className="text-right font-semibold">
                               {safeToFixed(item.unitPrice * item.quantity)} MAD
                             </td>

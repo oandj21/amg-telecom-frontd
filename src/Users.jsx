@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback , useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Navigate } from 'react-router-dom';
 import { 
@@ -9,7 +9,7 @@ import {
   Sparkles, TrendingUp, Award, Star, Zap, Crown, Wrench, HardDrive,
   DollarSign, CreditCard, History, BarChart3, TrendingDown, CalendarDays,
   Receipt, FileText, Printer, Download, Activity, Package, Smartphone,
-  RefreshCcw
+  RefreshCcw, Upload, File, Image, XCircle, Loader2, ExternalLink
 } from 'lucide-react';
 import {
   fetchUsers,
@@ -58,6 +58,22 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Helper function to format file size
+const formatFileSize = (bytes) => {
+  if (!bytes) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+// Helper function to get file icon
+const getFileIcon = (mimeType) => {
+  if (mimeType?.startsWith('image/')) return <Image size={16} />;
+  if (mimeType === 'application/pdf') return <FileText size={16} />;
+  return <File size={16} />;
+};
 
 // ==================== STYLES ====================
 const styles = `
@@ -659,6 +675,10 @@ const styles = `
     max-width: 48rem;
   }
   
+  .users-dialog-xl {
+    max-width: 64rem;
+  }
+  
   @keyframes slideIn {
     from {
       opacity: 0;
@@ -776,6 +796,28 @@ const styles = `
   .users-select:focus {
     border-color: #3b82f6;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+  
+  .users-number-input {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    background: white;
+    color: #0f172a;
+    outline: none;
+    transition: all 0.2s ease;
+  }
+  
+  .users-number-input:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+  
+  textarea.users-input {
+    resize: vertical;
+    min-height: 80px;
   }
   
   .users-toggle-container {
@@ -1092,44 +1134,324 @@ const styles = `
     color: #166534;
   }
   
-  /* Count Display Box */
-  .users-count-box {
-    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-    border: 1px solid #86efac;
+  /* File Upload Styles */
+  .file-upload-area {
+    border: 2px dashed #e2e8f0;
     border-radius: 0.75rem;
-    padding: 0.75rem 1rem;
+    padding: 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
     margin-bottom: 1rem;
+  }
+  
+  .file-upload-area:hover {
+    border-color: #3b82f6;
+    background: #eff6ff;
+  }
+  
+  .file-upload-area.dragging {
+    border-color: #3b82f6;
+    background: #eff6ff;
+  }
+  
+  .file-upload-icon {
+    color: #94a3b8;
+    margin-bottom: 0.5rem;
+  }
+  
+  .file-upload-text {
+    font-size: 0.875rem;
+    color: #64748b;
+  }
+  
+  .file-upload-hint {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    margin-top: 0.25rem;
+  }
+  
+  .selected-files {
+    margin-top: 1rem;
+  }
+  
+  .selected-files-title {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #475569;
+    margin-bottom: 0.5rem;
+  }
+  
+  .selected-files-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .selected-file-item {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: #f8fafc;
+    border-radius: 0.5rem;
+    border: 1px solid #e2e8f0;
   }
   
-  .users-count-box-label {
-    font-size: 0.875rem;
+  .selected-file-info {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .selected-file-name {
+    font-size: 0.75rem;
     font-weight: 500;
-    color: #166534;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
   }
   
-  .users-count-box-value {
-    font-size: 1.5rem;
-    font-weight: 800;
-    color: #15803d;
+  .selected-file-size {
+    font-size: 0.65rem;
+    color: #94a3b8;
   }
   
-  .users-refresh-count {
+  .remove-file-btn {
     background: transparent;
     border: none;
     cursor: pointer;
     padding: 0.25rem;
-    color: #15803d;
+    color: #94a3b8;
+    border-radius: 0.25rem;
     transition: all 0.2s ease;
   }
   
-  .users-refresh-count:hover {
-    transform: rotate(180deg);
+  .remove-file-btn:hover {
+    background: #fef2f2;
+    color: #dc2626;
   }
   
-  .users-info-box {
+  /* Payment Cards List */
+  .payments-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .payment-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    padding: 1rem;
+    transition: all 0.2s ease;
+  }
+  
+  .payment-card:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+  
+  .payment-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  
+  .payment-type {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 2rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+  
+  .payment-type.activation {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+  
+  .payment-type.vente {
+    background: #dcfce7;
+    color: #166534;
+  }
+  
+  .payment-date {
+    font-size: 0.75rem;
+    color: #64748b;
+  }
+  
+  .delete-payment-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0.25rem;
+    color: #94a3b8;
+    border-radius: 0.375rem;
+    transition: all 0.2s ease;
+  }
+  
+  .delete-payment-btn:hover {
+    background: #fef2f2;
+    color: #dc2626;
+  }
+  
+  .payment-card-details {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  .payment-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .detail-label {
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    color: #64748b;
+  }
+  
+  .detail-value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #0f172a;
+  }
+  
+  .payment-detail.total .detail-value {
+    color: #3b82f6;
+  }
+  
+  .payment-notes {
+    background: #f8fafc;
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  .notes-label {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: #64748b;
+    margin-bottom: 0.25rem;
+  }
+  
+  .notes-text {
+    font-size: 0.875rem;
+    color: #0f172a;
+  }
+  
+  .payment-files {
+    margin-top: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  .files-label {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #475569;
+    margin-bottom: 0.5rem;
+  }
+  
+  .files-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .file-attachment-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: #f8fafc;
+    border-radius: 0.5rem;
+    border: 1px solid #e2e8f0;
+    transition: all 0.2s ease;
+  }
+  
+  .file-attachment-item:hover {
+    background: #f1f5f9;
+  }
+  
+  .file-attachment-info {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .file-attachment-name {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+  }
+  
+  .file-attachment-meta {
+    font-size: 0.65rem;
+    color: #94a3b8;
+  }
+  
+  .file-attachment-actions {
+    display: flex;
+    gap: 0.25rem;
+  }
+  
+  .file-action-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 0.25rem;
+    color: #64748b;
+    transition: all 0.2s ease;
+  }
+  
+  .file-action-btn:hover {
+    background: white;
+    color: #3b82f6;
+  }
+  
+  .file-action-btn.delete:hover {
+    background: #fef2f2;
+    color: #dc2626;
+  }
+  
+  .file-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  .payment-footer {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #f1f5f9;
+  }
+  
+  .created-by {
+    font-size: 0.7rem;
+    color: #94a3b8;
+  }
+  
+  .created-date {
+    margin-left: 0.25rem;
+  }
+  
+  .info-box {
     background: #eff6ff;
     border: 1px solid #bfdbfe;
     border-radius: 0.75rem;
@@ -1140,6 +1462,10 @@ const styles = `
     display: flex;
     align-items: center;
     gap: 0.5rem;
+  }
+  
+  .spinner {
+    animation: spin 1s linear infinite;
   }
 `;
 
@@ -1365,89 +1691,99 @@ const AdminPaymentModal = ({ user, onClose, onSuccess }) => {
   );
 };
 
-// ==================== TECHNICIAN PAYMENT MODAL (ENHANCED) ====================
+// ==================== TECHNICIAN PAYMENT MODAL WITH FILE UPLOAD ====================
 const TechnicianPaymentModal = ({ user, onClose, onSuccess }) => {
   const dispatch = useDispatch();
   const [type, setType] = useState('activation');
-  const [amount, setAmount] = useState('');
+  const [unitPrice, setUnitPrice] = useState('');
+  const [quantity, setQuantity] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [notes, setNotes] = useState('');
+  const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [count, setCount] = useState(0);
-  const [loadingCount, setLoadingCount] = useState(false);
-  const [countDetails, setCountDetails] = useState(null);
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef(null);
 
-  // Fetch count based on type
-  const fetchCount = useCallback(async () => {
-    if (!user?.id) return;
+  const handleFileSelect = (selectedFiles) => {
+    const validFiles = [];
+    const invalidFiles = [];
     
-    setLoadingCount(true);
-    try {
-      let endpoint = '';
-      if (type === 'activation') {
-        endpoint = `/technician-stats/${user.id}/activations-count`;
-      } else {
-        endpoint = `/technician-stats/${user.id}/sales-count`;
-      }
+    Array.from(selectedFiles).forEach(file => {
+      const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      const maxSize = 5 * 1024 * 1024; // 5MB
       
-      const response = await api.get(endpoint);
-      
-      if (type === 'activation') {
-        const data = response.data;
-        setCount(data.count || 0);
-        setCountDetails({
-          total: data.total || 0,
-          items: data.activations || [],
-          message: data.message || ''
-        });
+      if (validTypes.includes(file.type) && file.size <= maxSize) {
+        validFiles.push(file);
       } else {
-        const data = response.data;
-        setCount(data.count || 0);
-        setCountDetails({
-          total: data.total_amount || 0,
-          items: data.sales || [],
-          message: data.message || ''
-        });
+        invalidFiles.push(file.name);
       }
-    } catch (err) {
-      console.error('Error fetching count:', err);
-      setCount(0);
-      setCountDetails(null);
-    } finally {
-      setLoadingCount(false);
+    });
+    
+    if (invalidFiles.length > 0) {
+      setError(`Fichiers non supportés ou trop volumineux: ${invalidFiles.join(', ')}`);
     }
-  }, [user?.id, type]);
+    
+    setFiles(prev => [...prev, ...validFiles]);
+  };
 
-  // Fetch count when type changes or user changes
-  useEffect(() => {
-    if (user?.id) {
-      fetchCount();
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
     }
-  }, [user?.id, type, fetchCount]);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFileSelect(e.dataTransfer.files);
+    }
+  };
+
+  const removeFile = (indexToRemove) => {
+    setFiles(files.filter((_, index) => index !== indexToRemove));
+  };
 
   const handleSubmit = async () => {
-    if (!amount || parseFloat(amount) <= 0) {
-      setError('Montant invalide');
+    if (!unitPrice || parseFloat(unitPrice) <= 0) {
+      setError('Prix unitaire invalide');
       return;
     }
     
-    if (count === 0) {
-      setError(`Aucun(e) ${type === 'activation' ? 'activation' : 'vente'} trouvé(e) pour ce technicien`);
+    if (!quantity || parseInt(quantity) <= 0) {
+      setError('Quantité invalide');
       return;
     }
+
+    const qty = parseInt(quantity);
+    const price = parseFloat(unitPrice);
+    const totalAmount = price * qty;
+
+    const formData = new FormData();
+    formData.append('type', type);
+    formData.append('amount', price);
+    formData.append('count', qty);
+    formData.append('date', date);
+    if (notes) formData.append('notes', notes);
+    
+    files.forEach((file, index) => {
+      formData.append(`payment_files[${index}]`, file);
+    });
 
     setLoading(true);
     try {
-      await dispatch(addTechnicianPayment({
-        userId: user.id,
-        type: type,
-        amount: parseFloat(amount),
-        count: count,
-        date: date
-      })).unwrap();
+      const response = await api.post(`/technician-payments/${user.id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
       
-      const totalAmount = parseFloat(amount) * count;
-      onSuccess(`${type === 'activation' ? 'Activation' : 'Vente'} de ${count} unité(s) à ${parseFloat(amount).toLocaleString('fr-FR')} DH ajoutée (Total: ${totalAmount.toLocaleString('fr-FR')} DH)`);
+      onSuccess(`${type === 'activation' ? 'Activation' : 'Vente'} de ${qty} unité(s) à ${price.toLocaleString('fr-FR')} DH/unité ajoutée (Total: ${totalAmount.toLocaleString('fr-FR')} DH)${files.length > 0 ? ` avec ${files.length} fichier(s) joint(s)` : ''}`);
       onClose();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -1456,18 +1792,7 @@ const TechnicianPaymentModal = ({ user, onClose, onSuccess }) => {
     }
   };
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString('fr-FR');
-  };
-
-  const getTypeLabel = () => {
-    return type === 'activation' ? 'Activations GPS' : 'Ventes GPS';
-  };
-
-  const getIcon = () => {
-    return type === 'activation' ? <Smartphone size={16} /> : <Package size={16} />;
-  };
+  const totalAmount = unitPrice && quantity ? parseFloat(unitPrice) * parseInt(quantity) : 0;
 
   return (
     <>
@@ -1479,7 +1804,7 @@ const TechnicianPaymentModal = ({ user, onClose, onSuccess }) => {
             Ajouter un paiement - {user?.name || 'Utilisateur'}
           </h2>
           <p className="users-dialog-description">
-            Ajouter une activation ou une vente au technicien
+            Ajouter manuellement une activation ou une vente avec justificatifs
           </p>
         </div>
         <div className="users-dialog-body">
@@ -1490,9 +1815,9 @@ const TechnicianPaymentModal = ({ user, onClose, onSuccess }) => {
             </div>
           )}
           
-          <div className="users-info-box">
+          <div className="info-box">
             <Info size={14} />
-            <span>Les quantités sont automatiquement récupérées du système. Aucune saisie manuelle requise.</span>
+            <span>Saisissez manuellement la quantité et le prix unitaire pour calculer le total.</span>
           </div>
           
           <div className="users-form-group">
@@ -1501,94 +1826,44 @@ const TechnicianPaymentModal = ({ user, onClose, onSuccess }) => {
               value={type} 
               onChange={(e) => setType(e.target.value)} 
               className="users-select"
-              disabled={loadingCount}
             >
               <option value="activation">Activation GPS</option>
               <option value="vente">Vente GPS</option>
             </select>
           </div>
           
-          {/* Automatic Count Display */}
-          <div className="users-count-box">
-            <div className="users-count-box-label">
-              {getIcon()}
-              <span style={{ marginLeft: '0.5rem' }}>
-                {getTypeLabel()} trouvés pour ce technicien:
-              </span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div className="users-count-box-value">
-                {loadingCount ? (
-                  <div className="users-loading-spinner" style={{ width: '20px', height: '20px' }} />
-                ) : (
-                  count
-                )}
-              </div>
-              <button 
-                onClick={fetchCount} 
-                className="users-refresh-count" 
-                title="Rafraîchir le compteur"
-                disabled={loadingCount}
-              >
-                <RefreshCcw size={16} />
-              </button>
-            </div>
-          </div>
-          
-          {/* Show details if available */}
-          {countDetails && countDetails.items && countDetails.items.length > 0 && (
-            <div style={{ marginBottom: '1rem', maxHeight: '200px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '0.5rem' }}>
-              <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse' }}>
-                <thead style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
-                  <tr>
-                    <th style={{ padding: '0.5rem', textAlign: 'left' }}>ID</th>
-                    <th style={{ padding: '0.5rem', textAlign: 'left' }}>Client</th>
-                    <th style={{ padding: '0.5rem', textAlign: 'left' }}>Date</th>
-                    {type === 'vente' && <th style={{ padding: '0.5rem', textAlign: 'left' }}>Total</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {countDetails.items.slice(0, 10).map((item, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '0.5rem' }}>#{item.id}</td>
-                      <td style={{ padding: '0.5rem' }}>{item.client_name || item.client?.nom || '-'}</td>
-                      <td style={{ padding: '0.5rem' }}>{formatDate(item.created_at || item.date_activation)}</td>
-                      {type === 'vente' && (
-                        <td style={{ padding: '0.5rem' }}>{item.total?.toLocaleString('fr-FR')} DH</td>
-                      )}
-                    </tr>
-                  ))}
-                  {countDetails.items.length > 10 && (
-                    <tr>
-                      <td colSpan={type === 'vente' ? 4 : 3} style={{ padding: '0.5rem', textAlign: 'center', color: '#64748b' }}>
-                        + {countDetails.items.length - 10} autre(s)
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-          
           <div className="users-form-group">
             <label className="users-label users-label-required">Prix unitaire (DH)</label>
             <input
               type="number"
               step="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="users-input"
+              value={unitPrice}
+              onChange={(e) => setUnitPrice(e.target.value)}
+              className="users-number-input"
               placeholder="0.00"
               autoFocus
             />
           </div>
           
-          {amount && count > 0 && (
-            <div className="users-info-box" style={{ background: '#f0fdf4', borderColor: '#86efac', color: '#166534' }}>
+          <div className="users-form-group">
+            <label className="users-label users-label-required">Quantité</label>
+            <input
+              type="number"
+              step="1"
+              min="1"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              className="users-number-input"
+              placeholder="1"
+            />
+          </div>
+          
+          {unitPrice && quantity && totalAmount > 0 && (
+            <div className="info-box" style={{ background: '#f0fdf4', borderColor: '#86efac', color: '#166534' }}>
               <CheckCircle size={14} />
               <span>
-                Total à payer: <strong>{(parseFloat(amount) * count).toLocaleString('fr-FR')} DH</strong>
-                {' '}({count} × {parseFloat(amount).toLocaleString('fr-FR')} DH)
+                <strong>Total à payer: {totalAmount.toLocaleString('fr-FR')} DH</strong>
+                {' '}({parseInt(quantity)} × {parseFloat(unitPrice).toLocaleString('fr-FR')} DH)
               </span>
             </div>
           )}
@@ -1603,12 +1878,73 @@ const TechnicianPaymentModal = ({ user, onClose, onSuccess }) => {
             />
           </div>
           
-          <div className="users-info-box" style={{ background: '#fef3c7', borderColor: '#fde68a', color: '#92400e' }}>
-            <AlertTriangle size={14} />
-            <span>
-              Cette opération va payer {count} {type === 'activation' ? 'activation(s)' : 'vente(s)'} 
-              {' '}à {amount ? parseFloat(amount).toLocaleString('fr-FR') : '0'} DH l'unité.
-            </span>
+          <div className="users-form-group">
+            <label className="users-label">Notes (optionnel)</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="users-input"
+              rows="2"
+              placeholder="Informations supplémentaires..."
+            />
+          </div>
+          
+          <div className="users-form-group">
+            <label className="users-label">Justificatifs (optionnel)</label>
+            <div 
+              className={`file-upload-area ${dragActive ? 'dragging' : ''}`}
+              onClick={() => fileInputRef.current?.click()}
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+            >
+              <div className="file-upload-icon">
+                <Upload size={32} />
+              </div>
+              <div className="file-upload-text">
+                Cliquez ou glissez-déposez des fichiers
+              </div>
+              <div className="file-upload-hint">
+                JPG, PNG, PDF, DOC (max. 5MB par fichier)
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".jpg,.jpeg,.png,.pdf,.doc,.docx"
+                style={{ display: 'none' }}
+                onChange={(e) => handleFileSelect(e.target.files)}
+              />
+            </div>
+            
+            {files.length > 0 && (
+              <div className="selected-files">
+                <div className="selected-files-title">
+                  Fichiers sélectionnés ({files.length})
+                </div>
+                <div className="selected-files-list">
+                  {files.map((file, index) => (
+                    <div key={index} className="selected-file-item">
+                      {getFileIcon(file.type)}
+                      <div className="selected-file-info">
+                        <div className="selected-file-name">{file.name}</div>
+                        <div className="selected-file-size">{formatFileSize(file.size)}</div>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFile(index);
+                        }}
+                        className="remove-file-btn"
+                      >
+                        <XCircle size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
         <div className="users-dialog-footer">
@@ -1618,17 +1954,17 @@ const TechnicianPaymentModal = ({ user, onClose, onSuccess }) => {
           <button 
             onClick={handleSubmit} 
             className="users-btn users-btn-primary" 
-            disabled={loading || loadingCount || count === 0}
+            disabled={loading || !unitPrice || !quantity || parseFloat(unitPrice) <= 0 || parseInt(quantity) <= 0}
           >
             {loading ? (
               <>
-                <div className="users-loading-spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} />
+                <Loader2 size={16} className="spinner" />
                 Ajout en cours...
               </>
             ) : (
               <>
                 <Plus size={16} />
-                Ajouter le paiement ({count} unité{count > 1 ? 's' : ''})
+                Ajouter le paiement
               </>
             )}
           </button>
@@ -1718,7 +2054,7 @@ const AdminPaymentHistoryModal = ({ user, onClose }) => {
                       <td>{payment?.date ? new Date(payment.date).toLocaleDateString('fr-FR') : '-'}</td>
                       <td className="users-amount-positive">
                         {payment?.amount ? payment.amount.toLocaleString('fr-FR') : 0} DH
-                      </td>
+                       </td>
                       <td>{payment?.description || '-'}</td>
                       <td className="users-text-muted">
                         {payment?.created_by_name || '-'}
@@ -1727,7 +2063,7 @@ const AdminPaymentHistoryModal = ({ user, onClose }) => {
                             {new Date(payment.created_at).toLocaleDateString('fr-FR')}
                           </div>
                         )}
-                      </td>
+                       </td>
                       {isSuperAdmin && (
                         <td>
                           <button
@@ -1793,30 +2129,70 @@ const AdminPaymentHistoryModal = ({ user, onClose }) => {
   );
 };
 
-// ==================== TECHNICIAN PAYMENT HISTORY MODAL ====================
+// ==================== TECHNICIAN PAYMENT HISTORY MODAL WITH FILE VIEW ====================
 const TechnicianPaymentHistoryModal = ({ user, onClose }) => {
   const dispatch = useDispatch();
   const { currentTechnicianPayments, loading } = useSelector((state) => state.technicianPayments);
   const { user: currentUser } = useSelector((state) => state.auth);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const isSuperAdmin = currentUser?.role === 'superadmin';
+  const isAdmin = currentUser?.role === 'admin';
 
   useEffect(() => {
     if (user) {
       dispatch(getTechnicianPayments(user.id));
     }
-  }, [dispatch, user]);
+  }, [dispatch, user, refreshKey]);
 
-  const handleDelete = async (paymentIndex) => {
+  const refreshData = () => {
+    setRefreshKey(prev => prev + 1);
+  };
+
+  const handleDownloadFile = async (paymentId, fileId, fileName) => {
+    setDownloading(true);
+    try {
+      const response = await api.get(`/technician-payments/${user.id}/${paymentId}/files/${fileId}/download`, {
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleDeleteFile = async (paymentId, fileId) => {
+    if (!window.confirm('Supprimer ce fichier ?')) return;
+    
+    try {
+      await api.delete(`/technician-payments/${user.id}/${paymentId}/files/${fileId}`);
+      refreshData();
+    } catch (error) {
+      console.error('Delete file error:', error);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId) => {
     setDeleting(true);
     try {
-      await dispatch(deleteTechnicianPayment({ userId: user.id, paymentIndex })).unwrap();
+      await api.delete(`/technician-payments/${user.id}/${paymentId}`);
       setDeleteConfirm(null);
-      dispatch(getTechnicianPayments(user.id));
-    } catch (err) {
-      console.error('Delete error:', err);
+      refreshData();
+    } catch (error) {
+      console.error('Delete payment error:', error);
     } finally {
       setDeleting(false);
     }
@@ -1832,7 +2208,7 @@ const TechnicianPaymentHistoryModal = ({ user, onClose }) => {
   return (
     <>
       <div className="users-overlay" onClick={onClose} />
-      <div className="users-dialog users-dialog-large">
+      <div className="users-dialog users-dialog-xl">
         <div className="users-dialog-header">
           <h2 className="users-dialog-title">
             <History size={20} />
@@ -1898,62 +2274,115 @@ const TechnicianPaymentHistoryModal = ({ user, onClose }) => {
               </div>
             </div>
           ) : (
-            <div className="users-payment-table-container">
-              <table className="users-payment-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Type</th>
-                    <th>Prix unitaire</th>
-                    <th>Quantité</th>
-                    <th>Total</th>
-                    <th>Ajouté par</th>
-                    {isSuperAdmin && <th>Actions</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {payments.map((payment, index) => (
-                    <tr key={index}>
-                      <td>{payment?.date ? new Date(payment.date).toLocaleDateString('fr-FR') : '-'}</td>
-                      <td>
-                        <span className={`users-payment-type-badge ${
-                          payment?.type === 'activation' ? 'users-payment-type-activation' : 'users-payment-type-vente'
-                        }`}>
-                          {payment?.type === 'activation' ? <Smartphone size={12} /> : <Package size={12} />}
-                          {payment?.type === 'activation' ? 'Activation' : 'Vente'}
-                        </span>
-                      </td>
-                      <td>{payment?.amount ? payment.amount.toLocaleString('fr-FR') : 0} DH</td>
-                      <td>{payment?.count || 0}</td>
-                      <td className="users-amount-positive">
-                        {payment?.amount && payment?.count ? (payment.amount * payment.count).toLocaleString('fr-FR') : 0} DH
-                      </td>
-                      <td className="users-text-muted">
-                        {payment?.created_by_name || '-'}
-                        {payment?.created_at && (
-                          <div style={{ fontSize: '0.7rem' }}>
-                            {new Date(payment.created_at).toLocaleDateString('fr-FR')}
+            <div className="payments-list">
+              {payments.map((payment) => (
+                <div key={payment.id || payment.index} className="payment-card">
+                  <div className="payment-card-header">
+                    <div>
+                      <span className={`payment-type ${payment.type}`}>
+                        {payment.type === 'activation' ? <Smartphone size={14} /> : <Package size={14} />}
+                        {payment.type === 'activation' ? 'Activation' : 'Vente'}
+                      </span>
+                    </div>
+                    <div className="payment-date">
+                      {payment.date ? new Date(payment.date).toLocaleDateString('fr-FR') : '-'}
+                    </div>
+                    {isSuperAdmin && (
+                      <button 
+                        onClick={() => setDeleteConfirm(payment)} 
+                        className="delete-payment-btn"
+                        title="Supprimer le paiement"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="payment-card-details">
+                    <div className="payment-detail">
+                      <span className="detail-label">Prix unitaire:</span>
+                      <span className="detail-value">{payment.amount?.toLocaleString('fr-FR')} DH</span>
+                    </div>
+                    <div className="payment-detail">
+                      <span className="detail-label">Quantité:</span>
+                      <span className="detail-value">{payment.count}</span>
+                    </div>
+                    <div className="payment-detail total">
+                      <span className="detail-label">Total:</span>
+                      <span className="detail-value">
+                        {(payment.amount * payment.count).toLocaleString('fr-FR')} DH
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {payment.notes && (
+                    <div className="payment-notes">
+                      <div className="notes-label">Notes:</div>
+                      <div className="notes-text">{payment.notes}</div>
+                    </div>
+                  )}
+                  
+                  {payment.files && payment.files.length > 0 && (
+                    <div className="payment-files">
+                      <div className="files-label">
+                        <File size={12} />
+                        Fichiers joints ({payment.files.length})
+                      </div>
+                      <div className="files-list">
+                        {payment.files.map((file) => (
+                          <div key={file.id} className="file-attachment-item">
+                            {getFileIcon(file.mime_type)}
+                            <div className="file-attachment-info">
+                              <div className="file-attachment-name" title={file.original_name}>
+                                {file.original_name.length > 30 
+                                  ? file.original_name.substring(0, 27) + '...' 
+                                  : file.original_name}
+                              </div>
+                              <div className="file-attachment-meta">
+                                {formatFileSize(file.size)}
+                              </div>
+                            </div>
+                            <div className="file-attachment-actions">
+                              <button
+                                onClick={() => handleDownloadFile(payment.id, file.id, file.original_name)}
+                                className="file-action-btn"
+                                title="Télécharger"
+                                disabled={downloading}
+                              >
+                                {downloading ? <Loader2 size={16} className="spinner" /> : <Download size={16} />}
+                              </button>
+                              {isSuperAdmin && (
+                                <button
+                                  onClick={() => handleDeleteFile(payment.id, file.id)}
+                                  className="file-action-btn delete"
+                                  title="Supprimer le fichier"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+                            </div>
                           </div>
-                        )}
-                      </td>
-                      {isSuperAdmin && (
-                        <td>
-                          <button
-                            onClick={() => setDeleteConfirm(index)}
-                            className="users-btn-icon users-btn-icon-danger"
-                            disabled={deleting}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </td>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="payment-footer">
+                    <div className="created-by">
+                      Ajouté par: {payment.created_by_name || '-'}
+                      {payment.created_at && (
+                        <span className="created-date">
+                          le {new Date(payment.created_at).toLocaleDateString('fr-FR')}
+                        </span>
                       )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
+        
         <div className="users-dialog-footer">
           <button onClick={onClose} className="users-btn users-btn-outline">
             Fermer
@@ -1964,8 +2393,8 @@ const TechnicianPaymentHistoryModal = ({ user, onClose }) => {
         </button>
       </div>
 
-      {/* Delete Confirmation */}
-      {deleteConfirm !== null && payments[deleteConfirm] && (
+      {/* Delete Payment Confirmation */}
+      {deleteConfirm && (
         <>
           <div className="users-overlay" onClick={() => setDeleteConfirm(null)} />
           <div className="users-dialog">
@@ -1981,19 +2410,31 @@ const TechnicianPaymentHistoryModal = ({ user, onClose }) => {
                   Supprimer ce paiement ?
                 </div>
                 <div className="delete-warning-text">
-                  Type: {payments[deleteConfirm]?.type === 'activation' ? 'Activation' : 'Vente'}<br />
-                  Total: {payments[deleteConfirm]?.amount && payments[deleteConfirm]?.count 
-                    ? (payments[deleteConfirm].amount * payments[deleteConfirm].count).toLocaleString('fr-FR') 
-                    : 0} DH
+                  Type: {deleteConfirm.type === 'activation' ? 'Activation' : 'Vente'}<br />
+                  Total: {(deleteConfirm.amount * deleteConfirm.count).toLocaleString('fr-FR')} DH<br />
+                  Date: {deleteConfirm.date ? new Date(deleteConfirm.date).toLocaleDateString('fr-FR') : '-'}
+                  {deleteConfirm.files?.length > 0 && (
+                    <><br />Fichiers joints: {deleteConfirm.files.length} fichier(s) (seront supprimés)</>
+                  )}
                 </div>
               </div>
             </div>
             <div className="users-dialog-footer">
-              <button onClick={() => setDeleteConfirm(null)} className="users-btn users-btn-outline">
+              <button onClick={() => setDeleteConfirm(null)} className="users-btn users-btn-outline" disabled={deleting}>
                 Annuler
               </button>
-              <button onClick={() => handleDelete(deleteConfirm)} className="users-btn users-btn-danger">
-                Supprimer
+              <button onClick={() => handleDeletePayment(deleteConfirm.id)} className="users-btn users-btn-danger" disabled={deleting}>
+                {deleting ? (
+                  <>
+                    <Loader2 size={16} className="spinner" />
+                    Suppression...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={16} />
+                    Supprimer le paiement
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -2009,7 +2450,6 @@ const Users = () => {
   const { user: currentUser } = useSelector((state) => state.auth);
   const { list: users, loading, error } = useSelector((state) => state.users);
   
-  // Track if initial load has been attempted
   const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -2028,26 +2468,21 @@ const Users = () => {
   const [toasts, setToasts] = useState([]);
   const [deleting, setDeleting] = useState(false);
   
-  // Payment modal states
   const [paymentModal, setPaymentModal] = useState({ open: false, user: null, type: null });
   const [historyModal, setHistoryModal] = useState({ open: false, user: null, type: null });
   
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
-  // Check if current user is admin or superadmin or technician
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'superadmin';
   const isSuperAdmin = currentUser?.role === 'superadmin';
   const isAdminOnly = currentUser?.role === 'admin';
   const isTechnician = currentUser?.role === 'technician';
   
-  // Redirect non-authorized users
   if (!isAdmin && !isTechnician) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  // Permission checking functions
   const canModifyUser = (user) => {
     if (isSuperAdmin) return true;
     if (isAdminOnly && user?.role === 'superadmin') return false;
@@ -2112,7 +2547,6 @@ const Users = () => {
     return [];
   };
 
-  // Fetch users on mount - FIXED: Proper async loading
   useEffect(() => {
     let isMounted = true;
     
@@ -2140,12 +2574,10 @@ const Users = () => {
     };
   }, [dispatch, initialLoadDone]);
 
-  // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [search, statusFilter, roleFilter]);
 
-  // Clear errors when modal opens/closes
   useEffect(() => {
     if (!open) {
       setFormError('');
@@ -2153,7 +2585,6 @@ const Users = () => {
     }
   }, [open, dispatch]);
 
-  // Toast management
   const showToast = (message, type = 'success') => {
     const id = Date.now();
     const displayMessage = getErrorMessage(message);
@@ -2167,7 +2598,6 @@ const Users = () => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
   };
 
-  // Filter users based on search, status, and role
   const filtered = users.filter(u => {
     const matchesSearch = (u.name?.toLowerCase() || '').includes(search.toLowerCase()) ||
                           (u.email?.toLowerCase() || '').includes(search.toLowerCase());
@@ -2176,14 +2606,12 @@ const Users = () => {
     return matchesSearch && matchesStatus && matchesRole;
   });
 
-  // Pagination calculations
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
   const paginatedUsers = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
     return filtered.slice(start, start + itemsPerPage);
   }, [filtered, currentPage, itemsPerPage]);
 
-  // Statistics - useMemo to avoid recalculating on every render
   const stats = useMemo(() => {
     const adminCount = users.filter(u => u.role === 'admin').length;
     const superAdminCount = users.filter(u => u.role === 'superadmin').length;
@@ -2195,7 +2623,6 @@ const Users = () => {
     return { adminCount, superAdminCount, technicianCount, userCount, activeCount, inactiveCount };
   }, [users]);
 
-  // Refresh users function
   const refreshUsers = useCallback(() => {
     setInitialLoadDone(false);
     dispatch(fetchUsers());
@@ -2404,7 +2831,6 @@ const Users = () => {
 
   const hasActiveFilters = search !== '' || statusFilter !== 'all' || roleFilter !== 'all';
 
-  // Show loading only on initial load when users array is empty
   if (loading && users.length === 0 && !initialLoadDone) {
     return (
       <div className="users-loading">
@@ -2418,7 +2844,6 @@ const Users = () => {
     <div className="users-page-container">
       <style>{styles}</style>
       
-      {/* Toast Container */}
       {toasts.length > 0 && (
         <div className="users-toast-container">
           {toasts.map(toast => (
@@ -2432,7 +2857,6 @@ const Users = () => {
         </div>
       )}
       
-      {/* Header */}
       <div className="users-page-header">
         <div className="users-title-section">
           <h1 className="users-title">
@@ -2482,7 +2906,6 @@ const Users = () => {
         </div>
       </div>
 
-      {/* Stats Cards */}
       <div className="users-stats-grid">
         <StatCard 
           icon={UsersIcon} 
@@ -2516,9 +2939,7 @@ const Users = () => {
         />
       </div>
 
-      {/* Main Card */}
       <div className="users-card">
-        {/* Filter Bar */}
         <div className="users-filter-bar">
           <div className="users-filter-group">
             <div className="users-search-wrapper">
@@ -2568,7 +2989,6 @@ const Users = () => {
           )}
         </div>
         
-        {/* Table */}
         <div className="users-table-container">
           <table className="users-table">
             <thead>
@@ -2698,7 +3118,6 @@ const Users = () => {
           </table>
         </div>
         
-        {/* Pagination */}
         <Pagination 
           currentPage={currentPage} 
           totalPages={totalPages} 

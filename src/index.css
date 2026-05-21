@@ -1919,3 +1919,62 @@ aside {
     padding-top: 4.5rem !important;
   }
 }
+/* ============================================
+   FULL WIDTH CONTENT (Removes 1600px max‑width)
+   ============================================ */
+
+/* 1. Override the max‑width on the main content container */
+.flex-1.overflow-auto > div {
+  max-width: 100% !important;
+  width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+/* 2. Smaller screens – reduce horizontal padding */
+@media (max-width: 768px) {
+  .flex-1.overflow-auto > div {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+/* 3. Force all known page containers to take full width */
+.dashboard-container,
+.activation-container,
+.check-page-container,
+.clients-container,
+.depenses-container,
+.products-card,
+.sales-card,
+.invoices-card,
+.users-card,
+.profile-card,
+.settings-simple-container,
+.client-page-container,
+.saved-reports-section {
+  max-width: 100% !important;
+  width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* 4. Allow tables to scroll horizontally without breaking the layout */
+.products-table-container,
+.sales-table-container,
+.activation-table-container,
+.clients-table-container,
+.check-table-container,
+.users-table-container,
+.payment-history-table,
+.payments-list {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* 5. Prevent horizontal scroll on body */
+body {
+  overflow-x: hidden;
+}

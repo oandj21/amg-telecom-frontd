@@ -79,7 +79,71 @@ export const fetchMe = createAsyncThunk("auth/me", async (_, thunkAPI) => {
     return handleError(error, thunkAPI);
   }
 });
+export const addTechnicianPaymentWithFiles = createAsyncThunk(
+    "technicianPayments/addWithFiles", 
+    async ({ userId, formData }, thunkAPI) => {
+        try {
+            const response = await api.post(`/technician-payments/${userId}`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
+            return response.data;
+        } catch (error) {
+            return handleError(error, thunkAPI);
+        }
+    }
+);
 
+export const downloadTechnicianPaymentFile = createAsyncThunk(
+    "technicianPayments/downloadFile",
+    async ({ userId, paymentId, fileId, fileName }, thunkAPI) => {
+        try {
+            const response = await api.get(
+                `/technician-payments/${userId}/${paymentId}/files/${fileId}/download`,
+                { responseType: 'blob' }
+            );
+            
+            // Create blob link to download
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', fileName);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+            
+            return { success: true };
+        } catch (error) {
+            return handleError(error, thunkAPI);
+        }
+    }
+);
+
+export const deleteTechnicianPaymentFile = createAsyncThunk(
+    "technicianPayments/deleteFile",
+    async ({ userId, paymentId, fileId }, thunkAPI) => {
+        try {
+            const response = await api.delete(`/technician-payments/${userId}/${paymentId}/files/${fileId}`);
+            return { userId, paymentId, fileId, data: response.data };
+        } catch (error) {
+            return handleError(error, thunkAPI);
+        }
+    }
+);
+
+export const deleteTechnicianPaymentById = createAsyncThunk(
+    "technicianPayments/deletePayment",
+    async ({ userId, paymentId }, thunkAPI) => {
+        try {
+            const response = await api.delete(`/technician-payments/${userId}/${paymentId}`);
+            return { userId, paymentId, data: response.data };
+        } catch (error) {
+            return handleError(error, thunkAPI);
+        }
+    }
+);
 // ==============================================
 // 📝 CHECK/REMISE ACTIONS
 // ==============================================
@@ -1143,7 +1207,106 @@ export const fetchDashboardStats = createAsyncThunk("dashboard/fetchStats", asyn
     return handleError(error, thunkAPI);
   }
 });
+// Add this after the existing actions in store.jsx
 
+// ==============================================
+// 📋 TECHNICIAN REPORTS ACTIONS
+// ==============================================
+
+export const fetchTechnicianReports = createAsyncThunk("technicianReports/fetchAll", async (_, thunkAPI) => {
+  try {
+    const response = await api.get("/technician-reports");
+    return response.data.reports || response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const fetchTechnicianReportById = createAsyncThunk("technicianReports/fetchById", async (id, thunkAPI) => {
+  try {
+    const response = await api.get(`/technician-reports/${id}`);
+    return response.data.report || response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const saveTechnicianReport = createAsyncThunk("technicianReports/save", async (data, thunkAPI) => {
+  try {
+    const response = await api.post("/technician-reports", data);
+    return response.data.report || response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const deleteTechnicianReport = createAsyncThunk("technicianReports/delete", async (id, thunkAPI) => {
+  try {
+    await api.delete(`/technician-reports/${id}`);
+    return id;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+// ==============================================
+// 📋 DASHBOARD REPORTS ACTIONS (Rapport Manuel)
+// ==============================================
+
+export const fetchReports = createAsyncThunk("reports/fetchAll", async (_, thunkAPI) => {
+  try {
+    const response = await api.get("/reports");
+    return response.data.reports || response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const fetchReportById = createAsyncThunk("reports/fetchById", async (id, thunkAPI) => {
+  try {
+    const response = await api.get(`/reports/${id}`);
+    return response.data.report || response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const saveReport = createAsyncThunk("reports/save", async (data, thunkAPI) => {
+  try {
+    const response = await api.post("/reports", data);
+    return response.data.report || response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const updateReport = createAsyncThunk("reports/update", async ({ id, ...data }, thunkAPI) => {
+  try {
+    const response = await api.put(`/reports/${id}`, data);
+    return response.data.report || response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const deleteReport = createAsyncThunk("reports/delete", async (id, thunkAPI) => {
+  try {
+    await api.delete(`/reports/${id}`);
+    return id;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const downloadReport = createAsyncThunk("reports/download", async (id, thunkAPI) => {
+  try {
+    const response = await api.get(`/download-report/${id}`, {
+      responseType: "blob",
+    });
+    return { id, blob: response.data };
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
 // ==============================================
 // 🎯 SLICES
 // ==============================================
@@ -2228,7 +2391,193 @@ const dashboardSlice = createSlice({
       });
   },
 });
+// Add this after the technicianPaymentsSlice
 
+// ==============================================
+// 📋 TECHNICIAN REPORTS SLICE
+// ==============================================
+
+const technicianReportsSlice = createSlice({
+  name: "technicianReports",
+  initialState: {
+    list: [],
+    selected: null,
+    loading: false,
+    error: null,
+    success: false,
+  },
+  reducers: {
+    clearTechnicianReportsError: (state) => {
+      state.error = null;
+    },
+    clearTechnicianReportsSuccess: (state) => {
+      state.success = false;
+    },
+    clearSelectedReport: (state) => {
+      state.selected = null;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchTechnicianReports.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchTechnicianReports.fulfilled, (state, action) => {
+        state.loading = false;
+        state.list = Array.isArray(action.payload) ? action.payload : [];
+      })
+      .addCase(fetchTechnicianReports.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(fetchTechnicianReportById.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchTechnicianReportById.fulfilled, (state, action) => {
+        state.loading = false;
+        state.selected = action.payload;
+      })
+      .addCase(fetchTechnicianReportById.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(saveTechnicianReport.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+        state.success = false;
+      })
+      .addCase(saveTechnicianReport.fulfilled, (state, action) => {
+        state.loading = false;
+        state.success = true;
+        state.list.unshift(action.payload);
+      })
+      .addCase(saveTechnicianReport.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+        state.success = false;
+      })
+      .addCase(deleteTechnicianReport.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(deleteTechnicianReport.fulfilled, (state, action) => {
+        state.loading = false;
+        state.list = state.list.filter(r => r.id !== action.payload);
+        if (state.selected?.id === action.payload) {
+          state.selected = null;
+        }
+      })
+      .addCase(deleteTechnicianReport.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      });
+  },
+});
+// ==============================================
+// 📋 DASHBOARD REPORTS SLICE
+// ==============================================
+
+const reportsSlice = createSlice({
+  name: "reports",
+  initialState: {
+    list: [],
+    selected: null,
+    loading: false,
+    error: null,
+    success: false,
+  },
+  reducers: {
+    clearReportsError: (state) => {
+      state.error = null;
+    },
+    clearReportsSuccess: (state) => {
+      state.success = false;
+    },
+    clearSelectedReport: (state) => {
+      state.selected = null;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchReports.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchReports.fulfilled, (state, action) => {
+        state.loading = false;
+        state.list = Array.isArray(action.payload) ? action.payload : [];
+      })
+      .addCase(fetchReports.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(fetchReportById.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchReportById.fulfilled, (state, action) => {
+        state.loading = false;
+        state.selected = action.payload;
+      })
+      .addCase(fetchReportById.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(saveReport.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+        state.success = false;
+      })
+      .addCase(saveReport.fulfilled, (state, action) => {
+        state.loading = false;
+        state.success = true;
+        state.list.unshift(action.payload);
+      })
+      .addCase(saveReport.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+        state.success = false;
+      })
+      .addCase(updateReport.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+        state.success = false;
+      })
+      .addCase(updateReport.fulfilled, (state, action) => {
+        state.loading = false;
+        state.success = true;
+        const index = state.list.findIndex(r => r.id === action.payload.id);
+        if (index !== -1) {
+          state.list[index] = action.payload;
+        }
+        if (state.selected?.id === action.payload.id) {
+          state.selected = action.payload;
+        }
+      })
+      .addCase(updateReport.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+        state.success = false;
+      })
+      .addCase(deleteReport.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(deleteReport.fulfilled, (state, action) => {
+        state.loading = false;
+        state.list = state.list.filter(r => r.id !== action.payload);
+        if (state.selected?.id === action.payload) {
+          state.selected = null;
+        }
+      })
+      .addCase(deleteReport.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      });
+  },
+});
 // ==============================================
 // 🏪 CONFIGURE STORE
 // ==============================================
@@ -2249,6 +2598,8 @@ export const store = configureStore({
     depenses: depensesSlice.reducer,
     adminPayments: adminPaymentsSlice.reducer,
     technicianPayments: technicianPaymentsSlice.reducer,
+    technicianReports: technicianReportsSlice.reducer,
+    reports: reportsSlice.reducer, 
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -2383,5 +2734,15 @@ export const selectAllTechniciansPayments = (state) => state.technicianPayments.
 export const selectTechnicianPaymentsLoading = (state) => state.technicianPayments.loading;
 export const selectTechnicianPaymentsError = (state) => state.technicianPayments.error;
 export const selectTechnicianPaymentsSuccess = (state) => state.technicianPayments.success;
-
+export const { 
+  clearTechnicianReportsError, 
+  clearTechnicianReportsSuccess, 
+  clearSelectedReport 
+} = technicianReportsSlice.actions;
+// Technician Reports selectors
+export const selectTechnicianReports = (state) => state.technicianReports.list;
+export const selectSelectedReport = (state) => state.technicianReports.selected;
+export const selectTechnicianReportsLoading = (state) => state.technicianReports.loading;
+export const selectTechnicianReportsError = (state) => state.technicianReports.error;
+export const selectTechnicianReportsSuccess = (state) => state.technicianReports.success;
 export default store;
