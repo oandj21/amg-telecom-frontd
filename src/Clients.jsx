@@ -1,5 +1,6 @@
 import React ,{ useState, useEffect, useMemo, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import ReactDOM from 'react-dom';
 import { 
   Plus, Pencil, Trash2, Search, X, RefreshCw, AlertTriangle, 
   CheckCircle, Info, ChevronLeft, ChevronRight, FileSpreadsheet, 
@@ -1052,7 +1053,7 @@ const styles = `
   .text-right { text-align: right; }
   
   .activations-table-container {
-    max-height: 50vh;
+    max-height: 65vh;
     overflow-x: auto;
     overflow-y: auto;
     border: 1px solid #e5e7eb;
@@ -1068,7 +1069,7 @@ const styles = `
   
   .activations-table {
     width: 100%;
-    min-width: 700px;
+    min-width: 800px;
     border-collapse: collapse;
     font-size: 0.7rem;
   }
@@ -1082,7 +1083,7 @@ const styles = `
   
   .activations-table th {
     background: #f8fafc;
-    padding: 0.5rem;
+    padding: 0.75rem;
     text-align: left;
     font-weight: 600;
     color: #1e293b;
@@ -1098,8 +1099,9 @@ const styles = `
   }
   
   .activations-table td {
-    padding: 0.5rem;
+    padding: 0.75rem;
     border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
   }
   
   @media (min-width: 768px) {
@@ -1155,13 +1157,7 @@ const styles = `
     animation: spin 1s linear infinite;
   }
 
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  /* Installation Row Styles */
+  /* Installation Row Styles - for grouped view */
   .installation-row {
     background-color: #f0f9ff;
     cursor: pointer;
@@ -1394,6 +1390,52 @@ const styles = `
   .cachet-choice-footer button:hover {
     background: #f1f5f9;
   }
+
+  /* Date filter row */
+  .date-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-end;
+    background: #f1f5f9;
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  
+  .date-filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .date-filter-field label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+  }
+  
+  .date-filter-input {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.5rem;
+    font-size: 0.813rem;
+    background: white;
+  }
+  
+  /* Checkbox column */
+  .checkbox-col {
+    width: 40px;
+    text-align: center;
+  }
+  
+  .row-checkbox {
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+    accent-color: #3b82f6;
+  }
 `;
 
 // ==================== HELPER FUNCTIONS ====================
@@ -1499,9 +1541,8 @@ const generateInstallationInvoiceHTML = (client, group, companyInfo, logoBase64 
   const invoiceDate = new Date().toLocaleDateString('fr-FR');
   const invoiceNumber = `FACT/${new Date().getFullYear()}/${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
   
-  // Calculate totals with TVA (same as simple activation)
   const venteProductsHT = group.saleTotalPriceHT || 0;
-  const totalActivationsPriceHT = group.activations.reduce((sum, act) => sum + (act.displayPriceTTC / 1.2), 0); // Convert TTC back to HT
+  const totalActivationsPriceHT = group.activations.reduce((sum, act) => sum + (act.displayPriceTTC / 1.2), 0);
   const totalHT = venteProductsHT + totalActivationsPriceHT;
   const totalTTC = calculateTTC(totalHT);
   const tvaAmount = totalTTC - totalHT;
@@ -1658,7 +1699,7 @@ const generateInstallationInvoiceHTML = (client, group, companyInfo, logoBase64 
                   <span style="font-size: 10px; color: #6b7280;">
                     ${group.activations.map(act => `${act.matricule} (${PLAN_LABEL[act.plan] || act.plan || 'Standard'})`).join(', ')}
                   </span>
-                </td>
+                 </td>
                 <td class="text-center"><strong>${totalQuantity}</strong></td>
                 <td class="text-right">${safeToFixed(unitPriceHT)} MAD</td>
                 <td class="text-right"><strong>${safeToFixed(totalHT)} MAD</strong></td>
@@ -1726,31 +1767,18 @@ const generateInstallationInvoiceHTML = (client, group, companyInfo, logoBase64 
   `;
 };
 
-// ==================== SIMPLE ACTIVATION INVOICE GENERATION ====================
-// UNE SEULE FOIS - GARDEZ CETTE VERSION
+// ==================== SIMPLE ACTIVATION INVOICE GENERATION (FIXED) ====================
 const generateSimpleActivationInvoiceHTML = (client, activation, companyInfo, logoBase64 = null, cacheImageBase64 = null, showCachet = true) => {
   const invoiceDate = new Date().toLocaleDateString('fr-FR');
   const invoiceNumber = `FACT/${new Date().getFullYear()}/${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
   
-  // FORCER la quantité à 1
   const QUANTITY = 1;
-  
-  // Calculer le prix HT correctement (prix unitaire HT)
-  // Pour activation simple, pas de vente associée, le prix est direct
-  let priceHT = safeNumber(activation.price || activation.activationPriceHT || 0);
-  
-  // Si l'activation a une quantité (venant potentiellement d'une installation), ajuster
+  let priceHT = safeNumber(activation.price || activation.priceHT || activation.activationPriceHT || 0);
   if (activation.quantity && activation.quantity > 1 && priceHT > 0) {
-    // Si le prix semble être un prix total, le diviser par la quantité pour obtenir le prix unitaire
     priceHT = priceHT / activation.quantity;
   }
-  
   const priceTTC = calculateTTC(priceHT);
-  
-  // Get plan label
   const planLabel = PLAN_LABEL[activation.plan] || activation.plan || 'Standard';
-  
-  // Create description
   const description = `Activation ${activation.type === 'Renouvellement' ? 'Renouvellement' : "d'abonnement"} - ${activation.matricule || '-'}`;
   
   return `
@@ -1805,10 +1833,6 @@ const generateSimpleActivationInvoiceHTML = (client, activation, companyInfo, lo
         .party-card .block-title { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; }
         .party-card .party-name { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
         .party-card .party-details { color: #475569; line-height: 1.5; font-size: 12px; }
-        .details-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
-        .details-table td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; color: #334155; font-size: 12px; }
-        .details-table td.label { background-color: #f8fafc; font-weight: 600; width: 35%; color: #1e293b; }
-        .details-table tr:last-child td { border-bottom: none; }
         .table-wrapper { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 25px; }
         .invoice-table { width: 100%; border-collapse: collapse; }
         .invoice-table th { background-color: #f8fafc; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; padding: 12px 8px; border-bottom: 1px solid #e2e8f0; text-align: left; }
@@ -1887,8 +1911,6 @@ const generateSimpleActivationInvoiceHTML = (client, activation, companyInfo, lo
           </div>
         </div>
         
-        
-        
         <div class="table-wrapper">
           <table class="invoice-table">
             <thead>
@@ -1923,7 +1945,7 @@ const generateSimpleActivationInvoiceHTML = (client, activation, companyInfo, lo
             <table class="financial-math">
               <tr>
                 <td>Montant HT</td>
-                <td class="text-right">${safeToFixed(priceHT)} MAD</td>
+                              <td class="text-right">${safeToFixed(priceHT)} MAD</td>
               </tr>
               <tr>
                 <td>TVA (20%)</td>
@@ -1968,6 +1990,25 @@ const generateSimpleActivationInvoiceHTML = (client, activation, companyInfo, lo
     </html>
   `;
 };
+
+const getCacheImageBase64 = async () => {
+  try {
+    const response = await fetch('/cache.png');
+    if (response.ok) {
+      const blob = await response.blob();
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+    }
+    return null;
+  } catch (e) {
+    console.log('Error loading cache.png:', e);
+    return null;
+  }
+};
+
 // ==================== CACHET CHOICE PROMPT ====================
 const CachetChoicePrompt = ({ onClose, onConfirm }) => {
   return (
@@ -2019,24 +2060,6 @@ const CachetChoicePrompt = ({ onClose, onConfirm }) => {
       </div>
     </div>
   );
-};
-
-const getCacheImageBase64 = async () => {
-  try {
-    const response = await fetch('/cache.png');
-    if (response.ok) {
-      const blob = await response.blob();
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.readAsDataURL(blob);
-      });
-    }
-    return null;
-  } catch (e) {
-    console.log('Error loading cache.png:', e);
-    return null;
-  }
 };
 
 // ==================== GENERATE INSTALLATION INVOICE PDF ====================
@@ -2121,7 +2144,12 @@ const generateSimpleActivationInvoicePDF = async (client, activation, showToast,
       getCacheImageBase64()
     ]);
     
-    const html = generateSimpleActivationInvoiceHTML(client, activation, companyInfo, logoBase64, cacheImageBase64, showCachet);
+    const activationWithPrice = {
+      ...activation,
+      price: activation.priceHT || activation.price || 0
+    };
+    
+    const html = generateSimpleActivationInvoiceHTML(client, activationWithPrice, companyInfo, logoBase64, cacheImageBase64, showCachet);
     
     element = document.createElement('div');
     element.innerHTML = html;
@@ -2325,7 +2353,7 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
 };
 
 // ==================== EXPORT HELPER ====================
-const exportClientActivationsToExcel = async (client, groupedData) => {
+const exportClientActivationsToExcel = async (client, flatItems) => {
   try {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet(`Client_${client.nom}_Activations`);
@@ -2372,7 +2400,7 @@ const exportClientActivationsToExcel = async (client, groupedData) => {
     worksheet.addRow(['Adresse:', client.adresse || '-']); 
     worksheet.addRow([]);
     
-    const headers = ['Date', 'Type', 'Matricule', 'IMEI / Client IMEI', 'Opérateur', 'Expiration', 'Plan', 'Prix HT (MAD)', 'Prix TTC (MAD)', 'Statut', 'Statut Paiement', 'Montant Payé (MAD)', 'Reste (MAD)'];
+    const headers = ['Date', 'Type', 'Matricule', 'IMEI', 'Opérateur', 'Plan', 'Prix HT (MAD)', 'Prix TTC (MAD)', 'Statut', 'Statut Paiement', 'Montant Payé (MAD)', 'Reste (MAD)'];
     const headerRow = worksheet.addRow(headers);
     headerRow.eachCell(cell => { 
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } }; 
@@ -2382,45 +2410,48 @@ const exportClientActivationsToExcel = async (client, groupedData) => {
     let grandTotalHT = 0;
     let grandTotalTTC = 0;
     
-    for (const group of groupedData) {
-      for (const act of group.activations) {
-        const htPrice = act.activationPriceHT;
-        const ttcPrice = calculateTTC(htPrice);
+    for (const item of flatItems) {
+      if (item.isGroup) {
+        for (const act of item.activations) {
+          const htPrice = act.activationPriceHT;
+          const ttcPrice = act.displayPriceTTC;
+          grandTotalHT += htPrice;
+          grandTotalTTC += ttcPrice;
+          
+          worksheet.addRow([
+            act.date ? new Date(act.date).toLocaleDateString('fr-FR') : '-',
+            `${item.type} - ${act.type}`,
+            act.matricule,
+            act.displayImei,
+            act.operator || '-',
+            PLAN_LABEL[act.plan] || act.plan || '-',
+            safeToFixed(htPrice),
+            safeToFixed(ttcPrice),
+            act.status === 'active' ? 'Actif' : act.status === 'suspended' ? 'Suspendu' : 'Expiré',
+            act.paymentStatus === 'paid' ? 'Payé' : act.paymentStatus === 'partial' ? 'Partiel' : 'Non payé',
+            safeToFixed(act.amountPaid),
+            safeToFixed(act.remainingAmount),
+          ]);
+        }
+      } else {
+        const htPrice = item.priceHT;
+        const ttcPrice = item.displayPriceTTC;
         grandTotalHT += htPrice;
         grandTotalTTC += ttcPrice;
         
-        let paymentStatus = 'Non payé';
-        let amountPaid = 0;
-        let remaining = ttcPrice;
-        
-        if (act.paymentStatus === 'paid') {
-          paymentStatus = 'Payé';
-          amountPaid = ttcPrice;
-          remaining = 0;
-        } else if (act.paymentStatus === 'partial') {
-          paymentStatus = 'Partiel';
-          amountPaid = act.amountPaid || 0;
-          remaining = ttcPrice - amountPaid;
-        } else {
-          paymentStatus = 'Non payé';
-          amountPaid = 0;
-          remaining = ttcPrice;
-        }
-        
         worksheet.addRow([
-          act.date ? new Date(act.date).toLocaleDateString('fr-FR') : '-',
-          group.type,
-          act.matricule,
-          act.displayImei,
-          act.operator || '-',
-          act.expirationDate ? new Date(act.expirationDate).toLocaleDateString('fr-FR') : '-',
-          PLAN_LABEL[act.plan] || act.plan || '-',
+          formatDate(item.date),
+          item.type === 'renewal' ? 'Renouvellement' : (item.typeLabel || 'Activation'),
+          item.matricule,
+          item.imei,
+          item.operator,
+          PLAN_LABEL[item.plan] || item.plan || '-',
           safeToFixed(htPrice),
           safeToFixed(ttcPrice),
-          act.status === 'active' ? 'Actif' : act.status === 'suspended' ? 'Suspendu' : 'Expiré',
-          paymentStatus,
-          safeToFixed(amountPaid),
-          safeToFixed(remaining),
+          item.status === 'active' ? 'Actif' : item.status === 'suspended' ? 'Suspendu' : 'Expiré',
+          item.paymentStatus === 'paid' ? 'Payé' : item.paymentStatus === 'partial' ? 'Partiel' : 'Non payé',
+          safeToFixed(item.amountPaid),
+          safeToFixed(item.remainingAmount),
         ]);
       }
     }
@@ -2447,35 +2478,53 @@ const exportClientActivationsToExcel = async (client, groupedData) => {
   }
 };
 
-// ==================== ACTIVATIONS DETAILS MODAL WITH GROUPING ====================
+const formatDate = (dateString) => {
+  if (!dateString) return '-';
+  return new Date(dateString).toLocaleDateString('fr-FR', {
+    day: '2-digit', month: '2-digit', year: 'numeric'
+  });
+};
+
+// ==================== ACTIVATIONS DETAILS MODAL (WITH OVERLAY) ====================
 const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
-  const [groupedData, setGroupedData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [generatingPdfTTC, setGeneratingPdfTTC] = useState(false);
   const [generatingPdfHT, setGeneratingPdfHT] = useState(false);
   const [generatingInvoice, setGeneratingInvoice] = useState(null);
+  const [generatingCombined, setGeneratingCombined] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
   const [editingPrice, setEditingPrice] = useState(null);
   const [tempPrice, setTempPrice] = useState('');
-  const [salesData, setSalesData] = useState([]);
+  const [cachetChoiceItem, setCachetChoiceItem] = useState(null);
+  
+  // Filter states
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  
+  // Checkbox selection
+  const [selectedRows, setSelectedRows] = useState(new Set());
+  
+  // Cachet choice for combined invoice
+  const [showCachetPromptCombined, setShowCachetPromptCombined] = useState(false);
+  
+  // Flat list with groups and renewals
+  const [displayItems, setDisplayItems] = useState([]);
+  const [expandedGroups, setExpandedGroups] = useState({});
+  
+  // Payment status filters for PDF summary
   const [showPaid, setShowPaid] = useState(true);
   const [showPartial, setShowPartial] = useState(true);
   const [showUnpaid, setShowUnpaid] = useState(true);
-  const [expandedGroups, setExpandedGroups] = useState({});
-  const [generatingInvoiceAct, setGeneratingInvoiceAct] = useState(null);
-  const [showCachetPromptAct, setShowCachetPromptAct] = useState(false);
-  const [pendingActivation, setPendingActivation] = useState(null);
   
-  const paymentCache = useRef({});
-
   const toggleGroup = (groupId) => {
     setExpandedGroups(prev => ({
       ...prev,
       [groupId]: !prev[groupId]
     }));
   };
-
+  
+  // Load data and build display items
   useEffect(() => {
     const loadClientActivations = async () => {
       setLoading(true);
@@ -2507,23 +2556,19 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
         if (salesResponse.ok) {
           const data = await salesResponse.json();
           clientSales = data.ventes || data.data || [];
-          setSalesData(clientSales);
         }
         
         const uniqueActivationIds = [...new Set(allActivations.map(a => a.id))];
         setLoadingProgress(50);
         
+        // Load payment data for each activation
         const paymentPromises = uniqueActivationIds.map(async (activationId) => {
-          if (paymentCache.current[activationId]) {
-            return { activationId, data: paymentCache.current[activationId] };
-          }
           try {
             const paymentResponse = await fetch(`${API_URL}/activations/${activationId}/payments`, {
               headers: { Authorization: `Bearer ${token}` }
             });
             if (paymentResponse.ok) {
               const paymentData = await paymentResponse.json();
-              paymentCache.current[activationId] = paymentData;
               return { activationId, data: paymentData };
             }
             return { activationId, data: null };
@@ -2542,7 +2587,9 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
           }
         });
         
+        // Group activations by sale (installation)
         const groups = new Map();
+        const standaloneItems = [];
         
         for (const activation of allActivations) {
           const associatedSale = clientSales.find(s => s.id === activation.vente_id);
@@ -2551,9 +2598,9 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
           const paymentStatus = paymentInfo.payment_status || 'unpaid';
           const amountPaid = safeNumber(paymentInfo.amount_paid);
           const activationOriginalPrice = safeNumber(paymentInfo.original_price || activation.price);
-          const renewalAmountPaid = safeNumber(paymentInfo.renewal_paid);
+          const totalToPay = paymentInfo.total_price || activationOriginalPrice;
+          const activationPriceTTC = calculateTTC(activationOriginalPrice);
           
-          let totalActivationPriceHT = activationOriginalPrice;
           let saleTotalPriceHT = 0;
           let totalProductQuantity = 0;
           
@@ -2566,137 +2613,199 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
             }
           }
           
-          const activationPriceTTC = calculateTTC(totalActivationPriceHT);
-          const saleTotalPriceTTC = calculateTTC(saleTotalPriceHT);
+          const groupKey = activation.vente_id ? `sale_${activation.vente_id}` : null;
           
-          let groupKey = '';
-          let groupType = '';
-          
-          if (activation.vente_id) {
-            groupKey = `sale_${activation.vente_id}`;
-            groupType = associatedSale ? 'Installation' : 'Activation (Vente)';
-          } else {
-            groupKey = `standalone_${activation.id}`;
-            groupType = 'Activation Simple';
-          }
-          
-          if (!groups.has(groupKey)) {
-            groups.set(groupKey, {
-              id: groupKey,
-              venteId: activation.vente_id || null,
-              type: groupType,
-              date: activation.activated_at || activation.created_at,
-              saleTotalPriceHT: 0,
-              saleTotalPriceTTC: 0,
-              totalProductQuantity: 0,
-              activations: [],
-              totalPaid: 0,
-              totalRemaining: 0,
-              overallPaymentStatus: 'unpaid'
-            });
-          }
-          
-          const group = groups.get(groupKey);
-          
-          if (associatedSale && group.saleTotalPriceHT === 0) {
-            group.saleTotalPriceHT = saleTotalPriceHT;
-            group.saleTotalPriceTTC = saleTotalPriceTTC;
-            group.totalProductQuantity = totalProductQuantity;
-          }
-          
-          let itemPaymentStatus = 'unpaid';
-          let itemAmountPaid = 0;
-          if (paymentStatus === 'paid') {
-            itemPaymentStatus = 'paid';
-            itemAmountPaid = activationPriceTTC;
-          } else if (paymentStatus === 'partial') {
-            if (amountPaid >= activationPriceTTC) {
+          if (groupKey) {
+            if (!groups.has(groupKey)) {
+              groups.set(groupKey, {
+                id: groupKey,
+                venteId: activation.vente_id,
+                type: associatedSale ? 'Installation' : 'Installation (Vente)',
+                date: activation.activated_at || activation.created_at,
+                saleTotalPriceHT: saleTotalPriceHT,
+                saleTotalPriceTTC: calculateTTC(saleTotalPriceHT),
+                totalProductQuantity: totalProductQuantity,
+                activations: [],
+                totalPaid: 0,
+                totalRemaining: 0,
+                overallPaymentStatus: 'unpaid'
+              });
+            }
+            
+            const group = groups.get(groupKey);
+            
+            let itemPaymentStatus = 'unpaid';
+            let itemAmountPaid = 0;
+            if (paymentStatus === 'paid') {
               itemPaymentStatus = 'paid';
               itemAmountPaid = activationPriceTTC;
-            } else if (amountPaid > 0) {
-              itemPaymentStatus = 'partial';
-              itemAmountPaid = amountPaid;
+            } else if (paymentStatus === 'partial') {
+              if (amountPaid >= activationPriceTTC) {
+                itemPaymentStatus = 'paid';
+                itemAmountPaid = activationPriceTTC;
+              } else if (amountPaid > 0) {
+                itemPaymentStatus = 'partial';
+                itemAmountPaid = amountPaid;
+              }
             }
-          }
-          
-          group.activations.push({
-            id: activation.id,
-            type: groupType === 'Activation Simple' ? 'Activation Simple' : 'Activation',
-            date: activation.activated_at,
-            matricule: activation.matricule || '-',
-            imei: activation.imei || null,
-            clientImei: activation.client_imei || null,
-            displayImei: getDisplayImei(activation),
-            operator: activation.operateur || '-',
-            expirationDate: activation.expires_at,
-            plan: activation.plan_abonnement,
-            originalPriceHT: totalActivationPriceHT,
-            activationPriceHT: totalActivationPriceHT,
-            activationPriceTTC: activationPriceTTC,
-            displayPriceTTC: activationPriceTTC,
-            price: totalActivationPriceHT,
-            status: activation.status,
-            venteId: activation.vente_id,
-            saleReference: associatedSale ? `Vente #${associatedSale.id}` : null,
-            paymentStatus: itemPaymentStatus,
-            amountPaid: itemAmountPaid,
-            remainingAmount: activationPriceTTC - itemAmountPaid,
-            paymentHistory: paymentInfo.payment_history || []
-          });
-          
-          if (activation.renewal_history && Array.isArray(activation.renewal_history)) {
-            for (const entry of activation.renewal_history) {
-              if (entry.action === 'renewal') {
-                const renewalPriceHT = safeNumber(entry.price);
-                
-                let renewalPaymentStatus = 'unpaid';
-                let renewalItemAmountPaid = 0;
-                if (paymentStatus === 'paid') {
-                  renewalPaymentStatus = 'paid';
-                  renewalItemAmountPaid = calculateTTC(renewalPriceHT);
-                } else if (paymentStatus === 'partial' && renewalAmountPaid > 0) {
-                  const renewalPriceTTC = calculateTTC(renewalPriceHT);
-                  if (renewalAmountPaid >= renewalPriceTTC) {
+            
+            group.activations.push({
+              id: activation.id,
+              type: 'Activation',
+              date: activation.activated_at,
+              matricule: activation.matricule || '-',
+              imei: activation.imei || null,
+              clientImei: activation.client_imei || null,
+              displayImei: getDisplayImei(activation),
+              operator: activation.operateur || '-',
+              expirationDate: activation.expires_at,
+              plan: activation.plan_abonnement,
+              originalPriceHT: activationOriginalPrice,
+              activationPriceHT: activationOriginalPrice,
+              activationPriceTTC: activationPriceTTC,
+              displayPriceTTC: activationPriceTTC,
+              price: activationOriginalPrice,
+              status: activation.status,
+              venteId: activation.vente_id,
+              paymentStatus: itemPaymentStatus,
+              amountPaid: itemAmountPaid,
+              remainingAmount: activationPriceTTC - itemAmountPaid,
+              paymentHistory: paymentInfo.payment_history || []
+            });
+            
+            // Add renewals as standalone items
+            if (activation.renewal_history && Array.isArray(activation.renewal_history)) {
+              for (let idx = 0; idx < activation.renewal_history.length; idx++) {
+                const entry = activation.renewal_history[idx];
+                if (entry.action === 'renewal') {
+                  const renewalPriceHT = safeNumber(entry.price);
+                  let renewalPaymentStatus = 'unpaid';
+                  let renewalAmountPaid = 0;
+                  if (paymentStatus === 'paid') {
                     renewalPaymentStatus = 'paid';
-                    renewalItemAmountPaid = renewalPriceTTC;
-                  } else if (renewalAmountPaid > 0) {
-                    renewalPaymentStatus = 'partial';
-                    renewalItemAmountPaid = renewalAmountPaid;
+                    renewalAmountPaid = calculateTTC(renewalPriceHT);
+                  } else if (paymentStatus === 'partial') {
+                    const renewalTotalTTC = calculateTTC(renewalPriceHT);
+                    if (amountPaid >= renewalTotalTTC) {
+                      renewalPaymentStatus = 'paid';
+                      renewalAmountPaid = renewalTotalTTC;
+                    } else if (amountPaid > 0) {
+                      renewalPaymentStatus = 'partial';
+                      renewalAmountPaid = amountPaid;
+                    }
                   }
+                  
+                  standaloneItems.push({
+                    id: `renewal_${activation.id}_${idx}`,
+                    originalId: activation.id,
+                    type: 'renewal',
+                    typeLabel: 'Renouvellement',
+                    date: entry.date,
+                    matricule: activation.matricule || '-',
+                    imei: activation.imei || activation.client_imei || '-',
+                    operator: activation.operateur || '-',
+                    plan: entry.new_plan,
+                    priceHT: renewalPriceHT,
+                    priceTTC: calculateTTC(renewalPriceHT),
+                    displayPriceTTC: calculateTTC(renewalPriceHT),
+                    status: activation.status,
+                    paymentStatus: renewalPaymentStatus,
+                    amountPaid: renewalAmountPaid,
+                    remainingAmount: calculateTTC(renewalPriceHT) - renewalAmountPaid,
+                    saleReference: associatedSale ? `Vente #${associatedSale.id}` : null,
+                    venteId: activation.vente_id
+                  });
                 }
-                
-                group.activations.push({
-                  id: `${activation.id}_renewal_${Date.now()}_${Math.random()}`,
-                  type: 'Renouvellement',
-                  date: entry.date,
-                  matricule: activation.matricule || '-',
-                  imei: activation.imei || null,
-                  clientImei: activation.client_imei || null,
-                  displayImei: getDisplayImei(activation),
-                  operator: activation.operateur || '-',
-                  expirationDate: entry.new_expires_at || activation.expires_at,
-                  plan: entry.new_plan,
-                  originalPriceHT: renewalPriceHT,
-                  activationPriceHT: renewalPriceHT,
-                  activationPriceTTC: calculateTTC(renewalPriceHT),
-                  displayPriceTTC: calculateTTC(renewalPriceHT),
-                  price: renewalPriceHT,
-                  status: activation.status,
-                  venteId: activation.vente_id,
-                  saleReference: associatedSale ? `Vente #${associatedSale.id}` : null,
-                  paymentStatus: renewalPaymentStatus,
-                  amountPaid: renewalItemAmountPaid,
-                  remainingAmount: calculateTTC(renewalPriceHT) - renewalItemAmountPaid,
-                  paymentHistory: paymentInfo.payment_history || []
-                });
+              }
+            }
+          } else {
+            // Standalone activation (no sale)
+            let itemPaymentStatus = 'unpaid';
+            let itemAmountPaid = 0;
+            if (paymentStatus === 'paid') {
+              itemPaymentStatus = 'paid';
+              itemAmountPaid = activationPriceTTC;
+            } else if (paymentStatus === 'partial') {
+              if (amountPaid >= activationPriceTTC) {
+                itemPaymentStatus = 'paid';
+                itemAmountPaid = activationPriceTTC;
+              } else if (amountPaid > 0) {
+                itemPaymentStatus = 'partial';
+                itemAmountPaid = amountPaid;
+              }
+            }
+            
+            standaloneItems.push({
+              id: `standalone_${activation.id}`,
+              originalId: activation.id,
+              type: 'activation',
+              typeLabel: 'Activation Simple',
+              date: activation.activated_at || activation.created_at,
+              matricule: activation.matricule || '-',
+              imei: activation.imei || activation.client_imei || '-',
+              operator: activation.operateur || '-',
+              plan: activation.plan_abonnement,
+              priceHT: activationOriginalPrice,
+              priceTTC: activationPriceTTC,
+              displayPriceTTC: activationPriceTTC,
+              status: activation.status,
+              paymentStatus: itemPaymentStatus,
+              amountPaid: itemAmountPaid,
+              remainingAmount: activationPriceTTC - itemAmountPaid,
+              saleReference: null,
+              venteId: null
+            });
+            
+            // Add renewals for standalone
+            if (activation.renewal_history && Array.isArray(activation.renewal_history)) {
+              for (let idx = 0; idx < activation.renewal_history.length; idx++) {
+                const entry = activation.renewal_history[idx];
+                if (entry.action === 'renewal') {
+                  const renewalPriceHT = safeNumber(entry.price);
+                  let renewalPaymentStatus = 'unpaid';
+                  let renewalAmountPaid = 0;
+                  if (paymentStatus === 'paid') {
+                    renewalPaymentStatus = 'paid';
+                    renewalAmountPaid = calculateTTC(renewalPriceHT);
+                  } else if (paymentStatus === 'partial') {
+                    const renewalTotalTTC = calculateTTC(renewalPriceHT);
+                    if (amountPaid >= renewalTotalTTC) {
+                      renewalPaymentStatus = 'paid';
+                      renewalAmountPaid = renewalTotalTTC;
+                    } else if (amountPaid > 0) {
+                      renewalPaymentStatus = 'partial';
+                      renewalAmountPaid = amountPaid;
+                    }
+                  }
+                  
+                  standaloneItems.push({
+                    id: `renewal_${activation.id}_${idx}`,
+                    originalId: activation.id,
+                    type: 'renewal',
+                    typeLabel: 'Renouvellement',
+                    date: entry.date,
+                    matricule: activation.matricule || '-',
+                    imei: activation.imei || activation.client_imei || '-',
+                    operator: activation.operateur || '-',
+                    plan: entry.new_plan,
+                    priceHT: renewalPriceHT,
+                    priceTTC: calculateTTC(renewalPriceHT),
+                    displayPriceTTC: calculateTTC(renewalPriceHT),
+                    status: activation.status,
+                    paymentStatus: renewalPaymentStatus,
+                    amountPaid: renewalAmountPaid,
+                    remainingAmount: calculateTTC(renewalPriceHT) - renewalAmountPaid,
+                    saleReference: null,
+                    venteId: null
+                  });
+                }
               }
             }
           }
         }
         
+        // Process groups to calculate totals
         const groupsArray = Array.from(groups.values()).map(group => {
-          group.activations.sort((a, b) => new Date(a.date) - new Date(b.date));
-          
           let totalActivationTTC = 0;
           let totalPaid = 0;
           let totalRemaining = 0;
@@ -2723,13 +2832,17 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
             totalPaid,
             totalRemaining,
             overallPaymentStatus,
-            grandTotalTTC: group.saleTotalPriceTTC + totalActivationTTC
+            grandTotalTTC: group.saleTotalPriceTTC + totalActivationTTC,
+            isGroup: true
           };
         });
         
+        // Sort groups and standalone items by date descending
         groupsArray.sort((a, b) => new Date(b.date) - new Date(a.date));
+        standaloneItems.sort((a, b) => new Date(b.date) - new Date(a.date));
         
-        setGroupedData(groupsArray);
+        const combined = [...groupsArray, ...standaloneItems];
+        setDisplayItems(combined);
         setLoadingProgress(100);
         
       } catch (err) {
@@ -2744,29 +2857,109 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       loadClientActivations();
     }
   }, [client, showToast]);
-
-  const startEditPrice = (groupId, actIndex, currentPriceTTC) => {
-    setEditingPrice({ groupId, actIndex });
+  
+  // Filter items by date
+  const filteredItems = useMemo(() => {
+    let filtered = [...displayItems];
+    if (startDate) {
+      filtered = filtered.filter(item => {
+        const itemDate = new Date(item.date);
+        return itemDate >= new Date(startDate);
+      });
+    }
+    if (endDate) {
+      filtered = filtered.filter(item => {
+        const itemDate = new Date(item.date);
+        return itemDate <= new Date(endDate);
+      });
+    }
+    return filtered;
+  }, [displayItems, startDate, endDate]);
+  
+  // Total amounts for filtered items
+  const totalHTFiltered = useMemo(() => {
+    let total = 0;
+    for (const item of filteredItems) {
+      if (item.isGroup) {
+        total += item.grandTotalTTC / (1 + TVA_RATE);
+      } else {
+        total += item.priceHT;
+      }
+    }
+    return total;
+  }, [filteredItems]);
+  
+  const totalTTCFiltered = useMemo(() => {
+    let total = 0;
+    for (const item of filteredItems) {
+      if (item.isGroup) {
+        total += item.grandTotalTTC;
+      } else {
+        total += item.displayPriceTTC;
+      }
+    }
+    return total;
+  }, [filteredItems]);
+  
+  // Handle checkbox selection
+  const toggleRowSelection = (rowId) => {
+    const newSelected = new Set(selectedRows);
+    if (newSelected.has(rowId)) {
+      newSelected.delete(rowId);
+    } else {
+      newSelected.add(rowId);
+    }
+    setSelectedRows(newSelected);
+  };
+  
+  const selectAllFiltered = () => {
+    if (selectedRows.size === filteredItems.length && filteredItems.length > 0) {
+      setSelectedRows(new Set());
+    } else {
+      const allIds = filteredItems.map(item => item.id);
+      setSelectedRows(new Set(allIds));
+    }
+  };
+  
+  // Edit price for an activation inside a group or standalone
+  const startEditPrice = (itemId, currentPriceTTC) => {
+    setEditingPrice(itemId);
     setTempPrice(currentPriceTTC.toString());
   };
   
-  const saveTempPrice = (groupId, actIndex) => {
+  const saveTempPrice = (itemId) => {
     const newPriceTTC = parseFloat(tempPrice);
-    if (!isNaN(newPriceTTC)) {
-      const updatedGroups = [...groupedData];
-      const group = updatedGroups.find(g => g.id === groupId);
-      if (group && group.activations[actIndex]) {
-        group.activations[actIndex].displayPriceTTC = safeNumber(newPriceTTC);
-        let totalActivationTTC = 0;
-        group.activations.forEach(act => {
-          totalActivationTTC += act.displayPriceTTC;
-        });
-        group.totalActivationTTC = totalActivationTTC;
-        group.grandTotalTTC = group.saleTotalPriceTTC + totalActivationTTC;
-        
-        setGroupedData(updatedGroups);
-        showToast(`Prix modifié temporairement`, 'success');
-      }
+    if (!isNaN(newPriceTTC) && newPriceTTC > 0) {
+      const updateItem = (item) => {
+        if (item.id === itemId) {
+          if (item.isGroup) {
+            const ratio = newPriceTTC / item.grandTotalTTC;
+            const newGrandTotal = newPriceTTC;
+            const newSaleTotal = item.saleTotalPriceTTC * ratio;
+            const newActivationTotal = newGrandTotal - newSaleTotal;
+            return {
+              ...item,
+              grandTotalTTC: newGrandTotal,
+              saleTotalPriceTTC: newSaleTotal,
+              totalActivationTTC: newActivationTotal,
+              activations: item.activations.map(act => ({
+                ...act,
+                displayPriceTTC: act.displayPriceTTC * ratio
+              }))
+            };
+          } else {
+            return {
+              ...item,
+              displayPriceTTC: newPriceTTC,
+              priceTTC: newPriceTTC,
+              priceHT: newPriceTTC / (1 + TVA_RATE)
+            };
+          }
+        }
+        return item;
+      };
+      setDisplayItems(prev => prev.map(updateItem));
+      showToast(`Prix modifié temporairement`, 'success');
     } else {
       showToast('Veuillez entrer un nombre valide', 'error');
     }
@@ -2780,82 +2973,308 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   };
   
   const resetAllPrices = () => {
-    const resetGroups = groupedData.map(group => ({
-      ...group,
-      activations: group.activations.map(act => ({
-        ...act,
-        displayPriceTTC: act.activationPriceTTC
-      })),
-      totalActivationTTC: group.activations.reduce((sum, act) => sum + act.activationPriceTTC, 0),
-      grandTotalTTC: group.saleTotalPriceTTC + group.activations.reduce((sum, act) => sum + act.activationPriceTTC, 0)
+    setDisplayItems(prev => prev.map(item => {
+      if (item.isGroup) {
+        return {
+          ...item,
+          grandTotalTTC: item.saleTotalPriceTTC + item.totalActivationTTC,
+          activations: item.activations.map(act => ({
+            ...act,
+            displayPriceTTC: act.activationPriceTTC
+          }))
+        };
+      } else {
+        return {
+          ...item,
+          displayPriceTTC: item.priceTTC,
+          priceTTC: item.priceTTC,
+          priceHT: item.priceHT
+        };
+      }
     }));
-    setGroupedData(resetGroups);
     showToast('Tous les prix ont été réinitialisés', 'info');
   };
-
-  const handleExportExcel = async () => {
-    setExportingExcel(true);
-    try {
-      await exportClientActivationsToExcel(client, groupedData);
-      showToast('Export Excel réussi', 'success');
-    } catch (err) {
-      showToast('Erreur lors de l\'export Excel', 'error');
-    } finally {
-      setExportingExcel(false);
-    }
-  };
   
-  const getPaymentStatusColor = (paymentStatus) => {
-    switch (paymentStatus) {
-      case 'paid': return { color: '#059669', bg: '#d1fae5', label: 'Payé' };
-      case 'partial': return { color: '#d97706', bg: '#fed7aa', label: 'Partiel' };
-      default: return { color: '#dc2626', bg: '#fee2e2', label: 'Non payé' };
-    }
-  };
-  
-  const getOverallPaymentStatusColor = (overallStatus) => {
-    switch (overallStatus) {
-      case 'paid': return { color: '#059669', bg: '#d1fae5', label: 'Payé' };
-      case 'partial': return { color: '#d97706', bg: '#fed7aa', label: 'Partiel' };
-      default: return { color: '#dc2626', bg: '#fee2e2', label: 'Non payé' };
-    }
-  };
-  
-  const getFilteredDataForPDF = () => {
-    const filtered = [];
-    for (const group of groupedData) {
-      const filteredActivations = group.activations.filter(act => {
-        if (act.paymentStatus === 'paid' && showPaid) return true;
-        if (act.paymentStatus === 'partial' && showPartial) return true;
-        if (act.paymentStatus === 'unpaid' && showUnpaid) return true;
-        return false;
-      });
-      if (filteredActivations.length > 0) {
-        filtered.push({
-          ...group,
-          activations: filteredActivations
-        });
-      }
-    }
-    return filtered;
-  };
-  
-  // Inside ActivationsDetailsModal component, replace the generatePDF function:
-
-const generatePDF = async (includeTVA = true) => {
-  try {
-    if (includeTVA) {
-      setGeneratingPdfTTC(true);
+  // Generate invoice for a single item (group or standalone)
+  const handleGenerateSingleInvoice = async (item, showCachet) => {
+    if (item.isGroup) {
+      setGeneratingInvoice(item.id);
+      const groupForInvoice = {
+        type: item.type,
+        saleTotalPriceHT: item.saleTotalPriceHT,
+        saleTotalPriceTTC: item.saleTotalPriceTTC,
+        totalProductQuantity: item.totalProductQuantity,
+        activations: item.activations.map(act => ({
+          matricule: act.matricule,
+          plan: act.plan,
+          displayPriceTTC: act.displayPriceTTC
+        }))
+      };
+      await generateInvoicePDF(client, groupForInvoice, showToast, () => {}, showCachet);
+      setGeneratingInvoice(null);
     } else {
-      setGeneratingPdfHT(true);
+      setGeneratingInvoice(item.id);
+      const invoiceItem = {
+        id: item.id,
+        type: item.type,
+        matricule: item.matricule,
+        plan: item.plan,
+        priceHT: item.priceHT,
+        priceTTC: item.displayPriceTTC
+      };
+      await generateSimpleActivationInvoicePDF(client, invoiceItem, showToast, () => {}, showCachet);
+      setGeneratingInvoice(null);
     }
-
+  };
+  
+  // Generate combined invoice for selected items (aggregated into one line)
+  const handleGenerateCombinedInvoice = async (showCachet) => {
+    const selected = filteredItems.filter(item => selectedRows.has(item.id));
+    if (selected.length === 0) {
+      showToast('Veuillez sélectionner au moins un élément', 'error');
+      return;
+    }
+    
+    setGeneratingCombined(true);
+    try {
+      const companyInfo = getCompanyInfo();
+      const [logoBase64, cacheImageBase64] = await Promise.all([
+        (async () => {
+          try {
+            const response = await fetch('/logo.png');
+            if (response.ok) {
+              const blob = await response.blob();
+              return new Promise(resolve => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.readAsDataURL(blob);
+              });
+            }
+            return null;
+          } catch (e) { return null; }
+        })(),
+        getCacheImageBase64()
+      ]);
+      
+      let totalQuantity = 0;
+      let totalHT = 0;
+      
+      for (const item of selected) {
+        if (item.isGroup) {
+          const groupQty = (item.totalProductQuantity || 0) + item.activations.length;
+          const groupHT = item.grandTotalTTC / (1 + TVA_RATE);
+          totalQuantity += groupQty;
+          totalHT += groupHT;
+        } else {
+          const itemHT = item.displayPriceTTC / (1 + TVA_RATE);
+          totalQuantity += 1;
+          totalHT += itemHT;
+        }
+      }
+      
+      const unitPriceHT = totalQuantity > 0 ? totalHT / totalQuantity : 0;
+      const totalTTC = calculateTTC(totalHT);
+      const tvaAmount = totalTTC - totalHT;
+      const invoiceDate = new Date().toLocaleDateString('fr-FR');
+      const invoiceNumber = `FACT/${new Date().getFullYear()}/${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
+      const description = `ACTIVATION GPS`;
+      
+      const html = `
+        <!DOCTYPE html>
+        <html lang="fr">
+        <head>
+          <meta charset="UTF-8">
+          <title>Facture ${invoiceNumber}</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; background-color: #ffffff; line-height: 1.5; padding: 35px 40px 60px 40px; font-size: 12px; }
+            .invoice-container { max-width: 850px; margin: 0 auto; box-sizing: border-box; page-break-after: avoid; position: relative; min-height: 100%; }
+            .header-top { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 25px; }
+            .logo-wrapper { width: 130px; height: 130px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 8px; }
+            .invoice-logo { width: 100%; height: 100%; object-fit: cover; }
+            .company-name-placeholder { font-size: 20px; font-weight: 700; color: #0f172a; font-family: 'Playfair Display', serif; }
+            .corporate-meta-box { text-align: right; }
+            .document-type-badge { font-family: 'Playfair Display', serif; font-size: 28px; font-style: italic; color: #0f172a; margin-bottom: 4px; font-weight: 600; }
+            .invoice-id-badge { font-size: 14px; font-weight: 700; color: #475569; letter-spacing: 0.05em; margin-bottom: 4px; }
+            .invoice-date-line { font-size: 12px; color: #94a3b8; }
+            .parties-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 30px; }
+            .party-card .block-title { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; }
+            .party-card .party-name { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+            .party-card .party-details { color: #475569; line-height: 1.5; font-size: 12px; }
+            .table-wrapper { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 25px; }
+            .invoice-table { width: 100%; border-collapse: collapse; }
+            .invoice-table th { background-color: #f8fafc; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; padding: 12px 8px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+            .invoice-table td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; color: #334155; font-size: 12px; }
+            .invoice-table tr:last-child td { border-bottom: 1px solid #e2e8f0; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            .summary-container { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; margin-bottom: 25px; }
+            .legal-wordings { border-left: 2px solid #e2e8f0; padding-left: 18px; margin-top: 5px; }
+            .wording-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.05em; margin-bottom: 4px; }
+            .wording-value { font-family: 'Playfair Display', serif; font-size: 14px; font-style: italic; color: #334155; font-weight: 600; line-height: 1.4; }
+            .financial-math { width: 100%; border-collapse: collapse; }
+            .financial-math td { padding: 6px 8px; font-size: 12px; color: #475569; }
+            .financial-math tr.premium-total td { font-size: 16px; font-weight: 700; color: #0f172a; border-top: 1px solid #e2e8f0; padding-top: 10px; padding-bottom: 10px; }
+            .payment-routing { border-top: 1px solid #e2e8f0; padding-top: 15px; margin-bottom: 30px; }
+            .routing-title { font-size: 11px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+            .routing-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; font-size: 11px; color: #475569; }
+            .routing-item strong { color: #0f172a; display: block; margin-bottom: 2px; }
+            .executive-footer { border-top: 2px solid #0f172a; padding-top: 15px; padding-bottom: 10px; text-align: center; font-size: 10px; color: #64748b; line-height: 1.6; margin-top: 20px; }
+            .executive-footer .footer-company-name { font-weight: 700; color: #0f172a; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+            .bank-info { margin-top: 12px; font-size: 11px; color: #475569; border-top: 1px dashed #e2e8f0; padding-top: 10px; }
+            .bank-info strong { color: #0f172a; }
+            .signature-section { margin-top: 40px; margin-bottom: 30px; display: flex; justify-content: flex-end; padding-right: 20px; }
+            .signature-box { text-align: center; width: 200px; }
+            .signature-label { font-size: 11px; font-weight: bold; margin-bottom: 10px; text-decoration: underline; color: #1f2937; }
+            .signature-image { margin-top: 10px; display: flex; justify-content: center; }
+            .signature-img { max-width: 150px; max-height: 80px; object-fit: contain; }
+            @media print { body { padding: 0 0 40px 0; } .executive-footer { position: fixed; bottom: 0; left: 0; right: 0; background: white; } }
+          </style>
+        </head>
+        <body>
+          <div class="invoice-container">
+            <div class="header-top">
+              <div class="logo-wrapper">
+                ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" class="invoice-logo"/>` : `<span class="company-name-placeholder">${companyInfo.name}</span>`}
+              </div>
+              <div class="corporate-meta-box">
+                <div class="document-type-badge">FACTURE</div>
+                <div class="invoice-id-badge">N° ${invoiceNumber}</div>
+                <div class="invoice-date-line">Date: ${invoiceDate}</div>
+              </div>
+            </div>
+            
+            <div class="parties-grid">
+              <div class="party-card">
+                <div class="block-title">Émetteur</div>
+                <div class="party-name">${companyInfo.name}</div>
+                <div class="party-details">
+                  ${companyInfo.address}<br>
+                  Téléphone: ${companyInfo.phone}<br>
+                  Email: ${companyInfo.email}
+                </div>
+              </div>
+              <div class="party-card">
+                <div class="block-title">Facturé à</div>
+                <div class="party-name">${client.nom}</div>
+                <div class="party-details">
+                  ${client.adresse ? `${client.adresse}<br>` : ''}
+                  Téléphone: ${client.telephone || '-'}<br>
+                  ${client.ice_client ? `ICE: ${client.ice_client}<br>` : ''}
+                  ${client.email ? `Email: ${client.email}` : ''}
+                </div>
+              </div>
+            </div>
+            
+            <div class="table-wrapper">
+              <table class="invoice-table">
+                <thead>
+                  <tr>
+                    <th style="width: 60%;">Désignation</th>
+                    <th class="text-center" style="width: 10%;">Qté</th>
+                    <th class="text-right" style="width: 15%;">P.U HT</th>
+                    <th class="text-right" style="width: 15%;">Montant HT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>${description}</strong></td>
+                    <td class="text-center"><strong>${totalQuantity}</strong></td>
+                    <td class="text-right">${safeToFixed(unitPriceHT)} MAD</td>
+                    <td class="text-right"><strong>${safeToFixed(totalHT)} MAD</strong></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            
+            <div class="summary-container">
+              <div class="legal-wordings">
+                <div class="wording-label">Arrêté la présente facture à la somme de :</div>
+                <div class="wording-value">${convertToFrenchWords(totalTTC)}</div>
+                <div class="bank-info" style="margin-top: 15px;">
+                  <strong>Informations de paiement</strong><br>
+                  ${companyInfo.rib ? `RIB: ${companyInfo.rib}` : ''}
+                </div>
+              </div>
+              <div>
+                <table class="financial-math">
+                  <tr><td>Montant HT</td><td class="text-right">${safeToFixed(totalHT)} MAD</td></tr>
+                  <tr><td>TVA (20%)</td><td class="text-right">${safeToFixed(tvaAmount)} MAD</td></tr>
+                  <tr class="premium-total"><td><strong>TOTAL TTC</strong></td><td class="text-right"><strong>${safeToFixed(totalTTC)} MAD</strong></td></tr>
+                </table>
+              </div>
+            </div>
+            
+            <div class="signature-section">
+              <div class="signature-box">
+                <div class="signature-label">Cachet & signature</div>
+                ${showCachet && cacheImageBase64 ? `<div class="signature-image"><img src="${cacheImageBase64}" alt="Cachet" class="signature-img" /></div>` : '<div style="height: 50px;"></div>'}
+              </div>
+            </div>
+            
+            <div class="payment-routing">
+              <div class="routing-title">Règlement & Informations Légales</div>
+              <div class="routing-grid">
+                <div class="routing-item"><strong>ICE</strong> ${companyInfo.ice || '-'}</div>
+                <div class="routing-item"><strong>RC</strong> ${companyInfo.rc || '-'}</div>
+                <div class="routing-item"><strong>Patente</strong> ${companyInfo.patente || '-'}</div>
+                <div class="routing-item"><strong>IF</strong> ${companyInfo.tax_number || '-'}</div>
+                <div class="routing-item"><strong>CNSS</strong> ${companyInfo.cnss || '-'}</div>
+              </div>
+            </div>
+            
+            <div class="executive-footer">
+              <div class="footer-company-name">${companyInfo.name}</div>
+              <div>${companyInfo.address} — Tel: ${companyInfo.phone} — Email: ${companyInfo.email}</div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+      
+      const element = document.createElement('div');
+      element.innerHTML = html;
+      document.body.appendChild(element);
+      const opt = {
+        margin: [6, 8, 6, 8],
+        filename: `Facture_Combinee_${client.nom.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: 'avoid-all' }
+      };
+      await html2pdf().set(opt).from(element).save();
+      showToast(`Facture combinée générée avec succès (${selected.length} élément(s))${!showCachet ? ' (sans cachet)' : ''}`, 'success');
+      document.body.removeChild(element);
+    } catch (error) {
+      console.error('Combined PDF error:', error);
+      showToast('Erreur lors de la génération de la facture combinée', 'error');
+    } finally {
+      setGeneratingCombined(false);
+    }
+  };
+  
+  const openCachetChoiceCombined = () => {
+    if (selectedRows.size === 0) {
+      showToast('Veuillez sélectionner au moins un élément', 'error');
+      return;
+    }
+    setShowCachetPromptCombined(true);
+  };
+  
+  // Generate summary PDF (TTC/HT) for filtered items - FLATTENED VERSION with product + activation prices combined
+const generateSummaryPDF = async (includeTVA = true) => {
+  try {
+    if (includeTVA) setGeneratingPdfTTC(true);
+    else setGeneratingPdfHT(true);
+    
     const { jsPDF } = await import('jspdf');
     const autoTable = (await import('jspdf-autotable')).default;
-
+    
     const doc = new jsPDF('p', 'mm', 'a4');
     const companyInfo = getCompanyInfo();
-
+    
     let logoBase64 = null;
     try {
       const response = await fetch('/logo.png');
@@ -2866,21 +3285,21 @@ const generatePDF = async (includeTVA = true) => {
         reader.readAsDataURL(blob);
       });
     } catch (e) {}
-
+    
     if (logoBase64) {
       doc.addImage(logoBase64, 'PNG', 87.5, 10, 35, 30);
     }
-
+    
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
     doc.text(companyInfo.name.toUpperCase(), 12, 50);
     doc.setFont('times', 'normal');
     doc.setFontSize(9.5);
     const addressLines = doc.splitTextToSize(companyInfo.address, 70);
-    doc.text(addressLines, 12, 56);     
+    doc.text(addressLines, 12, 56);
     doc.text(`Tél: ${companyInfo.phone}`, 12, 68);
     doc.text(`Email: ${companyInfo.email}`, 12, 73);
-
+    
     doc.setFont('helvetica', 'bold');
     doc.text('RELEVÉ POUR :', 130, 50);
     doc.setFont('times', 'bold');
@@ -2888,70 +3307,82 @@ const generatePDF = async (includeTVA = true) => {
     doc.text(client.nom.toUpperCase(), 130, 57);
     doc.setFont('times', 'normal');
     doc.setFontSize(10);
-
+    
     let y = 63;
-    if (client.adresse) {
-      doc.text(client.adresse, 130, y);
-      y += 5;
-    }
-    if (client.telephone) {
-      doc.text(`Tél: ${client.telephone}`, 130, y);
-      y += 5;
-    }
+    if (client.adresse) { doc.text(client.adresse, 130, y); y += 5; }
+    if (client.telephone) { doc.text(`Tél: ${client.telephone}`, 130, y); y += 5; }
     doc.text(`DATE : ${new Date().toLocaleDateString('fr-FR')}`, 130, y + 5);
-
+    
     const formatMoney = (val) => `${Number(val || 0).toFixed(2)} DH`;
-
-    const filteredData = getFilteredDataForPDF();
     
-    // Build rows - each activation gets its own row with combined price
-    const rows = [];
-    
-    for (const group of filteredData) {
-      // Calculate product price share per activation for this group
-      const totalActivationsInGroup = group.activations.length;
-      let productPricePerActivation = 0;
-      
-      if (group.saleTotalPriceHT > 0 && totalActivationsInGroup > 0) {
-        // Split the product total price equally among all activations
-        const productTotalForGroup = includeTVA ? group.saleTotalPriceTTC : group.saleTotalPriceHT;
-        productPricePerActivation = productTotalForGroup / totalActivationsInGroup;
+    // Filter by payment status for PDF summary
+    const filteredForPDF = filteredItems.filter(item => {
+      if (item.isGroup) {
+        if (item.overallPaymentStatus === 'paid' && showPaid) return true;
+        if (item.overallPaymentStatus === 'partial' && showPartial) return true;
+        if (item.overallPaymentStatus === 'unpaid' && showUnpaid) return true;
+        return false;
+      } else {
+        if (item.paymentStatus === 'paid' && showPaid) return true;
+        if (item.paymentStatus === 'partial' && showPartial) return true;
+        if (item.paymentStatus === 'unpaid' && showUnpaid) return true;
+        return false;
       }
-      
-      // Add each activation with combined price
-      for (const act of group.activations) {
-        let activationPrice;
-        if (includeTVA) {
-          activationPrice = act.displayPriceTTC;
-        } else {
-          activationPrice = act.activationPriceHT;
+    });
+    
+    // FLATTEN: each activation inside a group becomes its own row
+    // Price = product price (from sale) + activation price
+    const rows = [];
+    for (const item of filteredForPDF) {
+      if (item.isGroup) {
+        // For each activation in the group, calculate total price = (product price per activation) + activation price
+        const productPricePerActivation = item.saleTotalPriceTTC / item.activations.length;
+        
+        for (const act of item.activations) {
+          // Total price for this activation row = product price share + activation price
+          const totalPriceForRow = productPricePerActivation + act.displayPriceTTC;
+          const price = includeTVA ? totalPriceForRow : (totalPriceForRow / (1 + TVA_RATE));
+          
+          const priceColor = (() => {
+            if (act.paymentStatus === 'paid') return [5, 150, 105];
+            if (act.paymentStatus === 'partial') return [217, 119, 6];
+            return [220, 38, 38];
+          })();
+          
+          rows.push([
+            formatDate(act.date),
+            'Installation + Activation',
+            act.matricule,
+            PLAN_LABEL[act.plan] || act.plan || '-',
+            { content: formatMoney(price), styles: { textColor: priceColor, fontStyle: 'bold' } }
+          ]);
         }
-        
-        // Combine activation price + product share
-        const combinedPrice = activationPrice + productPricePerActivation;
-        
-        const priceColor = getPriceColor(act.paymentStatus);
+      } else {
+        // Standalone activation or renewal
+        const price = includeTVA ? item.displayPriceTTC : item.priceHT;
+        const priceColor = (() => {
+          if (item.paymentStatus === 'paid') return [5, 150, 105];
+          if (item.paymentStatus === 'partial') return [217, 119, 6];
+          return [220, 38, 38];
+        })();
         
         rows.push([
-          act.date ? new Date(act.date).toLocaleDateString('fr-FR') : '-',
-          group.type === 'Installation' ? 'Installation' : (act.type || group.type),
-          act.matricule || '-',
-          PLAN_LABEL[act.plan] || act.plan || '-',
-          { 
-            content: formatMoney(combinedPrice), 
-            styles: { textColor: priceColor, fontStyle: 'bold' }
-          }
+          formatDate(item.date),
+          item.typeLabel || 'Activation',
+          item.matricule,
+          PLAN_LABEL[item.plan] || item.plan || '-',
+          { content: formatMoney(price), styles: { textColor: priceColor, fontStyle: 'bold' } }
         ]);
       }
     }
-
+    
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
     const titleText = includeTVA 
       ? 'DÉTAIL DES ACTIVATIONS (Prix TTC - TVA incluse)'
       : 'DÉTAIL DES ACTIVATIONS (Prix HT - TVA exclue)';
     doc.text(titleText, 105, 108, { align: 'center' });
-
+    
     autoTable(doc, {
       startY: 116,
       head: [[
@@ -2973,36 +3404,23 @@ const generatePDF = async (includeTVA = true) => {
         4: { halign: 'right', cellWidth: 35 }
       },
       margin: { left: 10, right: 10 },
-      didDrawPage: () => {
-        doc.setDrawColor(200);
-        doc.rect(5, 5, 200, 287);
-      }
+      didDrawPage: () => { doc.setDrawColor(200); doc.rect(5, 5, 200, 287); }
     });
-
-    // Calculate total (sum of combined prices)
+    
     let total = 0;
-    for (const group of filteredData) {
-      const totalActivationsInGroup = group.activations.length;
-      let productPricePerActivation = 0;
-      
-      if (group.saleTotalPriceHT > 0 && totalActivationsInGroup > 0) {
-        const productTotalForGroup = includeTVA ? group.saleTotalPriceTTC : group.saleTotalPriceHT;
-        productPricePerActivation = productTotalForGroup / totalActivationsInGroup;
-      }
-      
-      for (const act of group.activations) {
-        let activationPrice;
-        if (includeTVA) {
-          activationPrice = act.displayPriceTTC;
-        } else {
-          activationPrice = act.activationPriceHT;
+    for (const item of filteredForPDF) {
+      if (item.isGroup) {
+        const productPricePerActivation = item.saleTotalPriceTTC / item.activations.length;
+        for (const act of item.activations) {
+          const totalPriceForRow = productPricePerActivation + act.displayPriceTTC;
+          total += includeTVA ? totalPriceForRow : (totalPriceForRow / (1 + TVA_RATE));
         }
-        total += activationPrice + productPricePerActivation;
+      } else {
+        total += includeTVA ? item.displayPriceTTC : item.priceHT;
       }
     }
     
     const finalY = doc.lastAutoTable.finalY + 15;
-
     doc.setFillColor(248, 250, 252);
     doc.roundedRect(145, finalY - 9, 55, 14, 3, 3, 'FD');
     doc.setFont('helvetica', 'bold');
@@ -3011,111 +3429,44 @@ const generatePDF = async (includeTVA = true) => {
     doc.text(totalLabel, 150, finalY);
     doc.setFont('times', 'bold');
     doc.text(formatMoney(total), 192, finalY, { align: 'right' });
-
-    // Calculate breakdown for information
-    let totalActivationsOnly = 0;
-    let totalProductsOnly = 0;
     
-    for (const group of filteredData) {
-      for (const act of group.activations) {
-        if (includeTVA) {
-          totalActivationsOnly += act.displayPriceTTC;
-        } else {
-          totalActivationsOnly += act.activationPriceHT;
-        }
-      }
-      if (includeTVA) {
-        totalProductsOnly += group.saleTotalPriceTTC;
-      } else {
-        totalProductsOnly += group.saleTotalPriceHT;
-      }
-    }
-
-    if (!includeTVA) {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(100, 100, 100);
-      doc.text('* TVA (20%) non incluse dans ce relevé', 14, finalY + 10);
-      doc.text(`Détail: Total Activations HT: ${formatMoney(totalActivationsOnly)} | Total Produits HT: ${formatMoney(totalProductsOnly)}`, 14, finalY + 16);
-      doc.setTextColor(0, 0, 0);
-    } else {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(100, 100, 100);
-      doc.text(`* TVA (20%) incluse - Taux applicable: ${TVA_RATE * 100}%`, 14, finalY + 10);
-      doc.text(`Détail: Total Activations TTC: ${formatMoney(totalActivationsOnly)} | Total Produits TTC: ${formatMoney(totalProductsOnly)}`, 14, finalY + 16);
-      doc.setTextColor(0, 0, 0);
-    }
-
     const fileNameSuffix = includeTVA ? 'TTC' : 'HT';
     doc.save(`Releve_${client.nom.replace(/\s+/g, '_')}_${fileNameSuffix}.pdf`);
     showToast(`PDF généré avec succès (${includeTVA ? 'TTC - TVA incluse' : 'HT - TVA exclue'})`, 'success');
-
+    
   } catch (err) {
     console.error(err);
     showToast('Erreur lors de la génération du PDF', 'error');
   } finally {
-    if (includeTVA) {
-      setGeneratingPdfTTC(false);
-    } else {
-      setGeneratingPdfHT(false);
-    }
+    if (includeTVA) setGeneratingPdfTTC(false);
+    else setGeneratingPdfHT(false);
   }
 };
-const getPriceColor = (paymentStatus) => {
-  switch (paymentStatus) {
-    case 'paid': return [5, 150, 105];
-    case 'partial': return [217, 119, 6];
-    default: return [220, 38, 38];
-  }
-};
-  const totalAmountTTC = groupedData.reduce((sum, group) => sum + group.grandTotalTTC, 0);
-  const hasModifiedPrices = groupedData.some(group => 
-    group.activations.some(act => act.displayPriceTTC !== act.activationPriceTTC)
-  );
-  const activationsCount = groupedData.reduce((sum, group) => 
-    sum + group.activations.filter(a => a.type !== 'Renouvellement').length, 0);
-  const renewalsCount = groupedData.reduce((sum, group) => 
-    sum + group.activations.filter(a => a.type === 'Renouvellement').length, 0);
-  const groupsCount = groupedData.length;
   
-  const [showCachetPrompt, setShowCachetPrompt] = useState(false);
-  const [pendingGroupData, setPendingGroupData] = useState(null);
-  
-  const handleGenerateInvoice = (group) => {
-    setPendingGroupData(group);
-    setShowCachetPrompt(true);
-  };
-  
-  const handleCachetChoice = async (showCachet) => {
-    if (pendingGroupData) {
-      setGeneratingInvoice(pendingGroupData.id);
-      await generateInvoicePDF(client, pendingGroupData, showToast, (loading) => setGeneratingInvoice(loading ? pendingGroupData.id : null), showCachet);
-      setPendingGroupData(null);
-      setShowCachetPrompt(false);
-      setGeneratingInvoice(null);
-    }
-  };
-
-  const handleGenerateActivationInvoice = (activation) => {
-    setPendingActivation(activation);
-    setShowCachetPromptAct(true);
-  };
-
-  const handleCachetChoiceAct = async (showCachet) => {
-    if (pendingActivation) {
-      setGeneratingInvoiceAct(pendingActivation.id);
-      await generateSimpleActivationInvoicePDF(client, pendingActivation, showToast, (loading) => setGeneratingInvoiceAct(loading ? pendingActivation.id : null), showCachet);
-      setPendingActivation(null);
-      setShowCachetPromptAct(false);
-      setGeneratingInvoiceAct(null);
+  const exportToExcel = async () => {
+    setExportingExcel(true);
+    try {
+      await exportClientActivationsToExcel(client, filteredItems);
+      showToast('Export Excel réussi', 'success');
+    } catch (err) {
+      showToast('Erreur lors de l\'export Excel', 'error');
+    } finally {
+      setExportingExcel(false);
     }
   };
   
+  const getPaymentStatusColor = (paymentStatus) => {
+    switch (paymentStatus) {
+      case 'paid': return { color: '#059669', bg: '#d1fae5', label: 'Payé' };
+      case 'partial': return { color: '#d97706', bg: '#fed7aa', label: 'Partiel' };
+      default: return { color: '#dc2626', bg: '#fee2e2', label: 'Non payé' };
+    }
+  };
+  
+  // MODAL WITH OVERLAY AND PORTALS
   return (
-    <>
-      <div className="clients-overlay" onClick={onClose} />
-      <div className="clients-dialog" style={{ maxWidth: '1400px' }}>
+    <div className="clients-overlay" onClick={onClose}>
+      <div className="clients-dialog" style={{ maxWidth: '1400px' }} onClick={e => e.stopPropagation()}>
         <div className="clients-dialog-header">
           <h2 className="clients-dialog-title">
             <Smartphone size={20} className="text-blue-600" />
@@ -3131,82 +3482,36 @@ const getPriceColor = (paymentStatus) => {
               <div className="clients-loading-spinner" />
               <p style={{ marginTop: '1rem' }}>Chargement des activations...</p>
               {loadingProgress > 0 && loadingProgress < 100 && (
-                <div style={{ 
-                  width: '80%', 
-                  maxWidth: '300px', 
-                  margin: '1rem auto 0',
-                  height: '4px',
-                  background: '#e5e7eb',
-                  borderRadius: '2px',
-                  overflow: 'hidden'
-                }}>
-                  <div style={{ 
-                    width: `${loadingProgress}%`, 
-                    height: '100%', 
-                    background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
-                    transition: 'width 0.3s ease'
-                  }} />
+                <div style={{ width: '80%', maxWidth: '300px', margin: '1rem auto 0', height: '4px', background: '#e5e7eb', borderRadius: '2px', overflow: 'hidden' }}>
+                  <div style={{ width: `${loadingProgress}%`, height: '100%', background: 'linear-gradient(135deg, #3b82f6, #2563eb)', transition: 'width 0.3s ease' }} />
                 </div>
               )}
             </div>
-          ) : groupedData.length === 0 ? (
-            <div className="error-message">
-              <Info size={18} />
-              Aucune activation trouvée pour ce client
-            </div>
           ) : (
             <>
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '1rem',
-                flexWrap: 'wrap',
-                gap: '0.5rem'
-              }}>
+              {/* Action Buttons Bar */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <div>
-                  {hasModifiedPrices && (
-                    <span style={{
-                      background: '#fef3c7',
-                      color: '#d97706',
-                      padding: '0.25rem 0.5rem',
-                      borderRadius: '0.5rem',
-                      fontSize: '0.7rem'
-                    }}>
-                      Prix modifiés temporairement
-                    </span>
-                  )}
-                </div>
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  <button onClick={resetAllPrices} className="modern-btn modern-btn-secondary">
-                    <RefreshCw size={14} /> Réinitialiser
+                  <button onClick={resetAllPrices} className="modern-btn modern-btn-secondary" style={{ marginRight: '0.5rem' }}>
+                    <RefreshCw size={14} /> Réinitialiser prix
                   </button>
-                  <button onClick={handleExportExcel} disabled={exportingExcel} className="modern-btn modern-btn-secondary">
+                  <button onClick={exportToExcel} disabled={exportingExcel} className="modern-btn modern-btn-secondary">
                     {exportingExcel ? <Loader size={14} className="spinning" /> : <FileSpreadsheet size={14} />}
                     {exportingExcel ? 'Export...' : 'Excel'}
                   </button>
-                  <button 
-                    onClick={() => generatePDF(true)} 
-                    disabled={generatingPdfTTC} 
-                    className="modern-btn modern-btn-success"
-                  >
-                    {generatingPdfTTC ? <Loader size={14} className="spinning" /> : <Printer size={14} />}
-                    {generatingPdfTTC ? 'Génération...' : 'PDF TTC'}
-                  </button>
-                  <button 
-                    onClick={() => generatePDF(false)} 
-                    disabled={generatingPdfHT} 
-                    className="modern-btn modern-btn-warning"
-                  >
-                    {generatingPdfHT ? <Loader size={14} className="spinning" /> : <Printer size={14} />}
-                    {generatingPdfHT ? 'Génération...' : 'PDF HT'}
+                </div>
+                <div>
+                  <button onClick={openCachetChoiceCombined} disabled={selectedRows.size === 0} className="modern-btn modern-btn-success">
+                    {generatingCombined ? <Loader size={14} className="spinning" /> : <Printer size={14} />}
+                    {generatingCombined ? 'Génération...' : `Combiner (${selectedRows.size})`}
                   </button>
                 </div>
               </div>
               
+              {/* PDF Summary Buttons */}
               <div className="pdf-filter-group">
                 <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Filter size={14} /> Filtrer par statut de paiement pour PDF:
+                  <Filter size={14} /> Filtrer par statut de paiement pour PDF récapitulatif:
                 </span>
                 <label className="pdf-filter-label">
                   <input type="checkbox" checked={showPaid} onChange={(e) => setShowPaid(e.target.checked)} />
@@ -3220,214 +3525,171 @@ const getPriceColor = (paymentStatus) => {
                   <input type="checkbox" checked={showUnpaid} onChange={(e) => setShowUnpaid(e.target.checked)} />
                   <span style={{ color: '#dc2626' }}>Non payé</span>
                 </label>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
+                  <button onClick={() => generateSummaryPDF(true)} disabled={generatingPdfTTC} className="modern-btn modern-btn-success">
+                    {generatingPdfTTC ? <Loader size={14} className="spinning" /> : <Printer size={14} />}
+                    {generatingPdfTTC ? 'Génération...' : 'PDF TTC (Récap)'}
+                  </button>
+                  <button onClick={() => generateSummaryPDF(false)} disabled={generatingPdfHT} className="modern-btn modern-btn-warning">
+                    {generatingPdfHT ? <Loader size={14} className="spinning" /> : <Printer size={14} />}
+                    {generatingPdfHT ? 'Génération...' : 'PDF HT (Récap)'}
+                  </button>
+                </div>
               </div>
-
+              
+              {/* Date Filter Row */}
+              <div className="date-filter-row">
+                <div className="date-filter-field">
+                  <label>Date début</label>
+                  <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="date-filter-input" />
+                </div>
+                <div className="date-filter-field">
+                  <label>Date fin</label>
+                  <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="date-filter-input" />
+                </div>
+                <button onClick={() => { setStartDate(''); setEndDate(''); }} className="modern-btn modern-btn-secondary" style={{ padding: '0.5rem 1rem' }}>
+                  <X size={14} /> Effacer filtres
+                </button>
+                <div className="date-filter-field" style={{ marginLeft: 'auto' }}>
+                  <span style={{ fontSize: '0.7rem', color: '#475569' }}>
+                    Total: {filteredItems.length} élément(s) | HT: {safeToFixed(totalHTFiltered)} MAD | TTC: {safeToFixed(totalTTCFiltered)} MAD
+                  </span>
+                </div>
+              </div>
+              
+              {/* Main Table */}
               <div className="activations-table-container">
                 <table className="activations-table">
                   <thead>
                     <tr>
-                      <th style={{ width: '30px' }}></th>
+                      <th className="checkbox-col">
+                        <input type="checkbox" checked={selectedRows.size === filteredItems.length && filteredItems.length > 0} onChange={selectAllFiltered} className="row-checkbox" />
+                      </th>
                       <th>Date</th>
                       <th>Type</th>
                       <th>Matricule(s)</th>
-                      <th className="hide-on-tablet">Produit</th>
-                      <th>Total TTC</th>
+                      <th>Plan</th>
+                      <th>Prix TTC</th>
                       <th>Statut Paiement</th>
                       <th>Montant Payé</th>
                       <th>Reste</th>
                       <th>Facture</th>
+                      <th style={{ width: '40px' }}></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {groupedData.map((group, groupIdx) => {
-                      const isExpanded = expandedGroups[group.id];
-                      const overallColor = getOverallPaymentStatusColor(group.overallPaymentStatus);
-                      const matricules = group.activations.map(a => a.matricule).filter((v, i, a) => a.indexOf(v) === i).join(', ');
+                    {filteredItems.map((item) => {
+                      const isGroup = item.isGroup;
+                      const paymentColor = isGroup ? getPaymentStatusColor(item.overallPaymentStatus) : getPaymentStatusColor(item.paymentStatus);
+                      const displayPrice = isGroup ? item.grandTotalTTC : item.displayPriceTTC;
+                      const amountPaid = isGroup ? item.totalPaid : item.amountPaid;
+                      const remaining = isGroup ? item.totalRemaining : item.remainingAmount;
+                      const isGenerating = generatingInvoice === item.id;
+                      const isExpanded = isGroup && expandedGroups[item.id];
                       
                       return (
-                        <React.Fragment key={group.id}>
-                          <tr 
-                            className={`installation-row ${isExpanded ? 'expanded' : ''}`}
-                            onClick={() => toggleGroup(group.id)}
-                            style={{ cursor: 'pointer' }}
-                          >
-                            <td>
-                              <span className={`expand-icon ${isExpanded ? 'rotated' : ''}`}>
-                                <ChevronRight size={16} />
-                              </span>
+                        <React.Fragment key={item.id}>
+                          <tr className={isGroup ? `installation-row ${isExpanded ? 'expanded' : ''}` : ''}>
+                            <td className="checkbox-col">
+                              <input type="checkbox" checked={selectedRows.has(item.id)} onChange={() => toggleRowSelection(item.id)} className="row-checkbox" />
                             </td>
-                            <td>{group.date ? new Date(group.date).toLocaleDateString('fr-FR') : '-'}</td>
+                            <td>{formatDate(item.date)}</td>
                             <td>
                               <span className="status-badge status-primary">
-                                {group.type}
+                                {isGroup ? item.type : (item.typeLabel || 'Activation')}
                               </span>
-                              {group.venteId && (
-                                <span style={{ fontSize: '0.6rem', color: '#6b7280', marginLeft: '0.5rem' }}>
-                                  (#{group.venteId})
+                              {isGroup && (
+                                <span className="expand-icon" style={{ marginLeft: '8px', cursor: 'pointer' }} onClick={() => toggleGroup(item.id)}>
+                                  <ChevronRight size={14} className={isExpanded ? 'rotated' : ''} />
                                 </span>
                               )}
                             </td>
-                            <td style={{ fontWeight: 500, fontSize: '0.75rem' }}>
-                              {matricules.length > 40 ? matricules.substring(0, 40) + '...' : matricules}
-                              {group.activations.length > 1 && (
-                                <span style={{ 
-                                  marginLeft: '0.5rem', 
-                                  background: '#e2e8f0', 
-                                  padding: '0.125rem 0.375rem', 
-                                  borderRadius: '0.25rem',
-                                  fontSize: '0.6rem',
-                                  color: '#475569'
-                                }}>
-                                  {group.activations.length} activations
+                            <td>
+                              {isGroup ? item.activations.map(a => a.matricule).join(', ') : item.matricule}
+                              {isGroup && item.activations.length > 1 && (
+                                <span style={{ marginLeft: '0.5rem', background: '#e2e8f0', padding: '0.125rem 0.375rem', borderRadius: '0.25rem', fontSize: '0.6rem', color: '#475569' }}>
+                                  {item.activations.length} activations
                                 </span>
                               )}
                             </td>
-                            <td className="hide-on-tablet">
-                              {group.saleTotalPriceTTC > 0 ? (
+                            <td>
+                              {isGroup ? (
                                 <span style={{ fontSize: '0.7rem', color: '#6b7280' }}>
-                                  Vente: {safeToFixed(group.saleTotalPriceTTC)} MAD
+                                  {item.activations.map(a => PLAN_LABEL[a.plan] || a.plan).join(', ')}
                                 </span>
-                              ) : '-'}
-                            </td>
-                            <td className="text-right" style={{ fontWeight: 'bold', color: '#059669' }}>
-                              {safeToFixed(group.grandTotalTTC)} MAD
+                              ) : (
+                                PLAN_LABEL[item.plan] || item.plan || '-'
+                              )}
                             </td>
                             <td>
-                              <span className="status-badge" style={{ background: overallColor.bg, color: overallColor.color, fontWeight: 600 }}>
-                                {overallColor.label}
+                              {editingPrice === item.id ? (
+                                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                  <input type="number" step="0.01" value={tempPrice} onChange={e => setTempPrice(e.target.value)} style={{ width: '80px', padding: '4px', borderRadius: '4px', border: '1px solid #d1d5db' }} autoFocus />
+                                  <button onClick={() => saveTempPrice(item.id)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer' }}>✓</button>
+                                  <button onClick={cancelEdit} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer' }}>✗</button>
+                                </div>
+                              ) : (
+                                <span onClick={() => startEditPrice(item.id, displayPrice)} style={{ cursor: 'pointer', backgroundColor: '#f8fafc', padding: '2px 4px', borderRadius: '4px', display: 'inline-block', fontWeight: 'bold', color: '#059669' }}>
+                                  {safeToFixed(displayPrice)} MAD
+                                </span>
+                              )}
+                            </td>
+                            <td>
+                              <span className="status-badge" style={{ background: paymentColor.bg, color: paymentColor.color }}>
+                                {paymentColor.label}
                               </span>
                             </td>
-                            <td className="text-right" style={{ color: '#059669' }}>{safeToFixed(group.totalPaid)} MAD</td>
-                            <td className="text-right" style={{ color: '#dc2626' }}>{safeToFixed(group.totalRemaining)} MAD</td>
+                            <td style={{ color: '#059669' }}>{safeToFixed(amountPaid)} MAD</td>
+                            <td style={{ color: '#dc2626' }}>{safeToFixed(remaining)} MAD</td>
                             <td>
-                              <button 
-  onClick={(e) => {
-    e.stopPropagation();
-    // Check if this is a simple activation (not from a sale, and has only one activation)
-    const isSimpleActivation = !group.venteId && group.activations.length === 1 && group.activations[0].type !== 'Renouvellement';
-    
-    if (isSimpleActivation) {
-      // Use the activation invoice for simple activations
-      handleGenerateActivationInvoice(group.activations[0]);
-    } else {
-      // Use the installation invoice for installations
-      handleGenerateInvoice(group);
-    }
-  }}
-  disabled={(generatingInvoice === group.id) || (generatingInvoiceAct === (group.activations[0]?.id))}
-  className="modern-btn modern-btn-success"
-  style={{ padding: '4px 8px', fontSize: '11px', background: 'linear-gradient(135deg, #3b82f6, #2563eb)' }}
-  title="Générer la facture"
->
-  {(generatingInvoice === group.id || generatingInvoiceAct === (group.activations[0]?.id)) ? 
-    <Loader size={12} className="spinning" /> : 
-    <Download size={12} />
-  }
-</button>
+                              <button onClick={() => setCachetChoiceItem(item)} disabled={isGenerating} className="modern-btn modern-btn-success" style={{ padding: '4px 8px', fontSize: '11px', background: 'linear-gradient(135deg, #3b82f6, #2563eb)' }}>
+                                {isGenerating ? <Loader size={12} className="spinning" /> : <Download size={12} />}
+                              </button>
                             </td>
+                            <td></td>
                           </tr>
-                          
-                          {isExpanded && group.activations.map((act, actIdx) => {
-                            const actPaymentColor = getPaymentStatusColor(act.paymentStatus);
-                            return (
-                              <tr key={`${group.id}_act_${act.id}`} className="activation-subrow">
-                                <td colSpan="10" style={{ padding: '0 !important' }}>
-                                  <table className="subtable">
-                                    <tbody>
-                                      <tr>
-                                        <td className="sub-label">Activation #{actIdx + 1}:</td>
-                                        <td><strong>{act.type}</strong></td>
-                                        <td className="sub-label">Matricule:</td>
-                                        <td>{act.matricule}</td>
-                                        <td className="sub-label">IMEI:</td>
-                                        <td style={{ fontFamily: 'monospace' }}>{act.displayImei}</td>
-                                        
-                                      </tr>
-                                      <tr>
-                                        <td className="sub-label">Date:</td>
-                                        <td>{act.date ? new Date(act.date).toLocaleDateString('fr-FR') : '-'}</td>
-                                        <td className="sub-label">Plan:</td>
-                                        <td>{PLAN_LABEL[act.plan] || act.plan || '-'}</td>
-                                        <td className="sub-label">Opérateur:</td>
-                                        <td>{act.operator || '-'}</td>
-                                      </tr>
-                                      <tr>
-                                        <td className="sub-label">Prix HT:</td>
-                                        <td>{safeToFixed(act.activationPriceHT)} MAD</td>
-                                        <td className="sub-label">Prix TTC:</td>
-                                        <td colSpan="3">
-                                          {editingPrice?.groupId === group.id && editingPrice?.actIndex === actIdx ? (
-                                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                              <input 
-                                                type="number" 
-                                                step="0.01" 
-                                                value={tempPrice} 
-                                                onChange={e => setTempPrice(e.target.value)} 
-                                                style={{ width: '80px', padding: '4px', borderRadius: '4px', border: '1px solid #d1d5db' }} 
-                                                autoFocus 
-                                              />
-                                              <button onClick={() => saveTempPrice(group.id, actIdx)} style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer' }}>✓</button>
-                                              <button onClick={cancelEdit} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer' }}>✗</button>
-                                            </div>
-                                          ) : (
-                                            <span 
-                                              onClick={() => startEditPrice(group.id, actIdx, act.displayPriceTTC)} 
-                                              style={{ cursor: 'pointer', backgroundColor: act.displayPriceTTC !== act.activationPriceTTC ? '#fef3c7' : 'transparent', padding: '2px 4px', borderRadius: '4px', display: 'inline-block', fontWeight: 'bold', color: '#059669' }}
-                                            >
-                                              {safeToFixed(act.displayPriceTTC)} MAD
-                                            </span>
-                                          )}
-                                        </td>
-                                      </tr>
-                                      <tr>
-                                        <td className="sub-label">Statut:</td>
-                                        <td>
-                                          <span className="status-badge" style={{ background: actPaymentColor.bg, color: actPaymentColor.color }}>
-                                            {actPaymentColor.label}
-                                          </span>
-                                        </td>
-                                        <td className="sub-label">Payé:</td>
-                                        <td style={{ color: '#059669' }}>{safeToFixed(act.amountPaid)} MAD</td>
-                                        <td className="sub-label">Reste:</td>
-                                        <td style={{ color: '#dc2626' }}>{safeToFixed(act.remainingAmount)} MAD</td>
-                                      </tr>
-                                    </tbody>
-                                  </table>
-                                </td>
-                              </tr>
-                            );
-                          })}
+                          {isGroup && isExpanded && item.activations.map((act, idx) => (
+                            <tr key={`${item.id}_sub_${idx}`} className="activation-subrow">
+                              <td colSpan="10" style={{ padding: '0 !important' }}>
+                                <table className="subtable">
+                                  <tbody>
+                                    <tr>
+                                      <td className="sub-label">Activation #{idx+1}:</td>
+                                      <td><strong>{act.type}</strong></td>
+                                      <td className="sub-label">Matricule:</td>
+                                      <td>{act.matricule}</td>
+                                      <td className="sub-label">IMEI:</td>
+                                      <td style={{ fontFamily: 'monospace' }}>{act.displayImei}</td>
+                                    </tr>
+                                    <tr>
+                                      <td className="sub-label">Date:</td>
+                                      <td>{formatDate(act.date)}</td>
+                                      <td className="sub-label">Plan:</td>
+                                      <td>{PLAN_LABEL[act.plan] || act.plan || '-'}</td>
+                                      <td className="sub-label">Opérateur:</td>
+                                      <td>{act.operator || '-'}</td>
+                                    </tr>
+                                    <tr>
+                                      <td className="sub-label">Prix TTC:</td>
+                                      <td>{safeToFixed(act.displayPriceTTC)} MAD</td>
+                                      <td className="sub-label">Statut:</td>
+                                      <td><span className="status-badge" style={{ background: getPaymentStatusColor(act.paymentStatus).bg, color: getPaymentStatusColor(act.paymentStatus).color }}>{getPaymentStatusColor(act.paymentStatus).label}</span></td>
+                                      <td className="sub-label">Payé:</td>
+                                      <td style={{ color: '#059669' }}>{safeToFixed(act.amountPaid)} MAD</td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </td>
+                            </tr>
+                          ))}
                         </React.Fragment>
                       );
                     })}
+                    {filteredItems.length === 0 && (
+                      <tr><td colSpan={11} className="clients-empty">Aucune activation ou renouvellement trouvé</td></tr>
+                    )}
                   </tbody>
                 </table>
-              </div>
-
-              <div style={{
-                marginTop: '1rem',
-                padding: '0.75rem',
-                background: '#f8fafc',
-                borderRadius: '0.5rem',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '0.5rem',
-                fontSize: '0.75rem'
-              }}>
-                <div>
-                  <strong>Statistiques:</strong>
-                  <span style={{ marginLeft: '0.5rem' }}>
-                    {groupsCount} installation(s) | {activationsCount} activation(s) | {renewalsCount} renouvellement(s)
-                  </span>
-                </div>
-                <div>
-                  <strong>Montant total TTC:</strong>
-                  <span style={{ color: '#059669', fontWeight: 'bold', marginLeft: '0.5rem', fontSize: '0.9rem' }}>
-                    {safeToFixed(totalAmountTTC)} MAD
-                  </span>
-                </div>
               </div>
             </>
           )}
@@ -3437,26 +3699,16 @@ const getPriceColor = (paymentStatus) => {
         </div>
       </div>
       
-      {showCachetPrompt && (
-        <CachetChoicePrompt 
-          onClose={() => {
-            setShowCachetPrompt(false);
-            setPendingGroupData(null);
-          }}
-          onConfirm={handleCachetChoice}
-        />
+      {/* PORTALS FOR CACHET CHOICE DIALOGS (rendered outside modal overlay) */}
+      {showCachetPromptCombined && ReactDOM.createPortal(
+        <CachetChoicePrompt onClose={() => setShowCachetPromptCombined(false)} onConfirm={async (showCachet) => { setShowCachetPromptCombined(false); await handleGenerateCombinedInvoice(showCachet); }} />,
+        document.body
       )}
-
-      {showCachetPromptAct && (
-        <CachetChoicePrompt 
-          onClose={() => {
-            setShowCachetPromptAct(false);
-            setPendingActivation(null);
-          }}
-          onConfirm={handleCachetChoiceAct}
-        />
+      {cachetChoiceItem && ReactDOM.createPortal(
+        <CachetChoicePrompt onClose={() => setCachetChoiceItem(null)} onConfirm={async (showCachet) => { setCachetChoiceItem(null); await handleGenerateSingleInvoice(cachetChoiceItem, showCachet); }} />,
+        document.body
       )}
-    </>
+    </div>
   );
 };
 
