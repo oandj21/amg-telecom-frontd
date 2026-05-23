@@ -1,5 +1,3 @@
-// Dashboard.jsx - Complete file with Saved Reports and Edit Functionality with Toast Notifications
-// UPDATED: Auto-refresh every 30 seconds (values change automatically), cards layout 4 per row
 import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -1333,20 +1331,9 @@ const EditReportModal = ({ isOpen, onClose, report, onSave, showToast }) => {
       doc.setTextColor(15, 23, 42);
       doc.text(companyInfo.name, margin, yPos + 5.5);
 
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(71, 85, 105);
-      
-      let companyY = yPos + 11;
-      const splitAddress = doc.splitTextToSize(companyInfo.address, pageWidth - (margin * 2));
-      splitAddress.forEach(line => {
-        doc.text(line, margin, companyY);
-        companyY += 4.5;
-      });
-      doc.text(`Tél: ${companyInfo.phone}`, margin, companyY);
-      doc.text(`Email: ${companyInfo.email}`, margin, companyY + 4.5);
+      // Removed address, phone, email lines
 
-      yPos = companyY + 16;
+      yPos = yPos + 16;  // Adjust Y position for the table
 
       const tableRows = validRows.map(row => [
         new Date(row.date).toLocaleDateString('fr-FR'),
@@ -1414,22 +1401,7 @@ const EditReportModal = ({ isOpen, onClose, report, onSave, showToast }) => {
       doc.text("Montant Total HT", calcX, finalY);
       doc.text(formatMoney(totalHT), pageWidth - margin, finalY, { align: 'right' });
 
-      if (companyInfo.bank_name || companyInfo.rib) {
-        finalY += 18;
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(7.5);
-        doc.setTextColor(148, 163, 184);
-        doc.text("RÈGLEMENT ET COORDONNÉES BANCAIRES", margin, finalY);
-        
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8.5);
-        doc.setTextColor(71, 85, 105);
-        
-        let bankInfoLine = "";
-        if (companyInfo.bank_name) bankInfoLine += `Établissement: ${companyInfo.bank_name}`;
-        if (companyInfo.rib) bankInfoLine += `   •   RIB: ${companyInfo.rib}`;
-        doc.text(bankInfoLine, margin, finalY + 4.5);
-      }
+      // Bank details block removed
 
       const footerY = pageHeight - 10;
       doc.setFont('helvetica', 'normal');
@@ -1728,20 +1700,9 @@ const MultiRowReportModal = ({ isOpen, onClose, showToast }) => {
       doc.setTextColor(15, 23, 42);
       doc.text(companyInfo.name, margin, yPos + 5.5);
 
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(71, 85, 105);
-      
-      let companyY = yPos + 11;
-      const splitAddress = doc.splitTextToSize(companyInfo.address, contentWidth);
-      splitAddress.forEach(line => {
-        doc.text(line, margin, companyY);
-        companyY += 4.5;
-      });
-      doc.text(`Tél: ${companyInfo.phone}`, margin, companyY);
-      doc.text(`Email: ${companyInfo.email}`, margin, companyY + 4.5);
+      // Removed address, phone, email lines
 
-      yPos = companyY + 16;
+      yPos = yPos + 16;  // Adjust Y position for the table
 
       const tableRows = validRows.map(row => [
         new Date(row.date).toLocaleDateString('fr-FR'),
@@ -1809,22 +1770,7 @@ const MultiRowReportModal = ({ isOpen, onClose, showToast }) => {
       doc.text("Montant Total HT", calcX, finalY);
       doc.text(formatMoney(totalHT), pageWidth - margin, finalY, { align: 'right' });
 
-      if (companyInfo.bank_name || companyInfo.rib) {
-        finalY += 18;
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(7.5);
-        doc.setTextColor(148, 163, 184);
-        doc.text("RÈGLEMENT ET COORDONNÉES BANCAIRES", margin, finalY);
-        
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8.5);
-        doc.setTextColor(71, 85, 105);
-        
-        let bankInfoLine = "";
-        if (companyInfo.bank_name) bankInfoLine += `Établissement: ${companyInfo.bank_name}`;
-        if (companyInfo.rib) bankInfoLine += `   •   RIB: ${companyInfo.rib}`;
-        doc.text(bankInfoLine, margin, finalY + 4.5);
-      }
+      // Bank details block removed
 
       const footerY = pageHeight - 10;
       doc.setFont('helvetica', 'normal');
@@ -1886,8 +1832,6 @@ const MultiRowReportModal = ({ isOpen, onClose, showToast }) => {
         <div className="report-modal-body">
           <div className="company-info-bar">
             <div style={{ fontWeight: 'bold' }}>{getCompanyInfo().name}</div>
-            <div style={{ fontSize: '0.65rem', opacity: 0.8, whiteSpace: 'normal', wordBreak: 'break-word' }}>{getCompanyInfo().address}</div>
-            <div style={{ fontSize: '0.65rem', opacity: 0.8 }}>Tél: {getCompanyInfo().phone}</div>
           </div>
 
           <div style={{ 

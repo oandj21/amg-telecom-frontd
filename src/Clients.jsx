@@ -1157,6 +1157,91 @@ const styles = `
     animation: spin 1s linear infinite;
   }
 
+  /* Invoice Number Control Styles */
+  .invoice-number-control {
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  
+  .invoice-number-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.813rem;
+    font-weight: 600;
+    color: #0369a1;
+  }
+  
+  .invoice-number-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: white;
+    border: 1px solid #bae6fd;
+    border-radius: 0.5rem;
+    padding: 0.25rem 0.5rem;
+  }
+  
+  .invoice-number-prefix {
+    font-weight: 700;
+    color: #0284c7;
+    font-family: monospace;
+    font-size: 0.875rem;
+  }
+  
+  .invoice-number-input {
+    width: 80px;
+    padding: 0.375rem 0.5rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-align: center;
+    font-family: monospace;
+  }
+  
+  .invoice-number-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  }
+  
+  .btn-invoice-init {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+    border: none;
+    border-radius: 0.5rem;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    transition: all 0.2s;
+  }
+  
+  .btn-invoice-init:hover {
+    background: linear-gradient(135deg, #d97706, #b45309);
+    transform: translateY(-1px);
+  }
+  
+  .invoice-number-info {
+    font-size: 0.7rem;
+    color: #0c4a6e;
+    background: #e0f2fe;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+  }
+
   /* Installation Row Styles - for grouped view */
   .installation-row {
     background-color: #f0f9ff;
@@ -1443,6 +1528,7 @@ const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-productio
 const safeNumber = (value) => { const n = Number(value); return isNaN(n) ? 0 : n; };
 const safeToFixed = (value, decimals = 2) => safeNumber(value).toFixed(decimals);
 const TVA_RATE = 0.20;
+const currentYear = new Date().getFullYear();
 
 const calculateTTC = (htPrice) => {
   return safeNumber(htPrice) * (1 + TVA_RATE);
@@ -1485,6 +1571,44 @@ const PLAN_OPTIONS = [
   { value: '6m', label: '6 mois' },
   { value: '12m', label: '12 mois' }
 ];
+
+// ==================== INVOICE NUMBER MANAGER ====================
+// Key for localStorage
+const INVOICE_COUNTER_KEY = 'invoice_counter';
+
+// Get current invoice number (default F01)
+const getCurrentInvoiceNumber = () => {
+  const saved = localStorage.getItem(INVOICE_COUNTER_KEY);
+  if (saved) {
+    return parseInt(saved, 10);
+  }
+  return 1;
+};
+
+// Set invoice number
+const setInvoiceCounter = (counter) => {
+  localStorage.setItem(INVOICE_COUNTER_KEY, counter.toString());
+};
+
+// Get formatted invoice number (F + 3 digits)
+const getFormattedInvoiceNumber = (counter) => {
+  return `F${counter.toString().padStart(2, '0')}`;
+};
+
+// Get next invoice number and increment
+const getNextInvoiceNumber = () => {
+  const current = getCurrentInvoiceNumber();
+  const formatted = getFormattedInvoiceNumber(current);
+  // Increment for next use
+  setInvoiceCounter(current + 1);
+  return formatted;
+};
+
+// Reset to F01
+const resetInvoiceCounter = () => {
+  setInvoiceCounter(1);
+  return 'F01';
+};
 
 // ==================== CONVERT NUMBER TO FRENCH WORDS ====================
 const convertToFrenchWords = (total) => {
@@ -1537,9 +1661,9 @@ const convertToFrenchWords = (total) => {
 };
 
 // ==================== INSTALLATION INVOICE GENERATION (WITH TVA) ====================
-const generateInstallationInvoiceHTML = (client, group, companyInfo, logoBase64 = null, cacheImageBase64 = null, showCachet = true) => {
+const generateInstallationInvoiceHTML = (client, group, companyInfo, logoBase64 = null, cacheImageBase64 = null, showCachet = true, invoiceNumber = null) => {
   const invoiceDate = new Date().toLocaleDateString('fr-FR');
-  const invoiceNumber = `FACT/${new Date().getFullYear()}/${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
+  const finalInvoiceNumber = invoiceNumber || getNextInvoiceNumber();
   
   const venteProductsHT = group.saleTotalPriceHT || 0;
   const totalActivationsPriceHT = group.activations.reduce((sum, act) => sum + (act.displayPriceTTC / 1.2), 0);
@@ -1558,7 +1682,7 @@ const generateInstallationInvoiceHTML = (client, group, companyInfo, logoBase64 
     <html lang="fr">
     <head>
       <meta charset="UTF-8">
-      <title>Facture ${invoiceNumber}</title>
+      <title>Facture ${finalInvoiceNumber}</title>
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1656,7 +1780,7 @@ const generateInstallationInvoiceHTML = (client, group, companyInfo, logoBase64 
           </div>
           <div class="corporate-meta-box">
             <div class="document-type-badge">FACTURE</div>
-            <div class="invoice-id-badge">N° ${invoiceNumber}</div>
+            <div class="invoice-id-badge">N° ${currentYear}/${finalInvoiceNumber}</div>
             <div class="invoice-date-line">Date: ${invoiceDate}</div>
           </div>
         </div>
@@ -1758,8 +1882,6 @@ const generateInstallationInvoiceHTML = (client, group, companyInfo, logoBase64 
         </div>
         
         <div class="executive-footer">
-          <div class="footer-company-name">${companyInfo.name}</div>
-          <div>${companyInfo.address} — Tel: ${companyInfo.phone} — Email: ${companyInfo.email}</div>
         </div>
       </div>
     </body>
@@ -1768,9 +1890,9 @@ const generateInstallationInvoiceHTML = (client, group, companyInfo, logoBase64 
 };
 
 // ==================== SIMPLE ACTIVATION INVOICE GENERATION (FIXED) ====================
-const generateSimpleActivationInvoiceHTML = (client, activation, companyInfo, logoBase64 = null, cacheImageBase64 = null, showCachet = true) => {
+const generateSimpleActivationInvoiceHTML = (client, activation, companyInfo, logoBase64 = null, cacheImageBase64 = null, showCachet = true, invoiceNumber = null) => {
   const invoiceDate = new Date().toLocaleDateString('fr-FR');
-  const invoiceNumber = `FACT/${new Date().getFullYear()}/${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
+  const finalInvoiceNumber = invoiceNumber || getNextInvoiceNumber();
   
   const QUANTITY = 1;
   let priceHT = safeNumber(activation.price || activation.priceHT || activation.activationPriceHT || 0);
@@ -1786,7 +1908,7 @@ const generateSimpleActivationInvoiceHTML = (client, activation, companyInfo, lo
     <html lang="fr">
     <head>
       <meta charset="UTF-8">
-      <title>Facture ${invoiceNumber}</title>
+      <title>Facture ${finalInvoiceNumber}</title>
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1884,7 +2006,7 @@ const generateSimpleActivationInvoiceHTML = (client, activation, companyInfo, lo
           </div>
           <div class="corporate-meta-box">
             <div class="document-type-badge">FACTURE</div>
-            <div class="invoice-id-badge">N° ${invoiceNumber}</div>
+            <div class="invoice-id-badge">N° ${currentYear}/${finalInvoiceNumber}</div>
             <div class="invoice-date-line">Date: ${invoiceDate}</div>
           </div>
         </div>
@@ -1982,8 +2104,7 @@ const generateSimpleActivationInvoiceHTML = (client, activation, companyInfo, lo
         </div>
         
         <div class="executive-footer">
-          <div class="footer-company-name">${companyInfo.name}</div>
-          <div>${companyInfo.address} — Tel: ${companyInfo.phone} — Email: ${companyInfo.email}</div>
+
         </div>
       </div>
     </body>
@@ -2063,7 +2184,7 @@ const CachetChoicePrompt = ({ onClose, onConfirm }) => {
 };
 
 // ==================== GENERATE INSTALLATION INVOICE PDF ====================
-const generateInvoicePDF = async (client, group, showToast, setLoading, showCachet) => {
+const generateInvoicePDF = async (client, group, showToast, setLoading, showCachet, customInvoiceNumber = null) => {
   setLoading(true);
   let element = null;
   try {
@@ -2089,7 +2210,7 @@ const generateInvoicePDF = async (client, group, showToast, setLoading, showCach
       getCacheImageBase64()
     ]);
     
-    const html = generateInstallationInvoiceHTML(client, group, companyInfo, logoBase64, cacheImageBase64, showCachet);
+    const html = generateInstallationInvoiceHTML(client, group, companyInfo, logoBase64, cacheImageBase64, showCachet, customInvoiceNumber);
     
     element = document.createElement('div');
     element.innerHTML = html;
@@ -2118,7 +2239,7 @@ const generateInvoicePDF = async (client, group, showToast, setLoading, showCach
 };
 
 // ==================== GENERATE SIMPLE ACTIVATION INVOICE PDF ====================
-const generateSimpleActivationInvoicePDF = async (client, activation, showToast, setLoading, showCachet) => {
+const generateSimpleActivationInvoicePDF = async (client, activation, showToast, setLoading, showCachet, customInvoiceNumber = null) => {
   setLoading(true);
   let element = null;
   try {
@@ -2149,7 +2270,7 @@ const generateSimpleActivationInvoicePDF = async (client, activation, showToast,
       price: activation.priceHT || activation.price || 0
     };
     
-    const html = generateSimpleActivationInvoiceHTML(client, activationWithPrice, companyInfo, logoBase64, cacheImageBase64, showCachet);
+    const html = generateSimpleActivationInvoiceHTML(client, activationWithPrice, companyInfo, logoBase64, cacheImageBase64, showCachet, customInvoiceNumber);
     
     element = document.createElement('div');
     element.innerHTML = html;
@@ -2498,6 +2619,11 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   const [tempPrice, setTempPrice] = useState('');
   const [cachetChoiceItem, setCachetChoiceItem] = useState(null);
   
+  // INVOICE NUMBER STATE
+  const [currentInvoiceNumber, setCurrentInvoiceNumber] = useState(getCurrentInvoiceNumber());
+  const [customInvoiceNumber, setCustomInvoiceNumber] = useState(getFormattedInvoiceNumber(getCurrentInvoiceNumber()));
+  const [isEditingInvoiceNumber, setIsEditingInvoiceNumber] = useState(false);
+  
   // Filter states
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -2516,6 +2642,38 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   const [showPaid, setShowPaid] = useState(true);
   const [showPartial, setShowPartial] = useState(true);
   const [showUnpaid, setShowUnpaid] = useState(true);
+  
+  // Update custom invoice number display when currentInvoiceNumber changes
+  useEffect(() => {
+    setCustomInvoiceNumber(getFormattedInvoiceNumber(currentInvoiceNumber));
+  }, [currentInvoiceNumber]);
+  
+  // Handle manual invoice number change
+  const handleInvoiceNumberChange = (e) => {
+    const value = e.target.value;
+    // Allow only numbers
+    if (/^\d*$/.test(value)) {
+      const numValue = parseInt(value, 10);
+      if (!isNaN(numValue) && numValue >= 1 && numValue <= 999) {
+        setCurrentInvoiceNumber(numValue);
+        setInvoiceCounter(numValue);
+        setCustomInvoiceNumber(getFormattedInvoiceNumber(numValue));
+        showToast(`Numéro de facture défini sur ${getFormattedInvoiceNumber(numValue)}`, 'success');
+      } else if (value === '') {
+        setCurrentInvoiceNumber(1);
+        setInvoiceCounter(1);
+        setCustomInvoiceNumber('F01');
+      }
+    }
+  };
+  
+  // Reset invoice number to F01
+  const handleResetInvoiceNumber = () => {
+    const resetNumber = resetInvoiceCounter();
+    setCurrentInvoiceNumber(1);
+    setCustomInvoiceNumber(resetNumber);
+    showToast(`Numéro de facture réinitialisé à ${resetNumber}`, 'success');
+  };
   
   const toggleGroup = (groupId) => {
     setExpandedGroups(prev => ({
@@ -2995,7 +3153,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
     showToast('Tous les prix ont été réinitialisés', 'info');
   };
   
-  // Generate invoice for a single item (group or standalone)
+  // Generate invoice for a single item (group or standalone) with custom invoice number
   const handleGenerateSingleInvoice = async (item, showCachet) => {
     if (item.isGroup) {
       setGeneratingInvoice(item.id);
@@ -3010,7 +3168,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
           displayPriceTTC: act.displayPriceTTC
         }))
       };
-      await generateInvoicePDF(client, groupForInvoice, showToast, () => {}, showCachet);
+      await generateInvoicePDF(client, groupForInvoice, showToast, () => {}, showCachet, customInvoiceNumber);
       setGeneratingInvoice(null);
     } else {
       setGeneratingInvoice(item.id);
@@ -3022,12 +3180,17 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
         priceHT: item.priceHT,
         priceTTC: item.displayPriceTTC
       };
-      await generateSimpleActivationInvoicePDF(client, invoiceItem, showToast, () => {}, showCachet);
+      await generateSimpleActivationInvoicePDF(client, invoiceItem, showToast, () => {}, showCachet, customInvoiceNumber);
       setGeneratingInvoice(null);
     }
+    // Increment invoice counter after generation
+    const nextNumber = getCurrentInvoiceNumber() + 1;
+    setCurrentInvoiceNumber(nextNumber);
+    setInvoiceCounter(nextNumber);
+    setCustomInvoiceNumber(getFormattedInvoiceNumber(nextNumber));
   };
   
-  // Generate combined invoice for selected items (aggregated into one line)
+  // Generate combined invoice for selected items (aggregated into one line) with custom invoice number
   const handleGenerateCombinedInvoice = async (showCachet) => {
     const selected = filteredItems.filter(item => selectedRows.has(item.id));
     if (selected.length === 0) {
@@ -3076,7 +3239,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       const totalTTC = calculateTTC(totalHT);
       const tvaAmount = totalTTC - totalHT;
       const invoiceDate = new Date().toLocaleDateString('fr-FR');
-      const invoiceNumber = `FACT/${new Date().getFullYear()}/${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
+      const finalInvoiceNumber = customInvoiceNumber;
       const description = `ACTIVATION GPS`;
       
       const html = `
@@ -3084,7 +3247,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
         <html lang="fr">
         <head>
           <meta charset="UTF-8">
-          <title>Facture ${invoiceNumber}</title>
+          <title>Facture ${finalInvoiceNumber}</title>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
             * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -3140,7 +3303,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
               </div>
               <div class="corporate-meta-box">
                 <div class="document-type-badge">FACTURE</div>
-                <div class="invoice-id-badge">N° ${invoiceNumber}</div>
+                <div class="invoice-id-badge">N° ${currentYear}/${finalInvoiceNumber}</div>
                 <div class="invoice-date-line">Date: ${invoiceDate}</div>
               </div>
             </div>
@@ -3225,8 +3388,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
             </div>
             
             <div class="executive-footer">
-              <div class="footer-company-name">${companyInfo.name}</div>
-              <div>${companyInfo.address} — Tel: ${companyInfo.phone} — Email: ${companyInfo.email}</div>
+
             </div>
           </div>
         </body>
@@ -3247,6 +3409,13 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       await html2pdf().set(opt).from(element).save();
       showToast(`Facture combinée générée avec succès (${selected.length} élément(s))${!showCachet ? ' (sans cachet)' : ''}`, 'success');
       document.body.removeChild(element);
+      
+      // Increment invoice counter after generation
+      const nextNumber = getCurrentInvoiceNumber() + 1;
+      setCurrentInvoiceNumber(nextNumber);
+      setInvoiceCounter(nextNumber);
+      setCustomInvoiceNumber(getFormattedInvoiceNumber(nextNumber));
+      
     } catch (error) {
       console.error('Combined PDF error:', error);
       showToast('Erreur lors de la génération de la facture combinée', 'error');
@@ -3477,6 +3646,33 @@ const generateSummaryPDF = async (includeTVA = true) => {
           </button>
         </div>
         <div className="clients-dialog-body">
+          {/* INVOICE NUMBER CONTROL SECTION */}
+          <div className="invoice-number-control">
+            <div className="invoice-number-label">
+              <Hash size={16} />
+              Numéro de facture suivant :
+            </div>
+            <div className="invoice-number-input-wrapper">
+              <span className="invoice-number-prefix">F</span>
+              <input
+                type="number"
+                min="1"
+                max="999"
+                value={currentInvoiceNumber}
+                onChange={handleInvoiceNumberChange}
+                className="invoice-number-input"
+                style={{ width: '70px' }}
+              />
+            </div>
+            <button onClick={handleResetInvoiceNumber} className="btn-invoice-init">
+              <RefreshCw size={14} />
+              Initialiser à F01
+            </button>
+            <div className="invoice-number-info">
+              Prochaine facture: <strong>{customInvoiceNumber}</strong>
+            </div>
+          </div>
+          
           {loading ? (
             <div className="clients-loading">
               <div className="clients-loading-spinner" />
