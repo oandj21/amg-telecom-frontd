@@ -79,6 +79,7 @@ export const fetchMe = createAsyncThunk("auth/me", async (_, thunkAPI) => {
     return handleError(error, thunkAPI);
   }
 });
+
 export const addTechnicianPaymentWithFiles = createAsyncThunk(
     "technicianPayments/addWithFiles", 
     async ({ userId, formData }, thunkAPI) => {
@@ -104,7 +105,6 @@ export const downloadTechnicianPaymentFile = createAsyncThunk(
                 { responseType: 'blob' }
             );
             
-            // Create blob link to download
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = url;
@@ -144,6 +144,7 @@ export const deleteTechnicianPaymentById = createAsyncThunk(
         }
     }
 );
+
 // ==============================================
 // 📝 CHECK/REMISE ACTIONS
 // ==============================================
@@ -198,13 +199,10 @@ export const uploadCheckFiles = createAsyncThunk("checks/uploadFiles", async ({ 
   try {
     const formData = new FormData();
     
-    // Ensure each file is properly appended
     files.forEach((file, index) => {
-      // For compressed images that might not be File objects
       if (file instanceof File || file instanceof Blob) {
         formData.append(`files[${index}]`, file, file.name || `file_${index}`);
       } else if (file && file.file) {
-        // Handle custom file wrapper
         formData.append(`files[${index}]`, file.file, file.name);
       } else {
         formData.append(`files[${index}]`, file);
@@ -273,7 +271,6 @@ export const markChequeEncaisse = createAsyncThunk("checks/markEncaisse", async 
     return handleError(error, thunkAPI);
   }
 });
-// store.js - Add/Update these actions
 
 // ==============================================
 // 📍 GPS ACTIVATION PAYMENT ACTIONS with payment_type
@@ -340,6 +337,7 @@ export const deleteActivationPayment = createAsyncThunk("activations/deletePayme
     return handleError(error, thunkAPI);
   }
 });
+
 // ==============================================
 // 👥 CLIENT ACTIONS
 // ==============================================
@@ -765,7 +763,8 @@ export const activateDevices = createAsyncThunk("activations/activate", async ({
 
 export const fetchActivations = createAsyncThunk("activations/fetchAll", async (filters = {}, thunkAPI) => {
   try {
-    const params = new URLSearchParams(filters).toString();
+    // Add per_page=1000 to get all activations (or use 'all' if your backend supports it)
+    const params = new URLSearchParams({ ...filters, per_page: 1000 }).toString();
     const response = await api.get(`/activations${params ? `?${params}` : ""}`);
     return response.data;
   } catch (error) {
@@ -874,6 +873,7 @@ export const createInstallation = createAsyncThunk("activations/createInstallati
     return handleError(error, thunkAPI);
   }
 });
+
 // ==============================================
 // 📝 CHEQUE PAYMENTS (Combined Sales + Activations)
 // ==============================================
@@ -886,6 +886,7 @@ export const fetchClientsWithChequePaymentsAll = createAsyncThunk("clients/fetch
     return handleError(error, thunkAPI);
   }
 });
+
 // ==============================================
 // 💸 DEPENSE ACTIONS
 // ==============================================
@@ -1207,7 +1208,6 @@ export const fetchDashboardStats = createAsyncThunk("dashboard/fetchStats", asyn
     return handleError(error, thunkAPI);
   }
 });
-// Add this after the existing actions in store.jsx
 
 // ==============================================
 // 📋 TECHNICIAN REPORTS ACTIONS
@@ -1248,6 +1248,7 @@ export const deleteTechnicianReport = createAsyncThunk("technicianReports/delete
     return handleError(error, thunkAPI);
   }
 });
+
 // ==============================================
 // 📋 DASHBOARD REPORTS ACTIONS (Rapport Manuel)
 // ==============================================
@@ -1307,6 +1308,7 @@ export const downloadReport = createAsyncThunk("reports/download", async (id, th
     return handleError(error, thunkAPI);
   }
 });
+
 // ==============================================
 // 🎯 SLICES
 // ==============================================
@@ -1937,6 +1939,7 @@ const depensesSlice = createSlice({
   },
 });
 
+// ==================== FIXED ACTIVATIONS SLICE ====================
 const activationsSlice = createSlice({
   name: "activations",
   initialState: {
@@ -1953,6 +1956,9 @@ const activationsSlice = createSlice({
       per_page: 20,
       total: 0,
     },
+    // Store full list for accurate counts across the app
+    fullList: [],
+    fullListLoaded: false,
   },
   reducers: {
     clearActivationError: (state) => {
@@ -1963,6 +1969,10 @@ const activationsSlice = createSlice({
     },
     setActivationPage: (state, action) => {
       state.pagination.current_page = action.payload;
+    },
+    setFullList: (state, action) => {
+      state.fullList = action.payload;
+      state.fullListLoaded = true;
     },
   },
   extraReducers: (builder) => {
@@ -2013,23 +2023,63 @@ const activationsSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
+      // ==================== FIXED: Handle paginated response correctly ====================
       .addCase(fetchActivations.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
       .addCase(fetchActivations.fulfilled, (state, action) => {
         state.loading = false;
-        state.list = action.payload.data || [];
-        state.pagination = {
-          current_page: action.payload.current_page || 1,
-          last_page: action.payload.last_page || 1,
-          per_page: action.payload.per_page || 20,
-          total: action.payload.total || 0,
-        };
+        
+        const payload = action.payload;
+        
+        // Case 1: Response has data and pagination metadata
+        if (payload && payload.data && Array.isArray(payload.data)) {
+          state.list = payload.data;
+          state.pagination = {
+            current_page: payload.current_page || 1,
+            last_page: payload.last_page || 1,
+            per_page: payload.per_page || 20,
+            total: payload.total || payload.data.length,
+          };
+        }
+        // Case 2: Response has activations array and pagination metadata
+        else if (payload && payload.activations && Array.isArray(payload.activations)) {
+          state.list = payload.activations;
+          state.pagination = {
+            current_page: payload.current_page || 1,
+            last_page: payload.last_page || 1,
+            per_page: payload.per_page || 20,
+            total: payload.total || payload.activations.length,
+          };
+        }
+        // Case 3: Response is a plain array (no pagination metadata)
+        else if (Array.isArray(payload)) {
+          state.list = payload;
+          // Calculate pagination based on array length
+          const perPage = state.pagination.per_page || 20;
+          state.pagination = {
+            current_page: 1,
+            last_page: Math.max(1, Math.ceil(payload.length / perPage)),
+            per_page: perPage,
+            total: payload.length,
+          };
+        }
+        // Case 4: Empty or unexpected response
+        else {
+          state.list = [];
+          state.pagination = {
+            current_page: 1,
+            last_page: 1,
+            per_page: 20,
+            total: 0,
+          };
+        }
       })
       .addCase(fetchActivations.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+        state.list = [];
       })
       .addCase(fetchActivationById.pending, (state) => {
         state.loading = true;
@@ -2046,25 +2096,45 @@ const activationsSlice = createSlice({
         const index = state.list.findIndex(a => a.id === action.payload.id);
         if (index !== -1) state.list[index] = action.payload;
         if (state.selected?.id === action.payload.id) state.selected = action.payload;
+        // Also update fullList if it exists
+        if (state.fullListLoaded) {
+          const fullIndex = state.fullList.findIndex(a => a.id === action.payload.id);
+          if (fullIndex !== -1) state.fullList[fullIndex] = action.payload;
+        }
       })
       .addCase(deleteActivation.fulfilled, (state, action) => {
         state.list = state.list.filter(a => a.id !== action.payload);
         if (state.selected?.id === action.payload) state.selected = null;
+        if (state.fullListLoaded) {
+          state.fullList = state.fullList.filter(a => a.id !== action.payload);
+        }
       })
       .addCase(renewActivation.fulfilled, (state, action) => {
         const index = state.list.findIndex(a => a.id === action.payload.id);
         if (index !== -1) state.list[index] = action.payload;
         if (state.selected?.id === action.payload.id) state.selected = action.payload;
+        if (state.fullListLoaded) {
+          const fullIndex = state.fullList.findIndex(a => a.id === action.payload.id);
+          if (fullIndex !== -1) state.fullList[fullIndex] = action.payload;
+        }
       })
       .addCase(suspendActivation.fulfilled, (state, action) => {
         const index = state.list.findIndex(a => a.id === action.payload.id);
         if (index !== -1) state.list[index] = action.payload;
         if (state.selected?.id === action.payload.id) state.selected = action.payload;
+        if (state.fullListLoaded) {
+          const fullIndex = state.fullList.findIndex(a => a.id === action.payload.id);
+          if (fullIndex !== -1) state.fullList[fullIndex] = action.payload;
+        }
       })
       .addCase(reactivateActivation.fulfilled, (state, action) => {
         const index = state.list.findIndex(a => a.id === action.payload.id);
         if (index !== -1) state.list[index] = action.payload;
         if (state.selected?.id === action.payload.id) state.selected = action.payload;
+        if (state.fullListLoaded) {
+          const fullIndex = state.fullList.findIndex(a => a.id === action.payload.id);
+          if (fullIndex !== -1) state.fullList[fullIndex] = action.payload;
+        }
       })
       .addCase(fetchActivationStats.fulfilled, (state, action) => {
         state.stats = action.payload;
@@ -2078,6 +2148,9 @@ const activationsSlice = createSlice({
         if (state.stats) {
           state.stats.total_activations += 1;
           if (action.payload.activation.status === 'active') state.stats.active_activations += 1;
+        }
+        if (state.fullListLoaded) {
+          state.fullList.unshift(action.payload.activation);
         }
       })
       .addCase(createStandaloneActivation.rejected, (state, action) => {
@@ -2094,6 +2167,9 @@ const activationsSlice = createSlice({
         if (state.stats) {
           state.stats.total_activations += newActivations.length;
           state.stats.active_activations += newActivations.filter(a => a.status === 'active').length;
+        }
+        if (state.fullListLoaded) {
+          state.fullList.unshift(...newActivations);
         }
       })
       .addCase(createInstallation.rejected, (state, action) => {
@@ -2209,7 +2285,6 @@ const adminPaymentsSlice = createSlice({
         state.loading = false;
         state.success = true;
         state.error = null;
-        // FIX: Only update if currentAdminPayments exists
         if (state.currentAdminPayments && state.currentAdminPayments.user?.id === action.payload.summary?.user?.id) {
           state.currentAdminPayments.summary = action.payload.summary;
         }
@@ -2225,7 +2300,6 @@ const adminPaymentsSlice = createSlice({
       })
       .addCase(deleteAdminPayment.fulfilled, (state, action) => {
         state.loading = false;
-        // FIX: Only update if currentAdminPayments exists
         if (state.currentAdminPayments && state.currentAdminPayments.user?.id === action.payload.userId) {
           if (state.currentAdminPayments.summary) {
             state.currentAdminPayments.summary = action.payload.data.summary;
@@ -2250,7 +2324,6 @@ const adminPaymentsSlice = createSlice({
       });
   },
 });
-
 
 // ==============================================
 // 💰 TECHNICIAN PAYMENTS SLICE
@@ -2313,7 +2386,6 @@ const technicianPaymentsSlice = createSlice({
         state.loading = false;
         state.success = true;
         state.error = null;
-        // FIX: Only update if currentTechnicianPayments exists
         if (state.currentTechnicianPayments && state.currentTechnicianPayments.user?.id === action.payload.summary?.user?.id) {
           state.currentTechnicianPayments.summary = action.payload.summary;
         }
@@ -2329,7 +2401,6 @@ const technicianPaymentsSlice = createSlice({
       })
       .addCase(deleteTechnicianPayment.fulfilled, (state, action) => {
         state.loading = false;
-        // FIX: Only update if currentTechnicianPayments exists
         if (state.currentTechnicianPayments && state.currentTechnicianPayments.user?.id === action.payload.userId) {
           if (state.currentTechnicianPayments.summary) {
             state.currentTechnicianPayments.summary = action.payload.data.summary;
@@ -2391,7 +2462,6 @@ const dashboardSlice = createSlice({
       });
   },
 });
-// Add this after the technicianPaymentsSlice
 
 // ==============================================
 // 📋 TECHNICIAN REPORTS SLICE
@@ -2475,6 +2545,7 @@ const technicianReportsSlice = createSlice({
       });
   },
 });
+
 // ==============================================
 // 📋 DASHBOARD REPORTS SLICE
 // ==============================================
@@ -2578,6 +2649,7 @@ const reportsSlice = createSlice({
       });
   },
 });
+
 // ==============================================
 // 🏪 CONFIGURE STORE
 // ==============================================
@@ -2623,7 +2695,12 @@ export const { clearDeviceError } = gpsDevicesSlice.actions;
 export const { clearSaleError, clearPaymentHistory } = salesSlice.actions;
 export const { clearUserError } = usersSlice.actions;
 export const { clearCheckError, clearSelectedCheck, setPage } = checksSlice.actions;
-export const { clearActivationError, clearSelectedSale, setActivationPage } = activationsSlice.actions;
+export const { 
+  clearActivationError, 
+  clearSelectedSale, 
+  setActivationPage,
+  setFullList 
+} = activationsSlice.actions;
 export const { clearSettingsError, clearSettingsSuccess } = settingsSlice.actions;
 export const { 
   clearAdminPaymentsError, 
@@ -2706,6 +2783,8 @@ export const selectPaymentSummary = (state) => state.sales.paymentSummary;
 export const selectSalesForActivation = (state) => state.activations.sales;
 export const selectSelectedSaleActivation = (state) => state.activations.selectedSale;
 export const selectActivations = (state) => state.activations.list;
+export const selectFullActivationsList = (state) => state.activations.fullList;
+export const selectFullActivationsLoaded = (state) => state.activations.fullListLoaded;
 export const selectSelectedActivation = (state) => state.activations.selected;
 export const selectActivationStats = (state) => state.activations.stats;
 export const selectActivationsLoading = (state) => state.activations.loading;
@@ -2739,10 +2818,12 @@ export const {
   clearTechnicianReportsSuccess, 
   clearSelectedReport 
 } = technicianReportsSlice.actions;
+
 // Technician Reports selectors
 export const selectTechnicianReports = (state) => state.technicianReports.list;
 export const selectSelectedReport = (state) => state.technicianReports.selected;
 export const selectTechnicianReportsLoading = (state) => state.technicianReports.loading;
 export const selectTechnicianReportsError = (state) => state.technicianReports.error;
 export const selectTechnicianReportsSuccess = (state) => state.technicianReports.success;
+
 export default store;

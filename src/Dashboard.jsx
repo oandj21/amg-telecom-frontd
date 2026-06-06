@@ -11,7 +11,7 @@ import {
   Target, Rocket, Sparkles, Crown, Medal, Trophy, Briefcase,
   Building2, CircleDollarSign, Receipt, ClipboardList, Timer,
   CalendarCheck, CheckSquare, ClockAlert, AlertOctagon, Gauge,
-  Printer, X, Loader, Trash2, FolderOpen, Edit, Database, Cloud, Save, Power
+  Printer, X, Loader, Trash2, FolderOpen, Edit, Database, Cloud, Save
 } from 'lucide-react';
 import { 
   BarChart, Bar, CartesianGrid, Tooltip, XAxis, YAxis, ResponsiveContainer, 
@@ -28,8 +28,8 @@ import {
   fetchGpsDevices,
   fetchVehicles,
   fetchActivations,
-  fetchDepenses,        // added to fetch expenses
-  selectDepenses        // added to read expenses
+  fetchDepenses,
+  selectDepenses
 } from './Store/store';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -37,7 +37,7 @@ import autoTable from 'jspdf-autotable';
 // ==================== API CONFIGURATION ====================
 const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
 
-// ==================== TOAST COMPONENT (Styled like Technician) ====================
+// ==================== TOAST COMPONENT ====================
 const Toast = ({ message, type, onClose }) => {
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1075,8 +1075,6 @@ const safeRound = (value) => {
   return Math.round(num);
 };
 
-const TVA_RATE = 0.20;
-
 const getCompanyInfo = () => {
   const saved = localStorage.getItem('company_info');
   if (saved) {
@@ -1331,9 +1329,7 @@ const EditReportModal = ({ isOpen, onClose, report, onSave, showToast }) => {
       doc.setTextColor(15, 23, 42);
       doc.text(companyInfo.name, margin, yPos + 5.5);
 
-      // Removed address, phone, email lines
-
-      yPos = yPos + 16;  // Adjust Y position for the table
+      yPos = yPos + 16;
 
       const tableRows = validRows.map(row => [
         new Date(row.date).toLocaleDateString('fr-FR'),
@@ -1401,8 +1397,6 @@ const EditReportModal = ({ isOpen, onClose, report, onSave, showToast }) => {
       doc.text("Montant Total HT", calcX, finalY);
       doc.text(formatMoney(totalHT), pageWidth - margin, finalY, { align: 'right' });
 
-      // Bank details block removed
-
       const footerY = pageHeight - 10;
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(7.5);
@@ -1458,7 +1452,6 @@ const EditReportModal = ({ isOpen, onClose, report, onSave, showToast }) => {
           </button>
         </div>
         <div className="edit-modal-body">
-          {/* Bulk Creation */}
           <div style={{ 
             display: 'flex', 
             alignItems: 'center', 
@@ -1502,7 +1495,6 @@ const EditReportModal = ({ isOpen, onClose, report, onSave, showToast }) => {
             </div>
           </div>
 
-          {/* Table */}
           <div className="report-table-container" style={{ marginTop: 0, maxHeight: '400px', overflowY: 'auto' }}>
             <table className="report-table">
               <thead>
@@ -1562,7 +1554,6 @@ const EditReportModal = ({ isOpen, onClose, report, onSave, showToast }) => {
             </table>
           </div>
 
-          {/* Summary */}
           <div className="summary-box">
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: '0.7rem', color: '#64748b' }}>Total HT</div>
@@ -1654,8 +1645,7 @@ const MultiRowReportModal = ({ isOpen, onClose, showToast }) => {
       const companyInfo = getCompanyInfo();
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 15; 
-      const contentWidth = pageWidth - (margin * 2);
+      const margin = 15;
       let yPos = 20;
 
       let logoBase64 = null;
@@ -1700,9 +1690,7 @@ const MultiRowReportModal = ({ isOpen, onClose, showToast }) => {
       doc.setTextColor(15, 23, 42);
       doc.text(companyInfo.name, margin, yPos + 5.5);
 
-      // Removed address, phone, email lines
-
-      yPos = yPos + 16;  // Adjust Y position for the table
+      yPos = yPos + 16;
 
       const tableRows = validRows.map(row => [
         new Date(row.date).toLocaleDateString('fr-FR'),
@@ -1770,8 +1758,6 @@ const MultiRowReportModal = ({ isOpen, onClose, showToast }) => {
       doc.text("Montant Total HT", calcX, finalY);
       doc.text(formatMoney(totalHT), pageWidth - margin, finalY, { align: 'right' });
 
-      // Bank details block removed
-
       const footerY = pageHeight - 10;
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(7.5);
@@ -1801,7 +1787,6 @@ const MultiRowReportModal = ({ isOpen, onClose, showToast }) => {
         showToast('Rapport sauvegardé avec succès', 'success');
         resetForm();
         onClose();
-        // Trigger refresh in parent
         window.dispatchEvent(new Event('reportSaved'));
       } else {
         showToast('Erreur lors de la sauvegarde', 'error');
@@ -2007,7 +1992,6 @@ const SavedReportsSection = ({ onEditReport, showToast }) => {
   useEffect(() => {
     loadReports();
     
-    // Listen for report saved events
     const handleReportSaved = () => loadReports();
     window.addEventListener('reportSaved', handleReportSaved);
     return () => window.removeEventListener('reportSaved', handleReportSaved);
@@ -2155,7 +2139,6 @@ const SavedReportsSection = ({ onEditReport, showToast }) => {
         ))}
       </div>
 
-      {/* Delete Confirmation Modal */}
       {deleteModal.isOpen && (
         <div className="report-modal-overlay" onClick={() => setDeleteModal({ isOpen: false, reportId: null, reportName: '' })}>
           <div className="report-modal" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
@@ -2195,8 +2178,7 @@ const Dashboard = () => {
   const [timeRange, setTimeRange] = useState('week');
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [editReport, setEditReport] = useState(null);
-  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
-  const [lastAutoUpdate, setLastAutoUpdate] = useState(new Date());
+  const [lastUpdate, setLastUpdate] = useState(new Date());
   const isRefreshingRef = useRef(false);
   
   const { showToast, ToastContainer } = useToast();
@@ -2208,7 +2190,7 @@ const Dashboard = () => {
   const { list: gpsDevices } = useSelector((state) => state.gpsDevices);
   const { list: vehicles } = useSelector((state) => state.vehicles);
   const { list: activations } = useSelector((state) => state.activations);
-  const { list: depenses } = useSelector(selectDepenses);   // added to fetch expenses
+  const { list: depenses } = useSelector(selectDepenses);
   const { user } = useSelector((state) => state.auth);
   
   // Refresh Data - memoized with useCallback to avoid dependency loops
@@ -2227,11 +2209,11 @@ const Dashboard = () => {
         dispatch(fetchGpsDevices()),
         dispatch(fetchVehicles()),
         dispatch(fetchActivations()),
-        dispatch(fetchDepenses())      // added
+        dispatch(fetchDepenses())
       ]);
-      setLastAutoUpdate(new Date());
+      setLastUpdate(new Date());
     } catch (error) {
-      console.error("Auto-refresh error:", error);
+      console.error("Refresh error:", error);
     } finally {
       setRefreshing(false);
       isRefreshingRef.current = false;
@@ -2243,31 +2225,6 @@ const Dashboard = () => {
     refreshData();
   }, [refreshData]);
   
-  // Auto-refresh interval (every 30 seconds)
-  useEffect(() => {
-    if (!autoRefreshEnabled) return;
-    const intervalId = setInterval(() => {
-      // Only refresh if the tab is visible to save resources
-      if (!document.hidden) {
-        refreshData();
-      }
-    }, 30000); // 30 seconds
-    
-    return () => clearInterval(intervalId);
-  }, [autoRefreshEnabled, refreshData]);
-  
-  // Listen for page visibility to avoid unnecessary background refreshes
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden && autoRefreshEnabled) {
-        // Optionally refresh immediately when tab becomes visible
-        refreshData();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [autoRefreshEnabled, refreshData]);
-  
   // Listen for report saved events to refresh
   useEffect(() => {
     const handleReportSaved = () => refreshData();
@@ -2275,8 +2232,35 @@ const Dashboard = () => {
     return () => window.removeEventListener('reportSaved', handleReportSaved);
   }, [refreshData]);
   
-  // ==================== COMPUTED STATISTICS ====================
+  // ==================== COMPUTED STATISTICS (includes standalone activations) ====================
   
+  // Helper function to get total expected revenue for an activation (includes renewals)
+  const getActivationTotalExpected = (act) => {
+    let total = safeNumber(act.price);
+    if (act.renewal_history && Array.isArray(act.renewal_history)) {
+      act.renewal_history.forEach(entry => {
+        if (entry.action === 'renewal' && entry.price) {
+          total += safeNumber(entry.price);
+        }
+      });
+    }
+    return total;
+  };
+
+  // Helper function to get total paid amount for an activation
+  const getActivationTotalPaid = (act) => {
+    let total = safeNumber(act.amount_paid);
+    if (act.payment_history && Array.isArray(act.payment_history)) {
+      // Add any cheque payments that have been encashed
+      act.payment_history.forEach(payment => {
+        if ((payment.method === 'cheque' || payment.method === 'check') && payment.remise_status === 'encaisse') {
+          total += safeNumber(payment.amount);
+        }
+      });
+    }
+    return total;
+  };
+
   // Revenue, Expenses and Profit Statistics
   const financialStats = useMemo(() => {
     const salesArray = Array.isArray(sales) ? sales : [];
@@ -2287,7 +2271,7 @@ const Dashboard = () => {
     const currentMonth = today.toISOString().slice(0, 7);
     const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().slice(0, 7);
     
-    // --- CHIFFRE D'AFFAIRES (expected revenue) ---
+    // --- CHIFFRE D'AFFAIRES (expected revenue from both sales AND standalone activations) ---
     // Sales: total invoice amount
     const currentMonthSalesTotal = salesArray
       .filter(s => s && s.created_at && s.created_at.slice(0, 7) === currentMonth)
@@ -2296,20 +2280,7 @@ const Dashboard = () => {
       .filter(s => s && s.created_at && s.created_at.slice(0, 7) === lastMonth)
       .reduce((sum, s) => sum + safeNumber(s?.total), 0);
     
-    // Activations: original price + all renewal prices (total expected revenue)
-    // Helper to compute total expected revenue for an activation
-    const getActivationTotalExpected = (act) => {
-      let total = safeNumber(act.price); // original price
-      if (act.renewal_history && Array.isArray(act.renewal_history)) {
-        act.renewal_history.forEach(entry => {
-          if (entry.action === 'renewal' && entry.price) {
-            total += safeNumber(entry.price);
-          }
-        });
-      }
-      return total;
-    };
-    
+    // Standalone Activations (including those without vente_id)
     const currentMonthActivationsExpected = activationsArray
       .filter(a => a && a.created_at && a.created_at.slice(0, 7) === currentMonth)
       .reduce((sum, a) => sum + getActivationTotalExpected(a), 0);
@@ -2330,14 +2301,15 @@ const Dashboard = () => {
       .reduce((sum, s) => sum + safeNumber(s?.amount_paid), 0);
     const currentMonthActivationsPaid = activationsArray
       .filter(a => a && a.created_at && a.created_at.slice(0, 7) === currentMonth)
-      .reduce((sum, a) => sum + safeNumber(a?.amount_paid), 0);
+      .reduce((sum, a) => sum + getActivationTotalPaid(a), 0);
     const totalPaidRevenueCurrent = currentMonthSalesPaid + currentMonthActivationsPaid;
+    
     const lastMonthSalesPaid = salesArray
       .filter(s => s && s.created_at && s.created_at.slice(0, 7) === lastMonth)
       .reduce((sum, s) => sum + safeNumber(s?.amount_paid), 0);
     const lastMonthActivationsPaid = activationsArray
       .filter(a => a && a.created_at && a.created_at.slice(0, 7) === lastMonth)
-      .reduce((sum, a) => sum + safeNumber(a?.amount_paid), 0);
+      .reduce((sum, a) => sum + getActivationTotalPaid(a), 0);
     const totalPaidRevenueLast = lastMonthSalesPaid + lastMonthActivationsPaid;
     
     // --- EXPENSES ---
@@ -2356,19 +2328,33 @@ const Dashboard = () => {
     if (profitLast > 0) profitGrowth = ((profitCurrent - profitLast) / profitLast) * 100;
     else if (profitCurrent > 0) profitGrowth = 100;
     
-    // Additional metrics
+    // Additional metrics - includes both sales and standalone activations
     const pendingRevenue = salesArray
       .filter(s => s && s.payment_status !== 'paid')
       .reduce((sum, s) => sum + safeNumber(s?.remaining_amount), 0);
-    const collectedRevenue = salesArray.reduce((sum, s) => sum + safeNumber(s?.amount_paid), 0);
     
+    const pendingActivationRevenue = activationsArray
+      .filter(a => a && a.payment_status !== 'paid')
+      .reduce((sum, a) => sum + safeNumber(a?.remaining_amount), 0);
+    
+    const totalPendingRevenue = pendingRevenue + pendingActivationRevenue;
+    
+    const collectedRevenue = salesArray.reduce((sum, s) => sum + safeNumber(s?.amount_paid), 0) +
+      activationsArray.reduce((sum, a) => sum + getActivationTotalPaid(a), 0);
+    
+    // Calculate average order value using both sales and standalone activations
+    const totalTransactions = salesArray.length + activationsArray.length;
     let averageOrderValue = 0;
-    if (salesArray.length > 0) averageOrderValue = currentMonthSalesTotal / salesArray.length;
+    if (totalTransactions > 0) {
+      const totalValue = salesArray.reduce((sum, s) => sum + safeNumber(s?.total), 0) +
+        activationsArray.reduce((sum, a) => sum + getActivationTotalExpected(a), 0);
+      averageOrderValue = totalValue / totalTransactions;
+    }
     
     return {
       currentRevenue: safeRound(totalExpectedRevenueCurrent),
       growth: safeRound(revenueGrowth),
-      pendingRevenue: safeRound(pendingRevenue),
+      pendingRevenue: safeRound(totalPendingRevenue),
       collectedRevenue: safeRound(collectedRevenue),
       averageOrderValue: safeRound(averageOrderValue),
       currentProfit: safeRound(profitCurrent),
@@ -2402,11 +2388,18 @@ const Dashboard = () => {
       const daysLeft = (expiry - new Date()) / (1000 * 60 * 60 * 24);
       return daysLeft <= 7 && daysLeft > 0;
     })?.length || 0;
-    return { active, expired: activationsArray?.filter(a => a?.status === 'expired')?.length || 0, expiringSoon, expiringThisWeek, total: activationsArray?.length || 0 };
+    return { 
+      active, 
+      expired: activationsArray?.filter(a => a?.status === 'expired')?.length || 0, 
+      expiringSoon, 
+      expiringThisWeek, 
+      total: activationsArray?.length || 0 
+    };
   }, [activations]);
   
   const chartData = useMemo(() => {
     const salesArray = Array.isArray(sales) ? sales : [];
+    const activationsArray = Array.isArray(activations) ? activations : [];
     const data = [];
     let period = 7;
     if (timeRange === 'month') period = 30;
@@ -2420,8 +2413,17 @@ const Dashboard = () => {
           const date = new Date(s.created_at);
           return !isNaN(date.getTime()) && date.getMonth() === i && date.getFullYear() === new Date().getFullYear();
         });
-        const monthlyRevenue = monthlySales.reduce((sum, s) => sum + safeNumber(s?.total), 0);
-        data.push({ name: months[i], revenue: safeRound(monthlyRevenue), avgOrder: monthlySales.length > 0 ? safeRound(monthlyRevenue / monthlySales.length) : 0 });
+        const monthlyActivations = activationsArray.filter(a => {
+          if (!a?.created_at) return false;
+          const date = new Date(a.created_at);
+          return !isNaN(date.getTime()) && date.getMonth() === i && date.getFullYear() === new Date().getFullYear();
+        });
+        const monthlySalesRevenue = monthlySales.reduce((sum, s) => sum + safeNumber(s?.total), 0);
+        const monthlyActivationsRevenue = monthlyActivations.reduce((sum, a) => sum + getActivationTotalExpected(a), 0);
+        const monthlyRevenue = monthlySalesRevenue + monthlyActivationsRevenue;
+        const totalTransactions = monthlySales.length + monthlyActivations.length;
+        const avgOrder = totalTransactions > 0 ? monthlyRevenue / totalTransactions : 0;
+        data.push({ name: months[i], revenue: safeRound(monthlyRevenue), avgOrder: safeRound(avgOrder) });
       }
     } else {
       for (let i = period - 1; i >= 0; i--) {
@@ -2429,29 +2431,53 @@ const Dashboard = () => {
         d.setDate(d.getDate() - i);
         const dateStr = d.toISOString().slice(0, 10);
         const dailySales = salesArray.filter(s => s?.created_at?.slice(0, 10) === dateStr);
-        const dailyRevenue = dailySales.reduce((sum, s) => sum + safeNumber(s?.total), 0);
-        data.push({ name: d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }), revenue: safeRound(dailyRevenue), avgOrder: dailySales.length > 0 ? safeRound(dailyRevenue / dailySales.length) : 0 });
+        const dailyActivations = activationsArray.filter(a => a?.created_at?.slice(0, 10) === dateStr);
+        const dailySalesRevenue = dailySales.reduce((sum, s) => sum + safeNumber(s?.total), 0);
+        const dailyActivationsRevenue = dailyActivations.reduce((sum, a) => sum + getActivationTotalExpected(a), 0);
+        const dailyRevenue = dailySalesRevenue + dailyActivationsRevenue;
+        const totalTransactions = dailySales.length + dailyActivations.length;
+        const avgOrder = totalTransactions > 0 ? dailyRevenue / totalTransactions : 0;
+        data.push({ 
+          name: d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }), 
+          revenue: safeRound(dailyRevenue), 
+          avgOrder: safeRound(avgOrder) 
+        });
       }
     }
     return data;
-  }, [sales, timeRange]);
+  }, [sales, activations, timeRange]);
   
   const paymentDistribution = useMemo(() => {
     const salesArray = Array.isArray(sales) ? sales : [];
-    const paid = salesArray.filter(s => s?.payment_status === 'paid').length;
-    const partial = salesArray.filter(s => s?.payment_status === 'partial').length;
-    const unpaid = salesArray.filter(s => s?.payment_status === 'unpaid' || !s?.payment_status).length;
-    const total = salesArray.length || 1;
+    const activationsArray = Array.isArray(activations) ? activations : [];
+    
+    const paidSales = salesArray.filter(s => s?.payment_status === 'paid').length;
+    const paidActivations = activationsArray.filter(a => a?.payment_status === 'paid').length;
+    const paid = paidSales + paidActivations;
+    
+    const partialSales = salesArray.filter(s => s?.payment_status === 'partial').length;
+    const partialActivations = activationsArray.filter(a => a?.payment_status === 'partial').length;
+    const partial = partialSales + partialActivations;
+    
+    const unpaidSales = salesArray.filter(s => s?.payment_status === 'unpaid' || !s?.payment_status).length;
+    const unpaidActivations = activationsArray.filter(a => a?.payment_status === 'unpaid' || !a?.payment_status).length;
+    const unpaid = unpaidSales + unpaidActivations;
+    
+    const total = paid + partial + unpaid || 1;
+    
     return [
       { name: 'Payé', value: paid, percent: Math.round((paid / total) * 100), color: '#10b981' },
       { name: 'Partiel', value: partial, percent: Math.round((partial / total) * 100), color: '#f59e0b' },
       { name: 'Impayé', value: unpaid, percent: Math.round((unpaid / total) * 100), color: '#ef4444' }
     ];
-  }, [sales]);
+  }, [sales, activations]);
   
   const productDistribution = useMemo(() => {
     const salesArray = Array.isArray(sales) ? sales : [];
+    const activationsArray = Array.isArray(activations) ? activations : [];
     const distribution = {};
+    
+    // From sales
     salesArray.forEach(sale => {
       if (sale?.produits && Array.isArray(sale.produits)) {
         sale.produits.forEach(prod => {
@@ -2463,10 +2489,23 @@ const Dashboard = () => {
         });
       }
     });
+    
+    // From standalone activations (add product from produit relation)
+    activationsArray.forEach(act => {
+      if (act?.produit?.nom) {
+        const name = act.produit.nom;
+        distribution[name] = (distribution[name] || 0) + 1;
+      }
+    });
+    
     const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#06b6d4', '#ef4444'];
     const sortedEntries = Object.entries(distribution).sort((a, b) => b[1] - a[1]);
-    return sortedEntries.slice(0, 6).map(([name, value], idx) => ({ name: name.length > 15 ? name.slice(0, 12) + '...' : name, value: safeNumber(value), color: colors[idx % colors.length] }));
-  }, [sales]);
+    return sortedEntries.slice(0, 6).map(([name, value], idx) => ({ 
+      name: name.length > 15 ? name.slice(0, 12) + '...' : name, 
+      value: safeNumber(value), 
+      color: colors[idx % colors.length] 
+    }));
+  }, [sales, activations]);
   
   const recentActivities = useMemo(() => {
     const salesArray = Array.isArray(sales) ? sales : [];
@@ -2474,17 +2513,33 @@ const Dashboard = () => {
     const activities = [];
     
     salesArray.slice(0, 8).forEach(sale => {
-      if (sale) activities.push({ id: `sale-${sale?.id}`, type: 'sale', title: 'Nouvelle vente', description: `Vente #${sale?.id || 'N/A'} - ${sale?.client?.nom || 'Client'}`, amount: safeNumber(sale?.total), date: sale?.created_at, status: sale?.payment_status });
+      if (sale) activities.push({ 
+        id: `sale-${sale?.id}`, 
+        type: 'sale', 
+        title: 'Nouvelle vente', 
+        description: `Vente #${sale?.id || 'N/A'} - ${sale?.client?.nom || 'Client'}`, 
+        amount: safeNumber(sale?.total), 
+        date: sale?.created_at, 
+        status: sale?.payment_status 
+      });
     });
     
-    activationsArray.slice(0, 6).forEach(act => {
-      if (act) activities.push({ id: `act-${act?.id}`, type: 'activation', title: 'Activation GPS', description: `IMEI: ${act?.imei?.slice(-6) || act?.id || 'N/A'}`, date: act?.activated_at, status: act?.status });
+    activationsArray.slice(0, 8).forEach(act => {
+      if (act) activities.push({ 
+        id: `act-${act?.id}`, 
+        type: 'activation', 
+        title: act?.vente_id ? 'Activation GPS (Vente)' : 'Activation GPS (Standalone)',
+        description: `IMEI: ${act?.imei?.slice(-6) || act?.client_imei?.slice(-6) || act?.id || 'N/A'}`, 
+        amount: safeNumber(act?.price),
+        date: act?.activated_at || act?.created_at, 
+        status: act?.status 
+      });
     });
     
     return activities.filter(a => a.date).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 8);
   }, [sales, activations]);
   
-  // Quick actions including the new Report button
+  // Quick actions
   const quickActions = [
     { label: 'Nouvelle vente', icon: ShoppingCart, path: '/ventes', color: '#3b82f6' },
     { label: 'Ajouter client', icon: Users, path: '/clients', color: '#10b981' },
@@ -2527,9 +2582,10 @@ const Dashboard = () => {
           <div style={{ position: 'relative', zIndex: 1 }}>
             <div className="welcome-title">🌟 Bonjour, {user?.name?.split(' ')[0] || 'Admin'}!</div>
             <div className="welcome-text">Voici le résumé de votre activité du {new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
-            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-              <div><span className="badge badge-success"><CheckCircle size={12} /> {paymentDistribution[0]?.value || 0} ventes payées</span></div>
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+              <div><span className="badge badge-success"><CheckCircle size={12} /> {paymentDistribution[0]?.value || 0} transactions payées</span></div>
               <div><span className="badge badge-warning"><Clock size={12} /> {activationStats.expiringThisWeek || 0} activations expirent cette semaine</span></div>
+              <div><span className="badge badge-info"><Activity size={12} /> {activations?.length || 0} activations totales</span></div>
             </div>
           </div>
         </div>
@@ -2537,7 +2593,7 @@ const Dashboard = () => {
         {/* Header */}
         <PageHeader
           title="Tableau de bord"
-          subtitle={<><span>📊 Analyse complète de votre activité commerciale</span><span className="badge badge-info"><Activity size={10} /> {sales?.length || 0} ventes</span></>}
+          subtitle={<><span>📊 Analyse complète de votre activité commerciale</span><span className="badge badge-info"><Activity size={10} /> {(sales?.length || 0) + (activations?.length || 0)} transactions</span></>}
           actions={
             <>
               <div className="time-range-selector">
@@ -2548,14 +2604,6 @@ const Dashboard = () => {
               <button onClick={refreshData} className="btn btn-outline" disabled={refreshing}>
                 <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} /> 
                 Actualiser
-              </button>
-              <button 
-                onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)} 
-                className="btn btn-outline"
-                style={{ background: autoRefreshEnabled ? '#e0f2fe' : 'white', borderColor: autoRefreshEnabled ? '#3b82f6' : '#e2e8f0' }}
-                title={autoRefreshEnabled ? "Mise à jour automatique activée (30s)" : "Mise à jour automatique désactivée"}
-              >
-                <Power size={14} /> {autoRefreshEnabled ? "Live ON" : "Auto OFF"}
               </button>
               <button onClick={() => navigate('/ventes')} className="btn btn-primary"><Plus size={16} /> Nouvelle vente</button>
             </>
@@ -2595,11 +2643,11 @@ const Dashboard = () => {
             onClick={() => navigate('/depenses')} 
           />
           <StatCard 
-            label="VENTES" 
-            value={sales?.length || 0} 
+            label="VENTES & ACTIVATIONS" 
+            value={(sales?.length || 0) + (activations?.length || 0)} 
             icon={ShoppingCart} 
             color="green" 
-            subtitle={`📊 Panier moyen: ${financialStats.averageOrderValue.toLocaleString()} MAD`} 
+            subtitle={`📊 Transactions: ${sales?.length || 0} ventes + ${activations?.length || 0} activations`} 
             onClick={() => navigate('/ventes')} 
           />
           <StatCard 
@@ -2617,20 +2665,13 @@ const Dashboard = () => {
           <KpiCard title="Appareils GPS" value={gpsStats.total} subtitle={`${gpsStats.available} disponibles • ${gpsStats.assigned} assignés`} icon={MapPin} onClick={() => navigate('/produits')} />
           <KpiCard title="Activations actives" value={activationStats.active} subtitle={`⚠️ ${activationStats.expiringSoon} expirent bientôt`} icon={Zap} onClick={() => navigate('/Activation')} />
           <KpiCard title="Taux d'utilisation GPS" value={`${gpsStats.utilizationRate}%`} subtitle={`📈 ${gpsStats.utilizationRate >= 70 ? 'Excellent' : 'À améliorer'}`} icon={Gauge} />
-            <StatCard 
-            label="CLIENTS" 
-            value={clients?.length || 0} 
-            icon={Users} 
-            color="orange" 
-            subtitle={`👥 +${Math.floor((clients?.length || 0) * 0.12)} nouveaux ce mois`} 
-            onClick={() => navigate('/clients')} 
-          />
+          <KpiCard title="CLIENTS" value={clients?.length || 0} icon={Users} subtitle={`👥 +${Math.floor((clients?.length || 0) * 0.12)} nouveaux ce mois`} onClick={() => navigate('/clients')} />
         </div>
         
         {/* Revenue Chart */}
         <div className="dashboard-card" style={{ marginBottom: '1.5rem' }}>
           <div className="section-header">
-            <div className="section-title"><TrendingUp size={18} style={{ color: '#3b82f6' }} /> Évolution des ventes</div>
+            <div className="section-title"><TrendingUp size={18} style={{ color: '#3b82f6' }} /> Évolution des ventes et activations</div>
             <div className="text-sm text-gray-500">Total: {chartData.reduce((sum, d) => sum + (d?.revenue || 0), 0).toLocaleString()} MAD</div>
           </div>
           <div className="chart-container">
@@ -2664,11 +2705,25 @@ const Dashboard = () => {
                 </div>
               ))}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginTop: '1.5rem' }}>
-                <div style={{ background: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)', borderRadius: '0.75rem', padding: '0.75rem', textAlign: 'center' }}><div className="text-lg font-bold text-green-700">{paymentDistribution[0]?.value || 0}</div><div className="text-xs text-green-600">Payées</div></div>
-                <div style={{ background: 'linear-gradient(135deg, #fed7aa 0%, #fdba74 100%)', borderRadius: '0.75rem', padding: '0.75rem', textAlign: 'center' }}><div className="text-lg font-bold text-orange-700">{paymentDistribution[1]?.value || 0}</div><div className="text-xs text-orange-600">Partielles</div></div>
-                <div style={{ background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)', borderRadius: '0.75rem', padding: '0.75rem', textAlign: 'center' }}><div className="text-lg font-bold text-red-700">{paymentDistribution[2]?.value || 0}</div><div className="text-xs text-red-600">Impayées</div></div>
+                <div style={{ background: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)', borderRadius: '0.75rem', padding: '0.75rem', textAlign: 'center' }}>
+                  <div className="text-lg font-bold text-green-700">{paymentDistribution[0]?.value || 0}</div>
+                  <div className="text-xs text-green-600">Payées</div>
+                </div>
+                <div style={{ background: 'linear-gradient(135deg, #fed7aa 0%, #fdba74 100%)', borderRadius: '0.75rem', padding: '0.75rem', textAlign: 'center' }}>
+                  <div className="text-lg font-bold text-orange-700">{paymentDistribution[1]?.value || 0}</div>
+                  <div className="text-xs text-orange-600">Partielles</div>
+                </div>
+                <div style={{ background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)', borderRadius: '0.75rem', padding: '0.75rem', textAlign: 'center' }}>
+                  <div className="text-lg font-bold text-red-700">{paymentDistribution[2]?.value || 0}</div>
+                  <div className="text-xs text-red-600">Impayées</div>
+                </div>
               </div>
-              {financialStats.pendingRevenue > 0 && (<div className="info-box" style={{ marginTop: '1rem', background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)' }}><div className="text-sm font-semibold text-yellow-800">💰 En attente de paiement</div><div className="text-xl font-bold text-yellow-900">{financialStats.pendingRevenue.toLocaleString()} MAD</div></div>)}
+              {financialStats.pendingRevenue > 0 && (
+                <div className="info-box" style={{ marginTop: '1rem', background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)' }}>
+                  <div className="text-sm font-semibold text-yellow-800">💰 En attente de paiement</div>
+                  <div className="text-xl font-bold text-yellow-900">{financialStats.pendingRevenue.toLocaleString()} MAD</div>
+                </div>
+              )}
             </div>
           </div>
           
@@ -2678,7 +2733,17 @@ const Dashboard = () => {
               {productDistribution.length > 0 ? productDistribution.map((product, idx) => {
                 const maxValue = productDistribution[0]?.value || 1;
                 const percentage = maxValue > 0 ? (product.value / maxValue) * 100 : 0;
-                return (<div key={idx}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.875rem' }}><span className="font-medium">{product.name}</span><span style={{ color: product.color, fontWeight: 600 }}>{product.value} unités</span></div><div className="progress-bar"><div className="progress-fill" style={{ width: `${percentage}%`, background: product.color }}></div></div></div>);
+                return (
+                  <div key={idx}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.875rem' }}>
+                      <span className="font-medium">{product.name}</span>
+                      <span style={{ color: product.color, fontWeight: 600 }}>{product.value} unités</span>
+                    </div>
+                    <div className="progress-bar">
+                      <div className="progress-fill" style={{ width: `${percentage}%`, background: product.color }}></div>
+                    </div>
+                  </div>
+                );
               }) : <div className="text-center py-8 text-gray-400">Aucune donnée de produit</div>}
             </div>
           </div>
@@ -2690,21 +2755,50 @@ const Dashboard = () => {
             <div className="section-header"><div className="section-title"><MapPin size={18} style={{ color: '#3b82f6' }} /> État du parc GPS</div></div>
             <div style={{ padding: '1.25rem' }}>
               <div className="gps-stats-mini">
-                <div className="gps-stat-mini" style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)' }}><div className="gps-stat-value" style={{ color: '#2563eb' }}>{gpsStats.available}</div><div className="gps-stat-label">Disponibles</div></div>
-                <div className="gps-stat-mini" style={{ background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' }}><div className="gps-stat-value" style={{ color: '#7c3aed' }}>{gpsStats.assigned}</div><div className="gps-stat-label">Assignés</div></div>
-                <div className="gps-stat-mini" style={{ background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)' }}><div className="gps-stat-value" style={{ color: '#d97706' }}>{gpsStats.reserved}</div><div className="gps-stat-label">Réservés</div></div>
+                <div className="gps-stat-mini" style={{ background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)' }}>
+                  <div className="gps-stat-value" style={{ color: '#2563eb' }}>{gpsStats.available}</div>
+                  <div className="gps-stat-label">Disponibles</div>
+                </div>
+                <div className="gps-stat-mini" style={{ background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)' }}>
+                  <div className="gps-stat-value" style={{ color: '#7c3aed' }}>{gpsStats.assigned}</div>
+                  <div className="gps-stat-label">Assignés</div>
+                </div>
+                <div className="gps-stat-mini" style={{ background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)' }}>
+                  <div className="gps-stat-value" style={{ color: '#d97706' }}>{gpsStats.reserved}</div>
+                  <div className="gps-stat-label">Réservés</div>
+                </div>
               </div>
-              <div style={{ marginBottom: '1rem' }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.875rem' }}><span>Taux d'utilisation</span><span className="font-semibold">{gpsStats.utilizationRate}%</span></div><div className="progress-bar"><div className="progress-fill" style={{ width: `${gpsStats.utilizationRate}%`, background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)' }}></div></div></div>
+              <div style={{ marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.875rem' }}>
+                  <span>Taux d'utilisation</span>
+                  <span className="font-semibold">{gpsStats.utilizationRate}%</span>
+                </div>
+                <div className="progress-bar">
+                  <div className="progress-fill" style={{ width: `${gpsStats.utilizationRate}%`, background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)' }}></div>
+                </div>
+              </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '1rem', borderTop: '1px solid #e2e8f0' }}>
-                <div><div className="text-xs text-gray-500">Total appareils</div><div className="text-xl font-bold text-gray-800">{gpsStats.total}</div></div>
-                <div><div className="text-xs text-gray-500">Activations actives</div><div className="text-xl font-bold text-green-600">{activationStats.active}</div></div>
-                <div><div className="text-xs text-gray-500">Expirations imminentes</div><div className="text-xl font-bold text-orange-600">{activationStats.expiringSoon}</div></div>
+                <div>
+                  <div className="text-xs text-gray-500">Total appareils</div>
+                  <div className="text-xl font-bold text-gray-800">{gpsStats.total}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">Activations actives</div>
+                  <div className="text-xl font-bold text-green-600">{activationStats.active}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">Expirations imminentes</div>
+                  <div className="text-xl font-bold text-orange-600">{activationStats.expiringSoon}</div>
+                </div>
               </div>
             </div>
           </div>
           
           <div className="dashboard-card">
-            <div className="section-header"><div className="section-title"><Activity size={18} style={{ color: '#10b981' }} /> Activités récentes</div><button className="btn btn-ghost" style={{ fontSize: '0.7rem' }} onClick={() => navigate('/ventes')}>Voir tout <ChevronRight size={14} /></button></div>
+            <div className="section-header">
+              <div className="section-title"><Activity size={18} style={{ color: '#10b981' }} /> Activités récentes</div>
+              <button className="btn btn-ghost" style={{ fontSize: '0.7rem' }} onClick={() => navigate('/ventes')}>Voir tout <ChevronRight size={14} /></button>
+            </div>
             <div style={{ padding: '0.75rem' }}>
               <div className="recent-list">
                 {recentActivities.map((activity) => (
@@ -2713,12 +2807,21 @@ const Dashboard = () => {
                       <div style={{ padding: '0.5rem', borderRadius: '0.75rem', background: activity.type === 'sale' ? '#d1fae5' : '#ede9fe' }}>
                         {activity.type === 'sale' ? <ShoppingCart size={14} className="text-green-600" /> : <Wifi size={14} className="text-purple-600" />}
                       </div>
-                      <div style={{ flex: 1 }}><div className="font-semibold text-sm text-gray-800">{activity.title}</div><div className="text-xs text-gray-400">{activity.description}</div></div>
+                      <div style={{ flex: 1 }}>
+                        <div className="font-semibold text-sm text-gray-800">{activity.title}</div>
+                        <div className="text-xs text-gray-400">{activity.description}</div>
+                      </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <div className="text-xs text-gray-400 whitespace-nowrap">{activity.date ? new Date(activity.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '-'}</div>
-                      {activity.amount !== undefined && activity.amount !== null && !isNaN(activity.amount) && activity.amount > 0 && (<div className="text-xs font-semibold text-gray-800 mt-1">{Math.round(activity.amount).toLocaleString()} MAD</div>)}
-                      {activity.status && (<span className={`badge text-xs mt-1 inline-block ${activity.status === 'paid' || activity.status === 'active' ? 'badge-success' : activity.status === 'partial' ? 'badge-warning' : 'badge-danger'}`}>{activity.status === 'paid' ? 'Payé' : activity.status === 'active' ? 'Actif' : activity.status === 'partial' ? 'Partiel' : activity.status}</span>)}
+                      {activity.amount !== undefined && activity.amount !== null && !isNaN(activity.amount) && activity.amount > 0 && (
+                        <div className="text-xs font-semibold text-gray-800 mt-1">{Math.round(activity.amount).toLocaleString()} MAD</div>
+                      )}
+                      {activity.status && (
+                        <span className={`badge text-xs mt-1 inline-block ${activity.status === 'paid' || activity.status === 'active' ? 'badge-success' : activity.status === 'partial' ? 'badge-warning' : 'badge-danger'}`}>
+                          {activity.status === 'paid' ? 'Payé' : activity.status === 'active' ? 'Actif' : activity.status === 'partial' ? 'Partiel' : activity.status}
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -2731,14 +2834,13 @@ const Dashboard = () => {
         {/* Saved Reports Section */}
         <SavedReportsSection onEditReport={handleEditReport} showToast={showToast} />
         
-        {/* Footer with auto-refresh info */}
+        {/* Footer with info */}
         <div className="text-center text-xs text-gray-400 border-t border-gray-100 pt-4 mt-2">
           <div className="flex justify-center gap-4 mb-2 flex-wrap">
             <span>📊 Données en temps réel</span>
-            <span>🔄 Dernière mise à jour auto: {lastAutoUpdate.toLocaleTimeString('fr-FR')}</span>
-            <span>✅ {sales?.length || 0} ventes enregistrées</span>
-            {autoRefreshEnabled && <span className="text-green-500">🔴 Live updates (30s)</span>}
-            {!autoRefreshEnabled && <span className="text-gray-400">⏸ Mise à jour auto désactivée</span>}
+            <span>🔄 Dernière mise à jour: {lastUpdate.toLocaleTimeString('fr-FR')}</span>
+            <span>✅ {(sales?.length || 0) + (activations?.length || 0)} transactions enregistrées</span>
+            <span>📱 {activationStats.active} activations actives</span>
           </div>
           <div>© 2024 - Tableau de bord commercial</div>
         </div>

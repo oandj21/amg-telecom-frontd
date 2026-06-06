@@ -1,41 +1,33 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
   Plus, Satellite, RefreshCw, AlertTriangle, CheckCircle2, Clock,
   Search, Eye, Edit, Trash2, X, Calendar, Wifi, Car,
   Smartphone, Ban, Power, DollarSign, Save, RotateCcw, ChevronDown, ChevronUp,
   FileSpreadsheet, Download, History, ChevronLeft, ChevronRight,
-  TrendingUp, Check, AlertCircle, CreditCard, Receipt, Loader,Info
+  TrendingUp, Check, AlertCircle, CreditCard, Receipt, Loader, Info
 } from 'lucide-react';
-import { ExportMenu } from './ExportMenu';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import {
-  selectSalesForActivation,
-  selectSelectedSaleActivation,
   selectActivations,
   selectActivationStats,
   selectActivationsLoading,
   selectActivationsPagination,
-  selectGpsDevices,
-  fetchSalesForActivation,
-  fetchSaleActivationDetails,
-  activateDevices,
   fetchActivations,
   fetchActivationStats,
   updateActivation,
   deleteActivation,
-  fetchGpsDevices,
-  clearSelectedSale,
-  getAvailableDevices,
   fetchAvailableImeis,
   selectAvailableImeis,
-  selectProducts
+  selectProducts,
+  setFullList
 } from './Store/store';
 
 // ==================== CONSTANTS ====================
 const PLAN_LABEL = { '1m': '1 mois', '3m': '3 mois', '6m': '6 mois', '12m': '12 mois' };
 const PLAN_OPTIONS = [
+   { value: '', label: '-- Sélectionner un plan --' },
   { value: '1m', label: '1 mois' },
   { value: '3m', label: '3 mois' },
   { value: '6m', label: '6 mois' },
@@ -45,29 +37,24 @@ const OPERATORS = ['Inwi', 'Maroc Telecom', 'Orange', 'Autre'];
 
 const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
 
-// ==================== HELPER: Check if activation has empty required fields ====================
+// ==================== HELPER FUNCTIONS ====================
 const isActivationIncomplete = (activation) => {
   if (!activation) return false;
   
-  // Check required fields
   const hasImei = (activation.imei && activation.imei.trim() !== '') || 
                   (activation.client_imei && activation.client_imei.trim() !== '');
   const hasNumeroSim = activation.numero_sim && activation.numero_sim.trim() !== '';
   const hasOperateur = activation.operateur && activation.operateur.trim() !== '';
-  const hasMatricule = activation.matricule && activation.matricule.trim() !== '';
-  const hasPrice = activation.price !== null && activation.price !== undefined && activation.price > 0;
   const hasPlan = activation.plan_abonnement && activation.plan_abonnement.trim() !== '';
   
-  // Fields that are considered critical for a complete activation
   const criticalFieldsMissing = !hasImei || !hasNumeroSim || !hasOperateur || !hasPlan;
-  // Optional but recommended fields
+  const hasMatricule = activation.matricule && activation.matricule.trim() !== '';
+  const hasPrice = activation.price !== null && activation.price !== undefined && activation.price > 0;
   const recommendedFieldsMissing = !hasMatricule || !hasPrice;
   
-  // Return true if any critical field is missing, or if at least 2 recommended fields are missing
   return criticalFieldsMissing || (recommendedFieldsMissing && (!hasMatricule && !hasPrice));
 };
 
-// Get list of empty fields for display
 const getEmptyFields = (activation) => {
   const empty = [];
   const hasImei = (activation.imei && activation.imei.trim() !== '') || 
@@ -79,6 +66,25 @@ const getEmptyFields = (activation) => {
   if (!activation.matricule?.trim()) empty.push('Matricule');
   if (!activation.price || activation.price <= 0) empty.push('Prix');
   return empty;
+};
+
+const safeFormatPrice = (value) => {
+  if (value === null || value === undefined) return '0.00';
+  const num = parseFloat(value);
+  return isNaN(num) ? '0.00' : num.toFixed(2);
+};
+
+const safeParseNumber = (value) => {
+  if (value === null || value === undefined) return 0;
+  const num = parseFloat(value);
+  return isNaN(num) ? 0 : num;
+};
+
+const formatDate = (dateString) => {
+  if (!dateString) return '-';
+  return new Date(dateString).toLocaleDateString('fr-FR', {
+    day: '2-digit', month: '2-digit', year: 'numeric'
+  });
 };
 
 // ==================== STYLES ====================
@@ -337,7 +343,6 @@ const styles = `
     background: #f9fafb;
   }
   
-  /* Empty cell highlighting */
   .empty-cell-highlight {
     background-color: #fef2f2;
     border-left: 3px solid #ef4444;
@@ -527,7 +532,7 @@ const styles = `
     inset: 0;
     background: rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(2px);
-    z-index: 50;
+    z-index: 1000;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -544,6 +549,8 @@ const styles = `
     overflow-y: auto;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
     animation: dialogFadeIn 0.2s ease;
+    z-index: 1010;
+    position: relative;
   }
   
   @keyframes dialogFadeIn {
@@ -592,6 +599,8 @@ const styles = `
   
   .confirmation-dialog {
     max-width: 28rem;
+    z-index: 1100 !important;
+    position: relative;
   }
   
   .confirmation-dialog .activation-dialog-body {
@@ -1069,143 +1078,6 @@ const styles = `
     outline: none;
   }
   
-  /* Searchable IMEI Select Styles */
-  .searchable-imei-select {
-    position: relative;
-    width: 100%;
-  }
-  
-  .searchable-imei-trigger {
-    width: 100%;
-    padding: 0.5rem 2rem 0.5rem 0.75rem;
-    border: 2px solid #3b82f6;
-    border-radius: 0.5rem;
-    font-size: 0.875rem;
-    background: white;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    transition: all 0.2s;
-  }
-  
-  .searchable-imei-trigger:hover {
-    border-color: #2563eb;
-    background: #f8fafc;
-  }
-  
-  .searchable-imei-trigger.open {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
-  }
-  
-  .searchable-imei-trigger-placeholder {
-    color: #9ca3af;
-  }
-  
-  .searchable-imei-trigger-value {
-    color: #1e293b;
-    font-weight: 500;
-  }
-  
-  .searchable-imei-icon {
-    color: #94a3b8;
-    transition: transform 0.2s ease;
-  }
-  
-  .searchable-imei-icon.open {
-    transform: rotate(180deg);
-  }
-  
-  .searchable-imei-dropdown {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
-    right: 0;
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.75rem;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
-    z-index: 1000;
-    max-height: 320px;
-    overflow: hidden;
-    animation: dropdownFadeIn 0.2s ease;
-  }
-  
-  @keyframes dropdownFadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(-8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  
-  .searchable-imei-search {
-    position: sticky;
-    top: 0;
-    padding: 0.75rem;
-    border-bottom: 1px solid #e2e8f0;
-    background: white;
-  }
-  
-  .searchable-imei-search-input {
-    width: 100%;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.5rem;
-    font-size: 0.813rem;
-    outline: none;
-  }
-  
-  .searchable-imei-search-input:focus {
-    border-color: #3b82f6;
-    outline: none;
-  }
-  
-  .searchable-imei-options {
-    max-height: 200px;
-    overflow-y: auto;
-  }
-  
-  .searchable-imei-option {
-    padding: 0.75rem;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    border-bottom: 1px solid #f1f5f9;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-  
-  .searchable-imei-option:hover {
-    background: #f1f5f9;
-  }
-  
-  .searchable-imei-option.selected {
-    background: #eff6ff;
-  }
-  
-  .searchable-imei-option-imei {
-    font-weight: 600;
-    font-family: monospace;
-    color: #1e293b;
-  }
-  
-  .searchable-imei-option-product {
-    font-size: 0.7rem;
-    color: #64748b;
-  }
-  
-  .searchable-imei-no-results {
-    padding: 1rem;
-    text-align: center;
-    color: #94a3b8;
-    font-size: 0.813rem;
-  }
-  
   @media (max-width: 640px) {
     .grid-cols-2 {
       grid-template-columns: 1fr;
@@ -1218,7 +1090,6 @@ const styles = `
     }
   }
   
-  /* Incomplete banner styles */
   .incomplete-alert-banner {
     background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
     border: 1px solid #fecaca;
@@ -1262,7 +1133,6 @@ const styles = `
     font-weight: normal;
   }
 
-  /* Payment Badge Styles */
   .payment-badge-cash { background: #dbeafe; color: #1e40af; padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.7rem; display: inline-block; }
   .payment-badge-card { background: #e0e7ff; color: #3730a3; padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.7rem; display: inline-block; }
   .payment-badge-check { background: #fef3c7; color: #92400e; padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.7rem; display: inline-block; }
@@ -1431,147 +1301,10 @@ const styles = `
     border-bottom: 1px solid #e5e7eb;
   }
   
-  .sales-loading {
-    text-align: center;
-    padding: 3rem 0;
-  }
-  
-  .sales-loading-spinner {
-    display: inline-block;
-    width: 2.5rem;
-    height: 2.5rem;
-    border: 3px solid #e5e7eb;
-    border-top-color: #3b82f6;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-  
   .spinning {
     animation: spin 1s linear infinite;
   }
-  
-  .sales-empty {
-    text-align: center;
-    color: #9ca3af;
-    padding: 3rem 0;
-  }
-    /* ========================================
-   FIX: Z-Index Layering for Modals & Dialogs
-   ======================================== */
-
-/* Base overlay for all modals (dimmed background) */
-.activation-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(2px);
-  z-index: 1000; /* Increased base z-index */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow-y: auto;
-  padding: 1rem;
-}
-
-/* Main modal dialog (Gestion des paiements, Détails, etc.) */
-.activation-dialog {
-  background: white;
-  border-radius: 0.75rem;
-  width: 100%;
-  max-width: 80rem;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  animation: dialogFadeIn 0.2s ease;
-  z-index: 1010; /* Above its own overlay */
-  position: relative;
-}
-
-/* Confirmation dialog (smaller modal that pops over the payment modal) */
-.confirmation-dialog {
-  max-width: 28rem;
-  z-index: 1100 !important; /* Ensures confirmation dialog is on top of everything */
-  position: relative;
-}
-
-/* When confirmation dialog is open inside payment modal overlay,
-   we need to ensure the confirmation overlay is on top */
-.activation-overlay:has(.confirmation-dialog) {
-  z-index: 2000; /* Higher z-index when confirmation dialog is present */
-}
-
-/* Ensure the confirmation dialog's overlay background is also layered correctly */
-.confirmation-dialog .activation-overlay {
-  z-index: 2001;
-}
-
-/* For any nested modals within dialogs */
-.activation-dialog .confirmation-dialog {
-  z-index: 2100;
-  position: relative;
-}
-
-/* Ensure payment modal body scroll doesn't affect confirmation */
-.activation-dialog-body {
-  position: relative;
-  z-index: 1;
-}
-
-/* Confirmation dialog within payment modal */
-#activation-payment-modal .confirmation-dialog,
-.activation-dialog .confirmation-dialog {
-  position: relative;
-  z-index: 9999;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-}
-
-/* Fix for any inline confirmation dialogs */
-.confirmation-dialog {
-  animation: dialogFadeIn 0.2s ease;
-}
-
-/* Ensure proper stacking context for modals */
-.activation-overlay,
-.activation-dialog,
-.confirmation-dialog {
-  isolation: isolate;
-}
-
-/* Animation */
-@keyframes dialogFadeIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-/* Responsive adjustments */
-@media (max-width: 640px) {
-  .confirmation-dialog {
-    margin: 1rem;
-    width: calc(100% - 2rem);
-  }
-}
 `;
-
-// ==================== STAT CARD COMPONENT ====================
-const StatCard = ({ icon: Icon, label, value, color = 'primary' }) => (
-  <div className={`activation-stat-card activation-stat-card-${color}`}>
-    <div className={`activation-stat-icon-wrapper activation-stat-icon-${color}`}>
-      <Icon size={24} />
-    </div>
-    <div className="activation-stat-content">
-      <div>
-        <div className="activation-stat-label">{label}</div>
-        <div className="activation-stat-value">{value}</div>
-      </div>
-    </div>
-  </div>
-);
 
 // ==================== COMPONENTS ====================
 const Badge = ({ children, variant = 'secondary' }) => {
@@ -1591,97 +1324,31 @@ const LoadingSpinner = () => (
   </div>
 );
 
-// ==================== SEARCHABLE IMEI SELECT COMPONENT ====================
-const SearchableImeiSelect = ({ options, value, onChange, placeholder = "Sélectionner un IMEI...", disabled = false }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const containerRef = useRef(null);
-  const searchInputRef = useRef(null);
-  
-  const selectedOption = options.find(opt => opt.imei === value);
-  
-  const filteredOptions = options.filter(opt => {
-    if (!searchTerm) return true;
-    const searchLower = searchTerm.toLowerCase();
-    return opt.imei.toLowerCase().includes(searchLower) ||
-           (opt.produit_nom && opt.produit_nom.toLowerCase().includes(searchLower));
-  });
-  
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
-        setIsOpen(false);
-        setSearchTerm('');
-      }
-    };
-    
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-  
-  useEffect(() => {
-    if (isOpen && searchInputRef.current) {
-      searchInputRef.current.focus();
-    }
-  }, [isOpen]);
-  
-  const handleSelect = (option) => {
-    onChange(option.imei);
-    setIsOpen(false);
-    setSearchTerm('');
-  };
-  
-  return (
-    <div className="searchable-imei-select" ref={containerRef}>
-      <div 
-        className={`searchable-imei-trigger ${isOpen ? 'open' : ''}`}
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-        style={{ cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1 }}
-      >
-        <span className={selectedOption ? 'searchable-imei-trigger-value' : 'searchable-imei-trigger-placeholder'}>
-          {selectedOption ? selectedOption.imei : placeholder}
-        </span>
-        <ChevronDown size={16} className={`searchable-imei-icon ${isOpen ? 'open' : ''}`} />
-      </div>
-      
-      {isOpen && !disabled && (
-        <div className="searchable-imei-dropdown">
-          <div className="searchable-imei-search">
-            <input
-              ref={searchInputRef}
-              type="text"
-              className="searchable-imei-search-input"
-              placeholder="Rechercher par IMEI ou produit..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-          <div className="searchable-imei-options">
-            {filteredOptions.length === 0 ? (
-              <div className="searchable-imei-no-results">
-                Aucun IMEI trouvé
-              </div>
-            ) : (
-              filteredOptions.map((option) => (
-                <div
-                  key={option.id}
-                  className={`searchable-imei-option ${selectedOption?.imei === option.imei ? 'selected' : ''}`}
-                  onClick={() => handleSelect(option)}
-                >
-                  <span className="searchable-imei-option-imei">{option.imei}</span>
-                  <span className="searchable-imei-option-product">{option.produit_nom}</span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
+const StatCard = ({ icon: Icon, label, value, color = 'primary' }) => (
+  <div className={`activation-stat-card activation-stat-card-${color}`}>
+    <div className={`activation-stat-icon-wrapper activation-stat-icon-${color}`}>
+      <Icon size={24} />
     </div>
-  );
+    <div className="activation-stat-content">
+      <div>
+        <div className="activation-stat-label">{label}</div>
+        <div className="activation-stat-value">{value}</div>
+      </div>
+    </div>
+  </div>
+);
+
+const getStatusBadge = (activation) => {
+  if (activation.status === 'suspended') return <Badge variant="warning">Suspendu</Badge>;
+  if (activation.status === 'expired') return <Badge variant="danger">Expiré</Badge>;
+  if (activation.status === 'pending') return <Badge variant="secondary">En attente</Badge>;
+  if (activation.expires_at && new Date(activation.expires_at) < new Date()) return <Badge variant="danger">Expiré</Badge>;
+  if (activation.days_remaining <= 30 && activation.days_remaining > 0) {
+    return <Badge variant="warning">Expire dans {activation.days_remaining}j</Badge>;
+  }
+  return <Badge variant="success">Actif</Badge>;
 };
 
-// ==================== CONFIRMATION DIALOG ====================
 const ConfirmationDialog = ({ isOpen, onClose, onConfirm, title, message, details, type = 'danger', confirmText = 'Confirmer', cancelText = 'Annuler', loading = false }) => {
   if (!isOpen) return null;
   
@@ -1726,7 +1393,6 @@ const ConfirmationDialog = ({ isOpen, onClose, onConfirm, title, message, detail
   );
 };
 
-// ==================== HISTORY MODAL ====================
 const HistoryModal = ({ isOpen, onClose, activation, history }) => {
   if (!isOpen || !activation) return null;
   
@@ -1835,8 +1501,6 @@ const HistoryModal = ({ isOpen, onClose, activation, history }) => {
   );
 };
 
-// Activation.jsx - Updated ActivationPaymentHistoryModal component
-
 const ActivationPaymentHistoryModal = ({ 
   isOpen, 
   activation, 
@@ -1915,20 +1579,11 @@ const ActivationPaymentHistoryModal = ({
     }
   }, [isOpen, activation?.id]);
 
-  // Get max amount based on selected payment type
   const getMaxAmountByType = () => {
     if (localPaymentType === 'activation') {
       return localOriginalRemaining;
     } else {
       return localRenewalRemaining;
-    }
-  };
-
-  const getRemainingLabel = () => {
-    if (localPaymentType === 'activation') {
-      return `Reste à payer (Activation): ${safeFormatPrice(localOriginalRemaining)} MAD`;
-    } else {
-      return `Reste à payer (Renouvellements): ${safeFormatPrice(localRenewalRemaining)} MAD`;
     }
   };
 
@@ -2203,7 +1858,6 @@ const ActivationPaymentHistoryModal = ({
             </div>
           ) : (
             <>
-              {/* Payment Summary - Enhanced with breakdown */}
               <div className="payment-summary-grid" style={{ 
                 display: 'grid', 
                 gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
@@ -2236,7 +1890,6 @@ const ActivationPaymentHistoryModal = ({
                 </div>
               </div>
 
-              {/* Payment History Table */}
               {localPayments && localPayments.length > 0 ? (
                 <table className="payment-history-table">
                   <thead>
@@ -2342,14 +1995,12 @@ const ActivationPaymentHistoryModal = ({
                 </div>
               )}
 
-              {/* Add Payment Form with Payment Type Selection */}
               <div style={{ marginTop: '1.5rem', borderTop: '1px solid #e5e7eb', paddingTop: '1rem' }}>
                 <div style={{ marginBottom: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <CreditCard size={16} />
                   Ajouter un nouveau paiement
                 </div>
                 
-                {/* Payment Type Selection Toggle */}
                 <div style={{ 
                   display: 'flex', 
                   gap: '0.5rem', 
@@ -2468,89 +2119,128 @@ const ActivationPaymentHistoryModal = ({
   );
 };
 
-// Helper functions
-const safeFormatPrice = (value) => {
-  if (value === null || value === undefined) return '0.00';
-  const num = parseFloat(value);
-  return isNaN(num) ? '0.00' : num.toFixed(2);
-};
-
-const safeParseNumber = (value) => {
-  if (value === null || value === undefined) return 0;
-  const num = parseFloat(value);
-  return isNaN(num) ? 0 : num;
-};
-
-const formatDate = (dateString) => {
-  if (!dateString) return '-';
-  return new Date(dateString).toLocaleDateString('fr-FR', {
-    day: '2-digit', month: '2-digit', year: 'numeric'
-  });
-};
-
-const getStatusBadge = (activation) => {
-  if (activation.status === 'suspended') return <Badge variant="warning">Suspendu</Badge>;
-  if (activation.status === 'expired') return <Badge variant="danger">Expiré</Badge>;
-  if (activation.status === 'pending') return <Badge variant="secondary">En attente</Badge>;
-  if (activation.expires_at && new Date(activation.expires_at) < new Date()) return <Badge variant="danger">Expiré</Badge>;
-  if (activation.days_remaining <= 30 && activation.days_remaining > 0) {
-    return <Badge variant="warning">Expire dans {activation.days_remaining}j</Badge>;
-  }
-  return <Badge variant="success">Actif</Badge>;
+const RenewalModal = ({ state, onClose, onConfirm, loading }) => {
+  if (!state.isOpen || !state.activation) return null;
+  
+  const [selectedPlan, setSelectedPlan] = useState(state.selectedPlan || '12m');
+  const [price, setPrice] = useState(state.price || 0);
+  
+  useEffect(() => {
+    setSelectedPlan(state.selectedPlan || '12m');
+    setPrice(state.price || 0);
+  }, [state.selectedPlan, state.price]);
+  
+  return (
+    <div className="activation-overlay">
+      <div className="activation-dialog" style={{ maxWidth: '32rem' }}>
+        <div className="activation-dialog-header">
+          <h2 className="activation-dialog-title">Renouvellement d'abonnement</h2>
+          <button onClick={onClose} className="activation-btn-icon"><X size={20} /></button>
+        </div>
+        <div className="activation-dialog-body">
+          <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+            <p className="text-sm mb-1"><strong>IMEI:</strong> <span className="font-mono">{state.activation.imei || state.activation.client_imei}</span></p>
+            <p className="text-sm mb-1"><strong>Client:</strong> {state.activation.vente?.client?.nom || state.activation.client?.nom || '-'}</p>
+            <p className="text-sm mb-1"><strong>Plan actuel:</strong> {PLAN_LABEL[state.activation.plan_abonnement]}</p>
+            <p className="text-sm"><strong>Expire le:</strong> {formatDate(state.activation.expires_at)}</p>
+            <p className="text-sm mt-2"><strong>Prix d'activation original:</strong> {safeFormatPrice(state.activation.price)} MAD</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="activation-form-group">
+              <label className="activation-label activation-label-required">Nouvelle durée</label>
+              <select 
+                className="activation-select" 
+                value={selectedPlan} 
+                onChange={(e) => setSelectedPlan(e.target.value)}
+              >
+                <option value="1m">+ 1 mois</option>
+                <option value="3m">+ 3 mois</option>
+                <option value="6m">+ 6 mois</option>
+                <option value="12m">+ 12 mois</option>
+              </select>
+            </div>
+            <div className="activation-form-group">
+              <label className="activation-label activation-label-required">Prix de renouvellement (MAD)</label>
+              <div className="price-input-group">
+                <input 
+                  type="number" 
+                  className="activation-input price-input" 
+                  placeholder="0.00"
+                  value={price||''}
+                  onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
+                  step="0.01"
+                  min="0"
+                />
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg text-sm">
+            <p className="font-medium text-blue-800 mb-1">Information:</p>
+            <p className="text-blue-700">Le renouvellement ajoutera <strong>{PLAN_LABEL[selectedPlan]}</strong> à l'abonnement actuel.</p>
+            <p className="text-blue-700">Le prix d'activation original ({safeFormatPrice(state.activation.price)} MAD) restera inchangé.</p>
+            {price > 0 && (
+              <p className="text-blue-700 mt-1">Montant du renouvellement: <strong>{safeFormatPrice(price)} MAD</strong></p>
+            )}
+          </div>
+        </div>
+        <div className="activation-dialog-footer">
+          <button onClick={onClose} className="activation-btn activation-btn-secondary" disabled={loading}>Annuler</button>
+          <button onClick={() => onConfirm(selectedPlan, price)} disabled={loading || !price} className="activation-btn activation-btn-primary">
+            {loading ? <><div className="activation-spinner" style={{ width: '1rem', height: '1rem', borderWidth: '2px' }} /> Renouvellement...</> : `Renouveler (${safeFormatPrice(price)} MAD)`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 // ==================== MAIN ACTIVATION COMPONENT ====================
 const Activation = () => {
   const dispatch = useDispatch();
   
-  const activations = useSelector(selectActivations);
   const stats = useSelector(selectActivationStats);
-  const loading = useSelector(selectActivationsLoading);
-  const pagination = useSelector(selectActivationsPagination);
   const availableImeis = useSelector(selectAvailableImeis);
   const products = useSelector(selectProducts);
+  
+  const [allActivations, setAllActivations] = useState([]);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
+  const [isLoadingAll, setIsLoadingAll] = useState(false);
   
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [operatorFilter, setOperatorFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [showExpiringOnly, setShowExpiringOnly] = useState(false);
+  const [showIncompleteOnly, setShowIncompleteOnly] = useState(false);
+  const [alertDismissed, setAlertDismissed] = useState(false);
+  
   const [showDetailModal, setShowDetailModal] = useState(null);
+  const [showActivationPaymentHistory, setShowActivationPaymentHistory] = useState(false);
+  const [selectedActivationForPayment, setSelectedActivationForPayment] = useState(null);
   const [loadingAction, setLoadingAction] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
-  const [alertDismissed, setAlertDismissed] = useState(false);
-  const [showExpiringOnly, setShowExpiringOnly] = useState(false);
-  const [showIncompleteOnly, setShowIncompleteOnly] = useState(false);
-  const [showActivationPaymentHistory, setShowActivationPaymentHistory] = useState(false);
-  const [selectedActivationForPayment, setSelectedActivationForPayment] = useState(null);
   
-  // Inline editing states
   const [editingCell, setEditingCell] = useState({ id: null, field: null });
   const [editValue, setEditValue] = useState('');
   const [editImeiType, setEditImeiType] = useState('existing');
   
-  // Items per page
-  const itemsPerPage = 15;
-  
-  // Confirmation dialog state
   const [confirmationState, setConfirmationState] = useState({
     isOpen: false, title: '', message: '', details: null, type: 'danger', confirmText: 'Confirmer', onConfirm: null
   });
   
-  // Renew selection modal state
   const [renewSelectionState, setRenewSelectionState] = useState({
     isOpen: false, activation: null, selectedPlan: '12m', price: 0
   });
   
-  // History modal state
   const [historyState, setHistoryState] = useState({
     isOpen: false, activation: null, history: []
   });
   
   const [actionHistory, setActionHistory] = useState({});
-  
-  // Toast state
   const [toasts, setToasts] = useState([]);
+  
+  const itemsPerPage = 15;
   
   const showToast = (message, type = 'success') => {
     const id = Date.now();
@@ -2579,25 +2269,74 @@ const Activation = () => {
     });
   };
   
-  // Fetch available IMEIs and products on mount
-  useEffect(() => {
-    dispatch(fetchAvailableImeis());
+  const loadAllActivations = useCallback(async (forceRefresh = false) => {
+    if (initialLoadDone && !forceRefresh) return;
+    
+    setIsLoadingAll(true);
+    
+    try {
+      const token = localStorage.getItem('token');
+      
+      const cached = localStorage.getItem('activations_cache');
+      const cacheTime = localStorage.getItem('activations_cache_time');
+      const now = Date.now();
+      
+      if (!forceRefresh && cached && cacheTime && (now - parseInt(cacheTime)) < 30000) {
+        const cachedData = JSON.parse(cached);
+        setAllActivations(cachedData);
+        setInitialLoadDone(true);
+        setIsLoadingAll(false);
+        dispatch(setFullList(cachedData));
+        return;
+      }
+      
+      const response = await fetch(`${API_URL}/activations?per_page=5000`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const activationsList = data.data || data.activations || [];
+        
+        setAllActivations(activationsList);
+        localStorage.setItem('activations_cache', JSON.stringify(activationsList));
+        localStorage.setItem('activations_cache_time', now.toString());
+        dispatch(setFullList(activationsList));
+        setInitialLoadDone(true);
+      }
+    } catch (err) {
+      console.error('Error loading activations:', err);
+      setErrorMessage('Erreur lors du chargement des activations');
+      setTimeout(() => setErrorMessage(null), 3000);
+    } finally {
+      setIsLoadingAll(false);
+    }
+  }, [dispatch, initialLoadDone]);
+  
+  const loadStats = useCallback(async () => {
+    try {
+      await dispatch(fetchActivationStats()).unwrap();
+    } catch (err) {
+      console.error('Error loading stats:', err);
+    }
   }, [dispatch]);
   
   useEffect(() => {
-    loadData();
-  }, [dispatch, currentPage]);
+    loadAllActivations();
+    loadStats();
+    dispatch(fetchAvailableImeis());
+  }, [loadAllActivations, loadStats, dispatch]);
   
-  const loadData = () => {
-    dispatch(fetchActivations({ page: currentPage, per_page: itemsPerPage }));
-    dispatch(fetchActivationStats());
-  };
+  const refreshData = useCallback(() => {
+    loadAllActivations(true);
+    loadStats();
+    showToast('Données actualisées', 'success');
+  }, [loadAllActivations, loadStats]);
   
-  // Build action history
   useEffect(() => {
-    if (activations && activations.length > 0) {
+    if (allActivations && allActivations.length > 0) {
       const historyMap = {};
-      activations.forEach(activation => {
+      allActivations.forEach(activation => {
         const history = [];
         
         if (activation.activated_at) {
@@ -2640,34 +2379,33 @@ const Activation = () => {
       });
       setActionHistory(historyMap);
     }
-  }, [activations]);
+  }, [allActivations]);
   
   const expiringActivations = useMemo(() => {
-    if (!activations || !Array.isArray(activations)) return [];
+    if (!allActivations || !Array.isArray(allActivations)) return [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    return activations.filter(act => {
+    return allActivations.filter(act => {
       if (!act.expires_at) return false;
       const expiryDate = new Date(act.expires_at);
       expiryDate.setHours(0, 0, 0, 0);
       const daysRemaining = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
       return daysRemaining > 0 && daysRemaining <= 7 && act.status !== 'expired' && act.status !== 'suspended';
     });
-  }, [activations]);
+  }, [allActivations]);
   
   const expiringCount = expiringActivations.length;
   
-  // Compute incomplete activations
   const incompleteActivations = useMemo(() => {
-    if (!activations || !Array.isArray(activations)) return [];
-    return activations.filter(act => isActivationIncomplete(act));
-  }, [activations]);
+    if (!allActivations || !Array.isArray(allActivations)) return [];
+    return allActivations.filter(act => isActivationIncomplete(act));
+  }, [allActivations]);
   
   const incompleteCount = incompleteActivations.length;
   
   const filteredActivations = useMemo(() => {
-    if (!activations || !Array.isArray(activations)) return [];
-    let filtered = activations;
+    if (!allActivations || !Array.isArray(allActivations)) return [];
+    let filtered = [...allActivations];
     
     if (showExpiringOnly) {
       const expiringIds = new Set(expiringActivations.map(a => a.id));
@@ -2688,44 +2426,33 @@ const Activation = () => {
     }
     
     if (search) {
+      const searchLower = search.toLowerCase();
       filtered = filtered.filter(act => 
-        act.imei?.toLowerCase().includes(search.toLowerCase()) ||
-        act.client_imei?.toLowerCase().includes(search.toLowerCase()) ||
-        act.numero_sim?.toLowerCase().includes(search.toLowerCase()) ||
-        act.matricule?.toLowerCase().includes(search.toLowerCase()) ||
-        act.vente?.client?.nom?.toLowerCase().includes(search.toLowerCase()) ||
+        act.imei?.toLowerCase().includes(searchLower) ||
+        act.client_imei?.toLowerCase().includes(searchLower) ||
+        act.numero_sim?.toLowerCase().includes(searchLower) ||
+        act.matricule?.toLowerCase().includes(searchLower) ||
+        act.vente?.client?.nom?.toLowerCase().includes(searchLower) ||
         act.vente?.id?.toString().includes(search)
       );
     }
     
     return filtered;
-  }, [activations, search, statusFilter, operatorFilter, showExpiringOnly, showIncompleteOnly, expiringActivations, incompleteActivations]);
+  }, [allActivations, search, statusFilter, operatorFilter, showExpiringOnly, showIncompleteOnly, expiringActivations, incompleteActivations]);
   
   const paginatedActivations = useMemo(() => {
-    if (showExpiringOnly || showIncompleteOnly) {
-      const start = (currentPage - 1) * itemsPerPage;
-      return filteredActivations.slice(start, start + itemsPerPage);
-    }
-    return filteredActivations;
-  }, [filteredActivations, currentPage, itemsPerPage, showExpiringOnly, showIncompleteOnly]);
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredActivations.slice(start, start + itemsPerPage);
+  }, [filteredActivations, currentPage]);
   
-  const totalPages = (showExpiringOnly || showIncompleteOnly)
-    ? Math.ceil(filteredActivations.length / itemsPerPage)
-    : (pagination?.last_page || 1);
+  const totalPages = useMemo(() => {
+    return Math.ceil(filteredActivations.length / itemsPerPage);
+  }, [filteredActivations]);
   
-  // Get filtered IMEIs for a specific activation
-  const getFilteredImeisForActivation = (activation) => {
-    if (!availableImeis || !Array.isArray(availableImeis)) return [];
-    
-    // Filter IMEIs by product ID if the activation has a produit_id
-    if (activation.produit_id) {
-      return availableImeis.filter(imei => imei.produit_id === activation.produit_id);
-    }
-    
-    return availableImeis;
-  };
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter, operatorFilter, showExpiringOnly, showIncompleteOnly]);
   
-  // ==================== INLINE EDITING FUNCTIONS ====================
   const startEditing = (activationId, field, currentValue, currentImeiType = null) => {
     setEditingCell({ id: activationId, field });
     let displayValue = currentValue !== null && currentValue !== undefined ? currentValue.toString() : '';
@@ -2756,11 +2483,9 @@ const Activation = () => {
       
       if (field === 'imei') {
         if (editImeiType === 'existing') {
-          // Find the activation to get its produit_id
-          const activation = activations.find(a => a.id === activationId);
+          const activation = allActivations.find(a => a.id === activationId);
           const selectedImei = availableImeis.find(imei => imei.imei === value);
           
-          // Validate that the selected IMEI belongs to the same product
           if (activation && selectedImei && activation.produit_id && activation.produit_id !== selectedImei.produit_id) {
             const product = products.find(p => p.id === activation.produit_id);
             setErrorMessage(`Cet IMEI n'est pas compatible avec le produit "${product?.nom || 'associé'}"`);
@@ -2799,7 +2524,13 @@ const Activation = () => {
       
       await dispatch(updateActivation({ id: activationId, ...updateData })).unwrap();
       showToast(`${getFieldLabel(field)} mis à jour avec succès`, 'success');
-      loadData();
+      
+      setAllActivations(prev => prev.map(act => 
+        act.id === activationId ? { ...act, ...updateData } : act
+      ));
+      
+      localStorage.removeItem('activations_cache');
+      
     } catch (err) {
       setErrorMessage(err || `Erreur lors de la mise à jour de ${getFieldLabel(field)}`);
       setTimeout(() => setErrorMessage(null), 3000);
@@ -2830,20 +2561,16 @@ const Activation = () => {
     }
   };
   
-  // Helper to check if a field value is empty
   const isFieldEmpty = (value) => {
     return value === null || value === undefined || value === '' || (typeof value === 'string' && value.trim() === '');
   };
   
-  // ==================== RENDER EDITABLE CELL ====================
   const renderEditableCell = (activation, field, value, type = 'text') => {
     const isEditing = editingCell.id === activation.id && editingCell.field === field;
     const isEmpty = isFieldEmpty(value);
     
     if (isEditing) {
       if (field === 'imei') {
-        const filteredImeis = getFilteredImeisForActivation(activation);
-        
         return (
           <div className="inline-edit-wrapper" style={{ minWidth: '300px' }}>
             <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
@@ -2857,11 +2584,14 @@ const Activation = () => {
               </label>
             </div>
             {editImeiType === 'existing' ? (
-              <SearchableImeiSelect
-                options={filteredImeis}
+              <input
+                type="text"
+                className="inline-edit-input"
                 value={editValue}
-                onChange={(selectedImei) => setEditValue(selectedImei)}
-                placeholder="-- Sélectionner un IMEI --"
+                onChange={(e) => setEditValue(e.target.value)}
+                onKeyDown={(e) => handleKeyDown(e, activation.id, field)}
+                placeholder="Saisir l'IMEI"
+                autoFocus
               />
             ) : (
               <input
@@ -2940,7 +2670,6 @@ const Activation = () => {
       );
     }
     
-    // Display value
     let displayValue = value || '-';
     if (field === 'imei') {
       let imeiDisplay = '';
@@ -2982,7 +2711,6 @@ const Activation = () => {
     );
   };
   
-  // ==================== OTHER HANDLERS ====================
   const openRenewSelectionModal = (activation) => {
     setRenewSelectionState({ 
       isOpen: true, 
@@ -2992,8 +2720,8 @@ const Activation = () => {
     });
   };
   
-  const handleRenewWithPlan = async () => {
-    const { activation, selectedPlan, price } = renewSelectionState;
+  const handleRenewWithPlan = async (selectedPlan, price) => {
+    const { activation } = renewSelectionState;
     if (!activation || !selectedPlan) return;
     
     if (!price || price <= 0) {
@@ -3004,7 +2732,6 @@ const Activation = () => {
     setRenewSelectionState(prev => ({ ...prev, isOpen: false }));
     setLoadingAction(true);
     setErrorMessage(null);
-    setSuccessMessage(null);
     
     try {
       await dispatch(updateActivation({ 
@@ -3013,8 +2740,16 @@ const Activation = () => {
         renew: true,
         price: price
       })).unwrap();
+      
       showToast(`Abonnement renouvelé avec +${PLAN_LABEL[selectedPlan]} pour ${safeFormatPrice(price)} MAD`, 'success');
-      loadData();
+      
+      setAllActivations(prev => prev.map(act => 
+        act.id === activation.id ? { ...act, plan_abonnement: selectedPlan } : act
+      ));
+      
+      localStorage.removeItem('activations_cache');
+      loadStats();
+      
     } catch (err) {
       setErrorMessage(err || 'Erreur lors du renouvellement');
       setTimeout(() => setErrorMessage(null), 3000);
@@ -3031,7 +2766,14 @@ const Activation = () => {
       const statusText = newStatus === 'suspended' ? 'suspendue' : 'réactivée';
       await dispatch(updateActivation({ id: activation.id, status: newStatus })).unwrap();
       showToast(`Activation ${statusText} avec succès`, 'success');
-      loadData();
+      
+      setAllActivations(prev => prev.map(act => 
+        act.id === activation.id ? { ...act, status: newStatus } : act
+      ));
+      
+      localStorage.removeItem('activations_cache');
+      loadStats();
+      
     } catch (err) {
       setErrorMessage(err || 'Erreur lors du changement de statut');
       setTimeout(() => setErrorMessage(null), 3000);
@@ -3064,6 +2806,27 @@ const Activation = () => {
         await handleDeleteActivation(activation);
       }
     });
+  };
+  
+  const handleDeleteActivation = async (activation) => {
+    setLoadingAction(true);
+    setErrorMessage(null);
+    
+    try {
+      await dispatch(deleteActivation(activation.id)).unwrap();
+      showToast('Activation supprimée avec succès', 'success');
+      
+      setAllActivations(prev => prev.filter(act => act.id !== activation.id));
+      
+      localStorage.removeItem('activations_cache');
+      loadStats();
+      
+    } catch (err) {
+      setErrorMessage(err || 'Erreur lors de la suppression');
+      setTimeout(() => setErrorMessage(null), 3000);
+    } finally {
+      setLoadingAction(false);
+    }
   };
   
   const showHistoryModal = (activation) => {
@@ -3101,29 +2864,9 @@ const Activation = () => {
     });
   };
   
-  const handleDeleteActivation = async (activation) => {
-    setLoadingAction(true);
-    setErrorMessage(null);
-    
-    try {
-      await dispatch(deleteActivation(activation.id)).unwrap();
-      showToast('Activation supprimée avec succès', 'success');
-      loadData();
-    } catch (err) {
-      setErrorMessage(err || 'Erreur lors de la suppression');
-      setTimeout(() => setErrorMessage(null), 3000);
-    } finally {
-      setLoadingAction(false);
-    }
-  };
-  
   const handlePageChange = (page) => {
-    if (!showExpiringOnly && !showIncompleteOnly) {
-      setCurrentPage(page);
-      dispatch(fetchActivations({ page: page, per_page: itemsPerPage }));
-    } else {
-      setCurrentPage(page);
-    }
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   
   const getPageNumbers = (totalPages) => {
@@ -3171,9 +2914,11 @@ const Activation = () => {
     setShowExpiringOnly(false);
     setShowIncompleteOnly(false);
     setCurrentPage(1);
+    setSearch('');
+    setStatusFilter('all');
+    setOperatorFilter('all');
   };
   
-  // Export function
   const exportToExcel = async () => {
     try {
       const workbook = new ExcelJS.Workbook();
@@ -3260,7 +3005,7 @@ const Activation = () => {
         cell.border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } };
       });
       
-      const dataToExport = showExpiringOnly || showIncompleteOnly ? filteredActivations : activations;
+      const dataToExport = showExpiringOnly || showIncompleteOnly ? filteredActivations : allActivations;
       dataToExport.forEach(activation => {
         const imeiType = activation.imei ? 'Existant' : (activation.client_imei ? 'Client' : '-');
         const emptyFields = getEmptyFields(activation);
@@ -3303,17 +3048,21 @@ const Activation = () => {
       const buffer = await workbook.xlsx.writeBuffer();
       const fileName = `activations_gps_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.xlsx`;
       saveAs(new Blob([buffer]), fileName);
+      showToast('Export Excel réussi', 'success');
     } catch (error) {
       console.error('Export error:', error);
       setErrorMessage('Erreur lors de l\'export Excel');
     }
   };
   
-  if (loading && (!activations || activations.length === 0)) {
+  if ((!initialLoadDone && isLoadingAll) || (allActivations.length === 0 && isLoadingAll)) {
     return (
       <>
         <style>{styles}</style>
-        <LoadingSpinner />
+        <div className="activation-loading">
+          <div className="activation-spinner"></div>
+          <p style={{ marginTop: '1rem', color: '#64748b' }}>Chargement des activations...</p>
+        </div>
       </>
     );
   }
@@ -3322,7 +3071,6 @@ const Activation = () => {
     <>
       <style>{styles}</style>
       
-      {/* Toast Container */}
       {toasts.length > 0 && (
         <div style={{ position: 'fixed', bottom: '1rem', right: '1rem', zIndex: 100, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           {toasts.map(toast => (
@@ -3347,68 +3095,12 @@ const Activation = () => {
         loading={loadingAction}
       />
       
-      {renewSelectionState.isOpen && renewSelectionState.activation && (
-        <div className="activation-overlay">
-          <div className="activation-dialog" style={{ maxWidth: '32rem' }}>
-            <div className="activation-dialog-header">
-              <h2 className="activation-dialog-title">Renouvellement d'abonnement</h2>
-              <button onClick={() => setRenewSelectionState(prev => ({ ...prev, isOpen: false }))} className="activation-btn-icon"><X size={20} /></button>
-            </div>
-            <div className="activation-dialog-body">
-              <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                <p className="text-sm mb-1"><strong>IMEI:</strong> <span className="font-mono">{renewSelectionState.activation.imei || renewSelectionState.activation.client_imei}</span></p>
-                <p className="text-sm mb-1"><strong>Client:</strong> {renewSelectionState.activation.vente?.client?.nom || renewSelectionState.activation.client?.nom || '-'}</p>
-                <p className="text-sm mb-1"><strong>Plan actuel:</strong> {PLAN_LABEL[renewSelectionState.activation.plan_abonnement]}</p>
-                <p className="text-sm"><strong>Expire le:</strong> {formatDate(renewSelectionState.activation.expires_at)}</p>
-                <p className="text-sm mt-2"><strong>Prix d'activation original:</strong> {safeFormatPrice(renewSelectionState.activation.price)} MAD</p>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="activation-form-group">
-                  <label className="activation-label activation-label-required">Nouvelle durée</label>
-                  <select 
-                    className="activation-select" 
-                    value={renewSelectionState.selectedPlan} 
-                    onChange={(e) => setRenewSelectionState(prev => ({ ...prev, selectedPlan: e.target.value }))}
-                  >
-                    <option value="1m">+ 1 mois</option>
-                    <option value="3m">+ 3 mois</option>
-                    <option value="6m">+ 6 mois</option>
-                    <option value="12m">+ 12 mois</option>
-                  </select>
-                </div>
-                <div className="activation-form-group">
-                  <label className="activation-label activation-label-required">Prix de renouvellement (MAD)</label>
-                  <div className="price-input-group">
-                    <input 
-                      type="number" 
-                      className="activation-input price-input" 
-                      placeholder="0.00"
-                      value={renewSelectionState.price ||""}
-                      onChange={(e) => setRenewSelectionState(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
-                      step="0.01"
-                      min="0"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="mt-4 p-3 bg-blue-50 rounded-lg text-sm">
-                <p className="font-medium text-blue-800 mb-1">Information:</p>
-                <p className="text-blue-700">Le renouvellement ajoutera <strong>{PLAN_LABEL[renewSelectionState.selectedPlan]}</strong> à l'abonnement actuel.</p>
-                <p className="text-blue-700">Le prix d'activation original ({safeFormatPrice(renewSelectionState.activation.price)} MAD) restera inchangé.</p>
-                {renewSelectionState.price > 0 && (
-                  <p className="text-blue-700 mt-1">Montant du renouvellement: <strong>{safeFormatPrice(renewSelectionState.price)} MAD</strong></p>
-                )}
-              </div>
-            </div>
-            <div className="activation-dialog-footer">
-              <button onClick={() => setRenewSelectionState(prev => ({ ...prev, isOpen: false }))} className="activation-btn activation-btn-secondary" disabled={loadingAction}>Annuler</button>
-              <button onClick={handleRenewWithPlan} disabled={loadingAction || !renewSelectionState.price} className="activation-btn activation-btn-primary">
-                {loadingAction ? <><div className="activation-spinner" style={{ width: '1rem', height: '1rem', borderWidth: '2px' }} /> Renouvellement...</> : `Renouveler (${safeFormatPrice(renewSelectionState.price)} MAD)`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <RenewalModal
+        state={renewSelectionState}
+        onClose={() => setRenewSelectionState(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={handleRenewWithPlan}
+        loading={loadingAction}
+      />
       
       <HistoryModal isOpen={historyState.isOpen} onClose={() => setHistoryState(prev => ({ ...prev, isOpen: false }))} activation={historyState.activation} history={historyState.history} />
       
@@ -3419,7 +3111,7 @@ const Activation = () => {
           setShowActivationPaymentHistory(false);
           setSelectedActivationForPayment(null);
         }}
-        onPaymentChange={loadData}
+        onPaymentChange={refreshData}
         showToast={showToast}
         showConfirm={showConfirm}
       />
@@ -3428,14 +3120,16 @@ const Activation = () => {
         <div className="activation-page-header">
           <div>
             <h1 className="activation-title">Activations GPS</h1>
-            <p className="activation-subtitle">Gérez toutes les activations des traceurs GPS (Cliquez sur n'importe quelle cellule pour la modifier)</p>
+            <p className="activation-subtitle">
+              {allActivations.length} activation(s) au total | Page {currentPage} sur {totalPages}
+            </p>
           </div>
           <div className="activation-actions">
             <button onClick={exportToExcel} className="activation-btn activation-btn-outline">
               <FileSpreadsheet size={16} /> Exporter Excel
             </button>
-            <button onClick={() => loadData()} className="activation-btn activation-btn-outline">
-              <RefreshCw size={16} /> Actualiser
+            <button onClick={refreshData} className="activation-btn activation-btn-outline" disabled={isLoadingAll}>
+              <RefreshCw size={16} className={isLoadingAll ? 'spinning' : ''} /> Actualiser
             </button>
             {(showExpiringOnly || showIncompleteOnly) && (
               <button onClick={clearFilters} className="activation-btn activation-btn-outline">
@@ -3446,24 +3140,20 @@ const Activation = () => {
         </div>
         
         <div className="activation-stats-grid">
-          <StatCard icon={Satellite} label="Total Activations" value={stats?.total_activations || 0} color="primary" />
+          <StatCard icon={Satellite} label="Total Activations" value={allActivations.length || 0} color="primary" />
           <StatCard 
             icon={DollarSign} 
             label="Chiffre d'affaires" 
             value={`${safeFormatPrice(
-              (activations || []).reduce(
-                (sum, act) => sum + (act.amount_paid || 0), 
-                0
-              )
+              allActivations.reduce((sum, act) => sum + (act.amount_paid || 0), 0)
             )} MAD`} 
             color="success" 
           />
-          <StatCard icon={CheckCircle2} label="Actives" value={stats?.active_activations || 0} color="success" />
-          <StatCard icon={Clock} label="Expirent bientôt" value={stats?.expiring_soon || 0} color="warning" />
-          <StatCard icon={AlertTriangle} label="Expirées" value={stats?.expired_activations || 0} color="danger" />
+          <StatCard icon={CheckCircle2} label="Actives" value={stats?.active_activations || allActivations.filter(a => a.status === 'active').length} color="success" />
+          <StatCard icon={Clock} label="Expirent bientôt" value={expiringCount} color="warning" />
+          <StatCard icon={AlertTriangle} label="Incomplètes" value={incompleteCount} color="danger" />
         </div>
         
-        {/* Expiring Alert Banner */}
         {expiringCount > 0 && !alertDismissed && !showExpiringOnly && !showIncompleteOnly && (
           <div className="alert-banner" onClick={handleAlertClick} style={{ cursor: 'pointer', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '0.5rem', padding: '0.75rem 1rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <AlertTriangle size={20} style={{ color: '#d97706' }} />
@@ -3475,7 +3165,6 @@ const Activation = () => {
           </div>
         )}
         
-        {/* Incomplete Activations Alert Banner */}
         {incompleteCount > 0 && !showIncompleteOnly && !showExpiringOnly && (
           <div className="incomplete-alert-banner" onClick={handleIncompleteClick}>
             <AlertCircle size={22} />
@@ -3497,7 +3186,7 @@ const Activation = () => {
               <Search className="activation-search-icon" />
               <input 
                 className="activation-search-input" 
-                placeholder="Rechercher par IMEI, N° SIM, matricule, client, N° vente..." 
+                placeholder="Rechercher par IMEI, N° SIM, matricule, client..." 
                 value={search} 
                 onChange={(e) => setSearch(e.target.value)} 
               />
@@ -3520,12 +3209,12 @@ const Activation = () => {
               )}
               {showIncompleteOnly && (
                 <div style={{ padding: '0.5rem 0.75rem', background: '#fee2e2', borderRadius: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#991b1b' }}>
-                  🔍 Filtre: Activations incomplètes uniquement
+                  🔍 Filtre: Activations incomplètes uniquement ({incompleteCount})
                 </div>
               )}
               {showExpiringOnly && (
                 <div style={{ padding: '0.5rem 0.75rem', background: '#fef3c7', borderRadius: '0.5rem', fontSize: '0.875rem', fontWeight: 500, color: '#92400e' }}>
-                  🔍 Filtre: Expirations proches uniquement
+                  🔍 Filtre: Expirations proches uniquement ({expiringCount})
                 </div>
               )}
             </div>
@@ -3552,7 +3241,7 @@ const Activation = () => {
                 </tr>
               </thead>
               <tbody>
-                {(showExpiringOnly || showIncompleteOnly ? paginatedActivations : (paginatedActivations.length > 0 ? paginatedActivations : filteredActivations)).map(activation => {
+                {paginatedActivations.map(activation => {
                   const daysRemaining = activation.days_remaining || 
                     (activation.expires_at ? Math.ceil((new Date(activation.expires_at) - new Date()) / (1000 * 60 * 60 * 24)) : 999);
                   const isExpiringSoon = daysRemaining > 0 && daysRemaining <= 7 && activation.status === 'active';
@@ -3572,7 +3261,7 @@ const Activation = () => {
                             ⚠️
                           </span>
                         )}
-                      </td>
+                                            </td>
                       <td>{imeiTypeLabel}</td>
                       <td>{renderEditableCell(activation, 'imei', activation.imei || activation.client_imei, 'text')}</td>
                       <td>{renderEditableCell(activation, 'numero_sim', activation.numero_sim, 'text')}</td>
@@ -3598,14 +3287,14 @@ const Activation = () => {
                         {safeFormatPrice(activation.amount_paid || 0)} MAD
                       </td>
                       <td className="text-red-500 font-medium">
-                        {safeFormatPrice(activation.remaining_amount || (totalPaid - (activation.amount_paid || 0)))}
+                        {safeFormatPrice(activation.remaining_amount || 0)} MAD
                       </td>
                       <td>{renderEditableCell(activation, 'matricule', activation.matricule, 'text')}</td>
                       <td className={daysRemaining <= 30 && daysRemaining > 0 ? 'text-red-600' : ''}>
                         {formatDate(activation.expires_at)}
                         {daysRemaining > 0 && daysRemaining < 999 && <span className="text-xs ml-2">({daysRemaining}j{isExpiringSoon && ' ⚠️'})</span>}
                       </td>
-                                            <td>{getStatusBadge(activation)}</td>
+                      <td>{getStatusBadge(activation)}</td>
                       <td>
                         <div className="action-buttons">
                           <button onClick={() => setShowDetailModal(activation)} className="activation-icon-btn" title="Détails">
@@ -3638,7 +3327,7 @@ const Activation = () => {
                     </tr>
                   );
                 })}
-                {filteredActivations.length === 0 && (
+                {paginatedActivations.length === 0 && (
                   <tr>
                     <td colSpan={14} className="activation-empty">
                       <Satellite size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
