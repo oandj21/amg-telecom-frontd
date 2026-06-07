@@ -11,7 +11,7 @@ const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-productio
 const api = axios.create({
   baseURL: API_URL,
   withCredentials: true,
-  timeout: 15000,
+  timeout: 30000,
   headers: {
     "Content-Type": "application/json",
     "Accept": "application/json",
@@ -1308,7 +1308,214 @@ export const downloadReport = createAsyncThunk("reports/download", async (id, th
     return handleError(error, thunkAPI);
   }
 });
+// ==================== INVOICE ACTIONS ====================
 
+// In store.jsx, verify these endpoints:
+export const fetchNextInvoiceNumber = createAsyncThunk("invoices/fetchNextNumber", async (_, thunkAPI) => {
+  try {
+    const response = await api.get("/invoices/next-number");
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const fetchCurrentInvoiceNumber = createAsyncThunk("invoices/fetchCurrentNumber", async (_, thunkAPI) => {
+  try {
+    const response = await api.get("/invoices/current-number");
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const updateInvoiceCounter = createAsyncThunk("invoices/updateCounter", async (value, thunkAPI) => {
+  try {
+    const response = await api.post("/invoices/set-counter", { value });
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const resetInvoiceCounterAction = createAsyncThunk("invoices/resetCounter", async (_, thunkAPI) => {
+  try {
+    const response = await api.post("/invoices/reset-counter");
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const fetchCounterInfo = createAsyncThunk("invoices/fetchCounterInfo", async (_, thunkAPI) => {
+  try {
+    const response = await api.get("/invoices/counter-info");
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+// DEVIS management
+export const fetchNextDevisNumber = createAsyncThunk("invoices/fetchNextDevis", async (_, thunkAPI) => {
+  try {
+    const response = await api.get("/invoices/next-devis");
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const saveDevis = createAsyncThunk("invoices/saveDevis", async ({ clientId, devisNumber }, thunkAPI) => {
+  try {
+    const response = await api.post("/invoices/track-devis", { client_id: clientId, devis_number: devisNumber });
+    return response.data;
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const fetchClientDevis = createAsyncThunk("invoices/fetchClientDevis", async (clientId, thunkAPI) => {
+  try {
+    const response = await api.get(`/invoices/client-devis/${clientId}`);
+    return { clientId, devis: response.data.devis };
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+// Individual invoice tracking (gray button)
+export const saveIndividualInvoice = createAsyncThunk("invoices/saveIndividual", async ({ clientId, itemId, invoiceNumber }, thunkAPI) => {
+  try {
+    console.log('📤 SAVE INDIVIDUAL INVOICE - Payload:', { 
+      client_id: clientId, 
+      item_id: itemId, 
+      invoice_number: invoiceNumber 
+    });
+    
+    const response = await api.post("/invoices/track-individual", { 
+      client_id: clientId, 
+      item_id: itemId, 
+      invoice_number: invoiceNumber 
+    });
+    
+    console.log('📥 SAVE RESPONSE:', response.data);
+    
+    // Return the data in a consistent format
+    return { 
+      clientId, 
+      itemId, 
+      invoiceNumber, 
+      data: response.data 
+    };
+  } catch (error) {
+    console.error('❌ SAVE ERROR:', error.response?.data || error.message);
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const checkIndividualInvoiceStatus = createAsyncThunk("invoices/checkIndividual", async ({ clientId, itemId }, thunkAPI) => {
+  try {
+    const response = await api.get(`/invoices/track-individual/${clientId}/${itemId}`);
+    return { clientId, itemId, data: response.data };
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const fetchIndividualInvoiceNumber = createAsyncThunk("invoices/fetchIndividualNumber", async ({ clientId, itemId }, thunkAPI) => {
+  try {
+    const response = await api.get(`/invoices/track-individual/number/${clientId}/${itemId}`);
+    return { clientId, itemId, invoiceNumber: response.data.invoice_number };
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+export const fetchGeneratedIndividualItems = createAsyncThunk("invoices/fetchGeneratedItems", async (clientId, thunkAPI) => {
+  try {
+    console.log('📤 API Call: GET /invoices/track-individual/items/', clientId);
+    const response = await api.get(`/invoices/track-individual/items/${clientId}`);
+    console.log('📥 API Response status:', response.status);
+    console.log('📥 API Response data:', response.data);
+    
+    // The API returns { success: true, items: [...] }
+    const items = response.data.items || [];
+    console.log('📥 Extracted items:', items);
+    
+    return { clientId, items: items };
+  } catch (error) {
+    console.error('❌ Error fetching generated items:', error);
+    return handleError(error, thunkAPI);
+  }
+});
+
+// Combined invoice tracking (red button)
+export const saveCombinedInvoice = createAsyncThunk("invoices/saveCombined", async ({ clientId, invoiceNumber, itemIds }, thunkAPI) => {
+  try {
+    const response = await api.post("/invoices/track-combined", { 
+      client_id: clientId, 
+      invoice_number: invoiceNumber, 
+      item_ids: itemIds 
+    });
+    return { clientId, invoiceNumber, itemIds, data: response.data };
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const checkCombinedInvoiceStatus = createAsyncThunk("invoices/checkCombined", async (clientId, thunkAPI) => {
+  try {
+    const response = await api.get(`/invoices/track-combined/${clientId}`);
+    return { clientId, data: response.data };
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const fetchCombinedInvoiceNumber = createAsyncThunk("invoices/fetchCombinedNumber", async (clientId, thunkAPI) => {
+  try {
+    const response = await api.get(`/invoices/track-combined/number/${clientId}`);
+    return { clientId, invoiceNumber: response.data.invoice_number };
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const fetchCombinedInvoiceItems = createAsyncThunk("invoices/fetchCombinedItems", async (clientId, thunkAPI) => {
+  try {
+    const response = await api.get(`/invoices/track-combined/items/${clientId}`);
+    return { clientId, items: response.data.items };
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const checkItemInCombinedStatus = createAsyncThunk("invoices/checkItemInCombined", async ({ clientId, itemId }, thunkAPI) => {
+  try {
+    const response = await api.get(`/invoices/track-combined/check-item/${clientId}/${itemId}`);
+    return { clientId, itemId, inCombined: response.data.in_combined };
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const removeItemFromCombined = createAsyncThunk("invoices/removeCombinedItem", async ({ clientId, itemId }, thunkAPI) => {
+  try {
+    const response = await api.delete(`/invoices/track-combined/item/${clientId}/${itemId}`);
+    return { clientId, itemId, data: response.data };
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
+
+export const deleteCombinedTrackingAction = createAsyncThunk("invoices/deleteCombined", async (clientId, thunkAPI) => {
+  try {
+    const response = await api.delete(`/invoices/track-combined/${clientId}`);
+    return { clientId, data: response.data };
+  } catch (error) {
+    return handleError(error, thunkAPI);
+  }
+});
 // ==============================================
 // 🎯 SLICES
 // ==============================================
@@ -2649,6 +2856,159 @@ const reportsSlice = createSlice({
       });
   },
 });
+// ==================== INVOICES SLICE ====================
+
+const invoicesSlice = createSlice({
+  name: "invoices",
+  initialState: {
+    currentInvoiceNumber: null,
+    currentDevisNumber: null,
+    counterInfo: null,
+    generatedIndividualItems: [], // ADD THIS - for persistent gray button state
+    generatedItems: {},
+    individualNumbers: {},
+    combinedGenerated: {},
+    combinedNumbers: {},
+    combinedItems: {},
+    loading: false,
+    error: null,
+    success: false,
+  },
+  reducers: {
+    clearInvoiceError: (state) => {
+      state.error = null;
+    },
+    clearInvoiceSuccess: (state) => {
+      state.success = false;
+    },
+    clearInvoiceCache: (state) => {
+      state.generatedItems = {};
+      state.combinedItems = {};
+      state.combinedGenerated = {};
+      state.combinedNumbers = {};
+      state.individualNumbers = {};
+      state.generatedIndividualItems = []; // ADD THIS
+    },
+    clearClientInvoiceCache: (state, action) => {
+      const clientId = action.payload;
+      delete state.generatedItems[clientId];
+      delete state.combinedItems[clientId];
+      delete state.combinedGenerated[clientId];
+      delete state.combinedNumbers[clientId];
+      state.generatedIndividualItems = []; // ADD THIS
+      Object.keys(state.individualNumbers).forEach(key => {
+        if (key.startsWith(`${clientId}_`)) {
+          delete state.individualNumbers[key];
+        }
+      });
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchNextInvoiceNumber.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchNextInvoiceNumber.fulfilled, (state, action) => {
+        state.loading = false;
+        state.currentInvoiceNumber = action.payload.invoice_number;
+        state.success = true;
+      })
+      .addCase(fetchNextInvoiceNumber.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(fetchCurrentInvoiceNumber.fulfilled, (state, action) => {
+        state.currentInvoiceNumber = action.payload.invoice_number;
+      })
+      .addCase(fetchCounterInfo.fulfilled, (state, action) => {
+        state.counterInfo = action.payload.info;
+      })
+      .addCase(resetInvoiceCounterAction.fulfilled, (state, action) => {
+        state.currentInvoiceNumber = action.payload.invoice_number;
+        if (state.counterInfo) {
+          state.counterInfo.invoice.current = 1;
+          state.counterInfo.invoice.formatted = 'F01';
+        }
+      })
+      .addCase(fetchNextDevisNumber.fulfilled, (state, action) => {
+        state.currentDevisNumber = action.payload.devis_number;
+      })
+      // ADD THIS - Store generated individual items in Redux for persistence
+      .addCase(fetchGeneratedIndividualItems.fulfilled, (state, action) => {
+        state.generatedIndividualItems = action.payload.items || [];
+        state.generatedItems[action.payload.clientId] = action.payload.items || [];
+      })
+      .addCase(checkIndividualInvoiceStatus.fulfilled, (state, action) => {
+        const key = `${action.payload.clientId}_${action.payload.itemId}`;
+        if (action.payload.data.generated && action.payload.data.invoice_number) {
+          state.individualNumbers[key] = action.payload.data.invoice_number;
+        }
+      })
+      .addCase(fetchIndividualInvoiceNumber.fulfilled, (state, action) => {
+        if (action.payload.invoiceNumber) {
+          const key = `${action.payload.clientId}_${action.payload.itemId}`;
+          state.individualNumbers[key] = action.payload.invoiceNumber;
+        }
+      })
+      .addCase(saveIndividualInvoice.fulfilled, (state, action) => {
+        const key = `${action.payload.clientId}_${action.payload.itemId}`;
+        state.individualNumbers[key] = action.payload.invoiceNumber;
+        if (state.generatedItems[action.payload.clientId]) {
+          if (!state.generatedItems[action.payload.clientId].includes(action.payload.itemId)) {
+            state.generatedItems[action.payload.clientId].push(action.payload.itemId);
+          }
+        } else {
+          state.generatedItems[action.payload.clientId] = [action.payload.itemId];
+        }
+        // Also update generatedIndividualItems for persistence
+        if (!state.generatedIndividualItems.includes(action.payload.itemId)) {
+          state.generatedIndividualItems.push(action.payload.itemId);
+        }
+      })
+      .addCase(checkCombinedInvoiceStatus.fulfilled, (state, action) => {
+        state.combinedGenerated[action.payload.clientId] = action.payload.data.generated;
+        if (action.payload.data.generated && action.payload.data.invoice_number) {
+          state.combinedNumbers[action.payload.clientId] = action.payload.data.invoice_number;
+        }
+      })
+      .addCase(fetchCombinedInvoiceNumber.fulfilled, (state, action) => {
+        if (action.payload.invoiceNumber) {
+          state.combinedNumbers[action.payload.clientId] = action.payload.invoiceNumber;
+        }
+      })
+      .addCase(fetchCombinedInvoiceItems.fulfilled, (state, action) => {
+        state.combinedItems[action.payload.clientId] = action.payload.items;
+      })
+      .addCase(saveCombinedInvoice.fulfilled, (state, action) => {
+        state.combinedGenerated[action.payload.clientId] = true;
+        state.combinedNumbers[action.payload.clientId] = action.payload.invoiceNumber;
+        state.combinedItems[action.payload.clientId] = action.payload.itemIds;
+      })
+      .addCase(removeItemFromCombined.fulfilled, (state, action) => {
+        const clientId = action.payload.clientId;
+        const itemId = action.payload.itemId;
+        if (state.combinedItems[clientId]) {
+          state.combinedItems[clientId] = state.combinedItems[clientId].filter(id => id !== itemId);
+        }
+      })
+      .addCase(deleteCombinedTrackingAction.fulfilled, (state, action) => {
+        const clientId = action.payload.clientId;
+        state.combinedGenerated[clientId] = false;
+        state.combinedItems[clientId] = [];
+        state.combinedNumbers[clientId] = null;
+      });
+  },
+});
+
+// Export actions
+export const { 
+  clearInvoiceError, 
+  clearInvoiceSuccess, 
+  clearInvoiceCache,
+  clearClientInvoiceCache 
+} = invoicesSlice.actions;
+
 
 // ==============================================
 // 🏪 CONFIGURE STORE
@@ -2672,6 +3032,7 @@ export const store = configureStore({
     technicianPayments: technicianPaymentsSlice.reducer,
     technicianReports: technicianReportsSlice.reducer,
     reports: reportsSlice.reducer, 
+    invoices: invoicesSlice.reducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -2825,5 +3186,21 @@ export const selectSelectedReport = (state) => state.technicianReports.selected;
 export const selectTechnicianReportsLoading = (state) => state.technicianReports.loading;
 export const selectTechnicianReportsError = (state) => state.technicianReports.error;
 export const selectTechnicianReportsSuccess = (state) => state.technicianReports.success;
-
+// Export selectors
+export const selectCurrentInvoiceNumber = (state) => state.invoices.currentInvoiceNumber;
+export const selectCurrentDevisNumber = (state) => state.invoices.currentDevisNumber;
+export const selectCounterInfo = (state) => state.invoices.counterInfo;
+export const selectInvoiceLoading = (state) => state.invoices.loading;
+export const selectInvoiceError = (state) => state.invoices.error;
+export const selectInvoiceSuccess = (state) => state.invoices.success;
+export const selectGeneratedItems = (state, clientId) => state.invoices.generatedItems[clientId] || [];
+export const selectIndividualInvoiceNumber = (state, clientId, itemId) => 
+  state.invoices.individualNumbers[`${clientId}_${itemId}`];
+export const selectIsIndividualGenerated = (state, clientId, itemId) => 
+  !!state.invoices.individualNumbers[`${clientId}_${itemId}`];
+export const selectCombinedGenerated = (state, clientId) => state.invoices.combinedGenerated[clientId] || false;
+export const selectCombinedNumber = (state, clientId) => state.invoices.combinedNumbers[clientId];
+export const selectCombinedItems = (state, clientId) => state.invoices.combinedItems[clientId] || [];
+export const selectIsItemInCombined = (state, clientId, itemId) => 
+  state.invoices.combinedItems[clientId]?.includes(itemId) || false;
 export default store;

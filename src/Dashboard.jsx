@@ -11,13 +11,13 @@ import {
   Target, Rocket, Sparkles, Crown, Medal, Trophy, Briefcase,
   Building2, CircleDollarSign, Receipt, ClipboardList, Timer,
   CalendarCheck, CheckSquare, ClockAlert, AlertOctagon, Gauge,
-  Printer, X, Loader, Trash2, FolderOpen, Edit, Database, Cloud, Save
+  Printer, X, Loader, Trash2, FolderOpen, Edit, Database, Cloud, Save,
+  Hash, Calculator, Search as SearchIcon, ChevronDown as ChevronDownIcon
 } from 'lucide-react';
 import { 
   BarChart, Bar, CartesianGrid, Tooltip, XAxis, YAxis, ResponsiveContainer, 
   PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, Legend, 
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  ComposedChart, Scatter, RadialBarChart, RadialBar
+  ComposedChart
 } from 'recharts';
 import {
   fetchProducts,
@@ -29,10 +29,15 @@ import {
   fetchVehicles,
   fetchActivations,
   fetchDepenses,
-  selectDepenses
+  selectDepenses,
+  // Invoice actions for DEVIS
+  fetchNextDevisNumber,
+  saveDevis,
+  fetchCurrentInvoiceNumber
 } from './Store/store';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import html2pdf from 'html2pdf.js';
 
 // ==================== API CONFIGURATION ====================
 const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
@@ -174,6 +179,140 @@ const useToast = () => {
   );
 
   return { showToast, ToastContainer };
+};
+
+// ==================== SEARCHABLE SELECT COMPONENT ====================
+const SearchableSelect = ({ options, value, onChange, placeholder = "Sélectionner...", disabled = false, label = "" }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const containerRef = useRef(null);
+
+  const selectedOption = options.find(opt => opt.id === value);
+
+  const filteredOptions = options.filter(opt => 
+    opt.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (opt.telephone?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+    (opt.email?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+  );
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm('');
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelect = (option) => {
+    onChange(option.id, option);
+    setIsOpen(false);
+    setSearchTerm('');
+  };
+
+  return (
+    <div className="searchable-select" ref={containerRef} style={{ position: 'relative', width: '100%' }}>
+      {label && <label style={{ fontSize: '0.7rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>{label}</label>}
+      <div 
+        className="searchable-select-input"
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        style={{ 
+          cursor: disabled ? 'not-allowed' : 'pointer', 
+          backgroundColor: disabled ? '#f3f4f6' : 'white',
+          padding: '0.5rem 2rem 0.5rem 0.75rem',
+          border: '1px solid #d1d5db',
+          borderRadius: '0.5rem',
+          fontSize: '0.875rem',
+          position: 'relative'
+        }}
+      >
+        {selectedOption ? (
+          <span>
+            {selectedOption.nom}
+            {selectedOption.telephone && (
+              <span style={{ fontSize: '0.7rem', color: '#6b7280', marginLeft: '0.5rem' }}>
+                ({selectedOption.telephone})
+              </span>
+            )}
+          </span>
+        ) : (
+          <span style={{ color: '#9ca3af' }}>{placeholder}</span>
+        )}
+      </div>
+      <ChevronDownIcon size={16} className="searchable-select-arrow" style={{ position: 'absolute', right: '0.75rem', top: label ? '32px' : '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#6b7280' }} />
+      
+      {isOpen && !disabled && (
+        <div style={{
+          position: 'absolute',
+          top: '100%',
+          left: 0,
+          right: 0,
+          background: 'white',
+          border: '1px solid #e5e7eb',
+          borderRadius: '0.5rem',
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+          zIndex: 1000,
+          maxHeight: '280px',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden'
+        }}>
+          <div style={{ padding: '0.5rem', borderBottom: '1px solid #e5e7eb' }}>
+            <input
+              type="text"
+              style={{
+                width: '100%',
+                padding: '0.5rem',
+                border: '1px solid #e5e7eb',
+                borderRadius: '0.375rem',
+                fontSize: '0.813rem',
+                outline: 'none'
+              }}
+              placeholder="Rechercher un client..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              autoFocus
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          <div style={{ overflowY: 'auto', maxHeight: '220px' }}>
+            {filteredOptions.length === 0 ? (
+              <div style={{ padding: '0.5rem 0.75rem', textAlign: 'center', color: '#9ca3af', fontSize: '0.813rem' }}>Aucun client trouvé</div>
+            ) : (
+              filteredOptions.map(option => (
+                <div
+                  key={option.id}
+                  style={{
+                    padding: '0.5rem 0.75rem',
+                    cursor: 'pointer',
+                    fontSize: '0.813rem',
+                    transition: 'background 0.2s',
+                    borderBottom: '1px solid #f3f4f6',
+                    backgroundColor: value === option.id ? '#eff6ff' : 'white'
+                  }}
+                  onClick={() => handleSelect(option)}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = value === option.id ? '#eff6ff' : 'white'}
+                >
+                  <div style={{ fontWeight: value === option.id ? 600 : 400 }}>
+                    {option.nom}
+                  </div>
+                  {option.telephone && (
+                    <div style={{ fontSize: '0.7rem', color: '#6b7280' }}>{option.telephone}</div>
+                  )}
+                  {option.email && (
+                    <div style={{ fontSize: '0.65rem', color: '#9ca3af' }}>{option.email}</div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 // ==================== MODERN STYLES ====================
@@ -777,7 +916,7 @@ const styles = `
     background: white;
     border-radius: 1.5rem;
     width: 95%;
-    max-width: 900px;
+    max-width: 1200px;
     max-height: 90vh;
     display: flex;
     flex-direction: column;
@@ -1062,6 +1201,31 @@ const styles = `
   .spinning {
     animation: spin 0.8s linear infinite;
   }
+  
+  .searchable-select {
+    position: relative;
+    width: 100%;
+  }
+  
+  .searchable-select-input {
+    width: 100%;
+    padding: 0.5rem 2rem 0.5rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    background: white;
+    color: #111827;
+    cursor: pointer;
+  }
+  
+  .searchable-select-arrow {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: #6b7280;
+  }
 `;
 
 // ==================== SAFE NUMBER UTILITY ====================
@@ -1073,6 +1237,15 @@ const safeNumber = (value, defaultValue = 0) => {
 const safeRound = (value) => {
   const num = safeNumber(value);
   return Math.round(num);
+};
+
+const safeToFixed = (value, decimals = 2) => safeNumber(value).toFixed(decimals);
+
+const TVA_RATE = 0.20;
+const currentYear = new Date().getFullYear();
+
+const calculateTTC = (htPrice) => {
+  return safeNumber(htPrice) * (1 + TVA_RATE);
 };
 
 const getCompanyInfo = () => {
@@ -1106,6 +1279,762 @@ const blobToBase64 = (blob) => {
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
+};
+
+// Convert number to French words
+const convertToFrenchWords = (total) => {
+  const integerPart = Math.floor(total);
+  
+  const units = ['', 'UN', 'DEUX', 'TROIS', 'QUATRE', 'CINQ', 'SIX', 'SEPT', 'HUIT', 'NEUF'];
+  const teens = ['DIX', 'ONZE', 'DOUZE', 'TREIZE', 'QUATORZE', 'QUINZE', 'SEIZE', 'DIX-SEPT', 'DIX-HUIT', 'DIX-NEUF'];
+  const tens = ['', 'DIX', 'VINGT', 'TRENTE', 'QUARANTE', 'CINQUANTE', 'SOIXANTE', 'SOIXANTE-DIX', 'QUATRE-VINGT', 'QUATRE-VINGT-DIX'];
+  
+  const convertLessThanOneThousand = (n) => {
+    let res = '';
+    if (n >= 100) {
+      const hundreds = Math.floor(n / 100);
+      res += (hundreds === 1 ? '' : units[hundreds] + ' ') + 'CENT ';
+      n %= 100;
+    }
+    if (n >= 20) {
+      const t = Math.floor(n / 10);
+      res += tens[t] + ' ';
+      n %= 10;
+    } else if (n >= 10) {
+      res += teens[n - 10] + ' ';
+      n = 0;
+    }
+    if (n > 0) {
+      res += units[n] + ' ';
+    }
+    return res.trim();
+  };
+  
+  const convertToWords = (n) => {
+    if (n === 0) return 'ZÉRO';
+    let words = '';
+    if (Math.floor(n / 1000000) > 0) {
+      words += convertLessThanOneThousand(Math.floor(n / 1000000)) + ' MILLION ';
+      n %= 1000000;
+    }
+    if (Math.floor(n / 1000) > 0) {
+      const thousands = Math.floor(n / 1000);
+      words += (thousands === 1 ? '' : convertLessThanOneThousand(thousands) + ' ') + 'MILLE ';
+      n %= 1000;
+    }
+    if (n > 0) {
+      words += convertLessThanOneThousand(n);
+    }
+    return words.trim();
+  };
+  
+  return convertToWords(integerPart) + ' DIRHAMS';
+};
+
+// ==================== PREMIUM INVOICE MODAL (WITH CLIENT SELECTION & DATABASE) ====================
+const PremiumInvoiceModal = ({ isOpen, onClose, showToast, clients = [] }) => {
+  const dispatch = useDispatch();
+  const [rows, setRows] = useState([
+    { id: 1, description: '', quantity: 1, unitPrice: 0, total: 0 }
+  ]);
+  const [generating, setGenerating] = useState(false);
+  const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [taxRate, setTaxRate] = useState(20);
+  const [applyTax, setApplyTax] = useState(true);
+  const [customClientInfo, setCustomClientInfo] = useState({ name: '', address: '', phone: '', email: '', ice: '' });
+  const [useCustomClient, setUseCustomClient] = useState(false);
+
+  // Load initial DEVIS number from API
+  useEffect(() => {
+    const loadDevisNumber = async () => {
+      try {
+        const result = await dispatch(fetchNextDevisNumber()).unwrap();
+        setInvoiceNumber(result.devis_number);
+      } catch (error) {
+        console.error('Error loading devis number:', error);
+        // Fallback
+        const year = new Date().getFullYear();
+        const random = Math.floor(Math.random() * 10000);
+        setInvoiceNumber(`DEV-${year}-${String(random).padStart(4, '0')}`);
+      }
+    };
+    if (isOpen) {
+      loadDevisNumber();
+    }
+  }, [dispatch, isOpen]);
+
+  const addRow = () => {
+    const newId = rows.length > 0 ? Math.max(...rows.map(r => r.id)) + 1 : 1;
+    setRows([
+      ...rows,
+      { id: newId, description: '', quantity: 1, unitPrice: 0, total: 0 }
+    ]);
+  };
+
+  const removeRow = (id) => {
+    if (rows.length > 1) {
+      setRows(rows.filter(row => row.id !== id));
+    }
+  };
+
+  const updateRow = (id, field, value) => {
+    setRows(rows.map(row => {
+      if (row.id === id) {
+        const updatedRow = { ...row, [field]: value };
+        if (field === 'quantity' || field === 'unitPrice') {
+          updatedRow.total = safeNumber(updatedRow.quantity) * safeNumber(updatedRow.unitPrice);
+        }
+        return updatedRow;
+      }
+      return row;
+    }));
+  };
+
+  const handleClientSelect = (clientId, client) => {
+    if (client) {
+      setSelectedClient(client);
+      setCustomClientInfo({
+        name: client.nom || '',
+        address: client.adresse || '',
+        phone: client.telephone || '',
+        email: client.email || '',
+        ice: client.ice_client || ''
+      });
+    }
+  };
+
+  const calculateSubtotal = () => {
+    return rows.reduce((sum, row) => sum + safeNumber(row.total), 0);
+  };
+
+  const calculateTax = () => {
+    const subtotal = calculateSubtotal();
+    return applyTax ? (subtotal * taxRate) / 100 : 0;
+  };
+
+  const calculateTotal = () => {
+    return calculateSubtotal() + calculateTax();
+  };
+
+  const resetForm = () => {
+    setRows([{ id: 1, description: '', quantity: 1, unitPrice: 0, total: 0 }]);
+    setSelectedClient(null);
+    setCustomClientInfo({ name: '', address: '', phone: '', email: '', ice: '' });
+    setUseCustomClient(false);
+    setTaxRate(20);
+    setApplyTax(true);
+    // Get new devis number
+    const loadNewDevisNumber = async () => {
+      try {
+        const result = await dispatch(fetchNextDevisNumber()).unwrap();
+        setInvoiceNumber(result.devis_number);
+      } catch (error) {
+        console.error('Error loading devis number:', error);
+      }
+    };
+    loadNewDevisNumber();
+  };
+
+  const getClientForInvoice = () => {
+    if (useCustomClient) {
+      return customClientInfo;
+    }
+    if (selectedClient) {
+      return {
+        name: selectedClient.nom || selectedClient.name || '',
+        address: selectedClient.adresse || '',
+        phone: selectedClient.telephone || '',
+        email: selectedClient.email || '',
+        ice: selectedClient.ice_client || ''
+      };
+    }
+    return null;
+  };
+
+  const generateInvoicePDF = async () => {
+    const validRows = rows.filter(row => row.description && row.description.trim() && row.quantity > 0 && row.unitPrice > 0);
+    if (validRows.length === 0) {
+      showToast('Veuillez ajouter au moins une ligne valide (description, quantité et prix requis)', 'warning');
+      return;
+    }
+
+    const clientForInvoice = getClientForInvoice();
+    if (!clientForInvoice || (!clientForInvoice.name && !useCustomClient)) {
+      showToast('Veuillez sélectionner un client ou activer "Client personnalisé"', 'warning');
+      return;
+    }
+
+    setGenerating(true);
+
+    try {
+      // Track this DEVIS in database if client is selected
+      if (selectedClient?.id) {
+        await dispatch(saveDevis({ 
+          clientId: selectedClient.id, 
+          devisNumber: invoiceNumber 
+        })).unwrap();
+      } else if (useCustomClient && customClientInfo.name) {
+        // For custom clients, we just log it (no database tracking)
+        console.log('DEVIS generated for custom client:', customClientInfo.name);
+      }
+
+      const companyInfo = getCompanyInfo();
+      const invoiceDate = new Date().toLocaleDateString('fr-FR');
+      const finalInvoiceNumber = invoiceNumber;
+
+      let logoBase64 = null;
+      let cacheImageBase64 = null;
+      
+      try {
+        const logoResponse = await fetch('/logo.png');
+        if (logoResponse.ok) {
+          const blob = await logoResponse.blob();
+          logoBase64 = await blobToBase64(blob);
+        }
+      } catch (e) {}
+
+      try {
+        const cacheResponse = await fetch('/cache.png');
+        if (cacheResponse.ok) {
+          const blob = await cacheResponse.blob();
+          cacheImageBase64 = await blobToBase64(blob);
+        }
+      } catch (e) {}
+
+      const subtotal = calculateSubtotal();
+      const tax = calculateTax();
+      const total = calculateTotal();
+
+      const clientName = clientForInvoice?.name || clientForInvoice?.nom || '';
+      const clientAddress = clientForInvoice?.address || clientForInvoice?.adresse || '';
+      const clientPhone = clientForInvoice?.phone || clientForInvoice?.telephone || '';
+      const clientEmail = clientForInvoice?.email || '';
+      const clientIce = clientForInvoice?.ice || clientForInvoice?.ice_client || '';
+
+      const html = `
+        <!DOCTYPE html>
+        <html lang="fr">
+        <head>
+          <meta charset="UTF-8">
+          <title>Devis ${finalInvoiceNumber}</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body {
+              font-family: 'Plus Jakarta Sans', sans-serif;
+              color: #1e293b;
+              background-color: #ffffff;
+              line-height: 1.5;
+              padding: 35px 40px 60px 40px;
+              font-size: 12px;
+            }
+            .invoice-container { 
+              max-width: 850px; 
+              margin: 0 auto; 
+              box-sizing: border-box; 
+              page-break-after: avoid;
+              position: relative;
+              min-height: 100%;
+            }
+            .header-top { 
+              display: flex; 
+              justify-content: space-between; 
+              align-items: flex-start; 
+              border-bottom: 1px solid #e2e8f0; 
+              padding-bottom: 20px; 
+              margin-bottom: 25px; 
+            }
+            .logo-wrapper { 
+              width: 130px; 
+              height: 130px; 
+              display: flex; 
+              align-items: center; 
+              justify-content: center; 
+              overflow: hidden; 
+              border-radius: 8px; 
+            }
+            .invoice-logo { width: 100%; height: 100%; object-fit: cover; }
+            .company-name-placeholder { font-size: 20px; font-weight: 700; color: #0f172a; font-family: 'Playfair Display', serif; }
+            .corporate-meta-box { text-align: right; }
+            .document-type-badge { font-family: 'Playfair Display', serif; font-size: 28px; font-style: italic; color: #0f172a; margin-bottom: 4px; font-weight: 600; }
+            .invoice-id-badge { font-size: 14px; font-weight: 700; color: #475569; letter-spacing: 0.05em; margin-bottom: 4px; }
+            .invoice-date-line { font-size: 12px; color: #94a3b8; }
+            .parties-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 30px; }
+            .party-card .block-title { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; }
+            .party-card .party-name { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+            .party-card .party-details { color: #475569; line-height: 1.5; font-size: 12px; }
+            .table-wrapper { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 25px; }
+            .invoice-table { width: 100%; border-collapse: collapse; }
+            .invoice-table th { background-color: #f8fafc; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; padding: 12px 8px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+            .invoice-table td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; color: #334155; font-size: 12px; }
+            .invoice-table tr:last-child td { border-bottom: 1px solid #e2e8f0; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            .summary-container { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; margin-bottom: 25px; }
+            .legal-wordings { border-left: 2px solid #e2e8f0; padding-left: 18px; margin-top: 5px; }
+            .wording-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.05em; margin-bottom: 4px; }
+            .wording-value { font-family: 'Playfair Display', serif; font-size: 14px; font-style: italic; color: #334155; font-weight: 600; line-height: 1.4; }
+            .financial-math { width: 100%; border-collapse: collapse; }
+            .financial-math td { padding: 6px 8px; font-size: 12px; color: #475569; }
+            .financial-math tr.premium-total td { font-size: 16px; font-weight: 700; color: #0f172a; border-top: 1px solid #e2e8f0; padding-top: 10px; padding-bottom: 10px; }
+            .payment-routing { border-top: 1px solid #e2e8f0; padding-top: 15px; margin-bottom: 30px; }
+            .routing-title { font-size: 11px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+            .routing-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; font-size: 11px; color: #475569; }
+            .routing-item strong { color: #0f172a; display: block; margin-bottom: 2px; }
+            .executive-footer { 
+              border-top: 2px solid #0f172a; 
+              padding-top: 15px; 
+              padding-bottom: 10px;
+              text-align: center; 
+              font-size: 10px; 
+              color: #64748b; 
+              line-height: 1.6;
+              margin-top: 20px;
+            }
+            .executive-footer .footer-company-name { font-weight: 700; color: #0f172a; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+            .bank-info { margin-top: 12px; font-size: 11px; color: #475569; border-top: 1px dashed #e2e8f0; padding-top: 10px; }
+            .bank-info strong { color: #0f172a; }
+            .signature-section { margin-top: 40px; margin-bottom: 30px; display: flex; justify-content: flex-end; padding-right: 20px; }
+            .signature-box { text-align: center; width: 200px; }
+            .signature-label { font-size: 11px; font-weight: bold; margin-bottom: 10px; text-decoration: underline; color: #1f2937; }
+            .signature-image { margin-top: 10px; display: flex; justify-content: center; }
+            .signature-img { max-width: 150px; max-height: 80px; object-fit: contain; }
+            
+            @media print {
+              body { padding: 0 0 40px 0; }
+              .executive-footer { position: fixed; bottom: 0; left: 0; right: 0; background: white; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="invoice-container">
+            <div class="header-top">
+              <div class="logo-wrapper">
+                ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" class="invoice-logo"/>` : `<span class="company-name-placeholder">${companyInfo.name}</span>`}
+              </div>
+              <div class="corporate-meta-box">
+                <div class="document-type-badge">DEVIS</div>
+                <div class="invoice-id-badge">N° ${currentYear}/${finalInvoiceNumber}</div>
+                <div class="invoice-date-line">Date: ${invoiceDate}</div>
+              </div>
+            </div>
+            
+            <div class="parties-grid">
+              <div class="party-card">
+                <div class="block-title">Émetteur</div>
+                <div class="party-name">${companyInfo.name}</div>
+                <div class="party-details">
+                  ${companyInfo.address}<br>
+                  Téléphone: ${companyInfo.phone}<br>
+                  Email: ${companyInfo.email}
+                </div>
+              </div>
+              <div class="party-card">
+                <div class="block-title">Facturé à</div>
+                <div class="party-name">${clientName}</div>
+                <div class="party-details">
+                  ${clientAddress ? `${clientAddress}<br>` : ''}
+                  ${clientPhone ? `Téléphone: ${clientPhone}<br>` : ''}
+                  ${clientIce ? `ICE: ${clientIce}<br>` : ''}
+                  ${clientEmail ? `Email: ${clientEmail}` : ''}
+                </div>
+              </div>
+            </div>
+            
+            <div class="table-wrapper">
+              <table class="invoice-table">
+                <thead>
+                  <tr>
+                    <th style="width: 5%;">#</th>
+                    <th style="width: 50%;">Désignation</th>
+                    <th class="text-center" style="width: 10%;">Qté</th>
+                    <th class="text-right" style="width: 15%;">P.U HT</th>
+                    <th class="text-right" style="width: 20%;">Montant HT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${validRows.map((row, index) => `
+                    <tr>
+                      <td class="text-center">${index + 1}</td>
+                      <td>${row.description}</td>
+                      <td class="text-center">${row.quantity}</td>
+                      <td class="text-right">${formatMoney(row.unitPrice)}</td>
+                      <td class="text-right"><strong>${formatMoney(row.total)}</strong></td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+            
+            <div class="summary-container">
+              <div class="legal-wordings">
+                <div class="wording-label">Arrêté la présente devis à la somme de :</div>
+                <div class="wording-value">${convertToFrenchWords(total)}</div>
+                <div class="bank-info" style="margin-top: 15px;">
+                  <strong>Informations de paiement</strong><br>
+                  ${companyInfo.rib ? `RIB: ${companyInfo.rib}` : ''}
+                </div>
+              </div>
+              <div>
+                <table class="financial-math">
+                  <tr><td>Montant HT</td><td class="text-right">${formatMoney(subtotal)}</td></tr>
+                  ${applyTax ? `<tr><td>TVA (${taxRate}%)</td><td class="text-right">${formatMoney(tax)}</td></tr>` : ''}
+                  <tr class="premium-total"><td><strong>TOTAL TTC</strong></td><td class="text-right"><strong>${formatMoney(total)}</strong></td></tr>
+                </table>
+              </div>
+            </div>
+            
+            <div class="signature-section">
+              <div class="signature-box">
+                <div class="signature-label">Cachet & signature</div>
+                ${cacheImageBase64 ? `<div class="signature-image"><img src="${cacheImageBase64}" alt="Cachet" class="signature-img" /></div>` : '<div style="height: 50px;"></div>'}
+              </div>
+            </div>
+            
+            <div class="payment-routing">
+              <div class="routing-title">Règlement & Informations Légales</div>
+              <div class="routing-grid">
+                <div class="routing-item"><strong>ICE</strong> ${companyInfo.ice || '-'}</div>
+                <div class="routing-item"><strong>RC</strong> ${companyInfo.rc || '-'}</div>
+                <div class="routing-item"><strong>Patente</strong> ${companyInfo.patente || '-'}</div>
+                <div class="routing-item"><strong>IF</strong> ${companyInfo.tax_number || '-'}</div>
+                <div class="routing-item"><strong>CNSS</strong> ${companyInfo.cnss || '-'}</div>
+              </div>
+            </div>
+            
+            <div class="executive-footer">
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const element = document.createElement('div');
+      element.innerHTML = html;
+      document.body.appendChild(element);
+      
+      const opt = {
+        margin: [6, 8, 6, 8],
+        filename: `Devis_${clientName.replace(/\s+/g, '_')}_${finalInvoiceNumber}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: 'avoid-all' }
+      };
+      
+      await html2pdf().set(opt).from(element).save();
+      showToast('Devis généré avec succès', 'success');
+      document.body.removeChild(element);
+      resetForm();
+      onClose();
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      showToast('Erreur lors de la génération du devis', 'error');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="report-modal-overlay" onClick={onClose}>
+      <div className="report-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '1200px' }}>
+        <div className="report-modal-header">
+          <div className="report-modal-title">
+            <Printer size={20} style={{ color: '#3b82f6' }} />
+            <span>Générer un Devis Professionnel</span>
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0.5rem' }}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="report-modal-body">
+          <div className="company-info-bar">
+            <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>{getCompanyInfo().name}</div>
+            <div style={{ fontSize: '0.65rem', opacity: 0.8 }}>{getCompanyInfo().address}</div>
+          </div>
+
+          {/* Invoice Header */}
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            marginBottom: '1.5rem',
+            padding: '1rem',
+            background: '#f8fafc',
+            borderRadius: '0.75rem',
+            flexWrap: 'wrap',
+            gap: '1rem'
+          }}>
+            <div>
+              <label style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>Numéro de devis</label>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  className="report-input"
+                  value={invoiceNumber}
+                  onChange={(e) => setInvoiceNumber(e.target.value)}
+                  style={{ width: '200px', fontSize: '0.875rem', fontWeight: 'bold' }}
+                />
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>Date</label>
+              <input
+                type="date"
+                className="report-input"
+                value={new Date().toISOString().slice(0, 10)}
+                disabled
+                style={{ width: '150px', background: '#f1f5f9' }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>TVA</label>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <input
+                  type="checkbox"
+                  checked={applyTax}
+                  onChange={(e) => setApplyTax(e.target.checked)}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                />
+                <input
+                  type="number"
+                  className="report-input"
+                  value={taxRate}
+                  onChange={(e) => setTaxRate(safeNumber(e.target.value, 20))}
+                  disabled={!applyTax}
+                  style={{ width: '80px', textAlign: 'center' }}
+                />
+                <span style={{ fontSize: '0.75rem' }}>%</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Client Selection */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  checked={!useCustomClient}
+                  onChange={() => setUseCustomClient(false)}
+                />
+                <span style={{ fontSize: '0.875rem' }}>Client existant</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  checked={useCustomClient}
+                  onChange={() => setUseCustomClient(true)}
+                />
+                <span style={{ fontSize: '0.875rem' }}>Client personnalisé</span>
+              </label>
+            </div>
+
+            {!useCustomClient ? (
+              <SearchableSelect
+                options={clients}
+                value={selectedClient?.id || null}
+                onChange={handleClientSelect}
+                placeholder="Rechercher un client..."
+                label="Sélectionner un client"
+              />
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.7rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>
+                    Nom du client <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="report-input"
+                    placeholder="Nom du client"
+                    value={customClientInfo.name}
+                    onChange={(e) => setCustomClientInfo({ ...customClientInfo, name: e.target.value })}
+                    style={{ background: 'white' }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.7rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>Adresse</label>
+                  <input
+                    type="text"
+                    className="report-input"
+                    placeholder="Adresse"
+                    value={customClientInfo.address}
+                    onChange={(e) => setCustomClientInfo({ ...customClientInfo, address: e.target.value })}
+                    style={{ background: 'white' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.7rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>Téléphone</label>
+                  <input
+                    type="tel"
+                    className="report-input"
+                    placeholder="Téléphone"
+                    value={customClientInfo.phone}
+                    onChange={(e) => setCustomClientInfo({ ...customClientInfo, phone: e.target.value })}
+                    style={{ background: 'white' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.7rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>Email</label>
+                  <input
+                    type="email"
+                    className="report-input"
+                    placeholder="Email"
+                    value={customClientInfo.email}
+                    onChange={(e) => setCustomClientInfo({ ...customClientInfo, email: e.target.value })}
+                    style={{ background: 'white' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.7rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>ICE</label>
+                  <input
+                    type="text"
+                    className="report-input"
+                    placeholder="ICE"
+                    value={customClientInfo.ice}
+                    onChange={(e) => setCustomClientInfo({ ...customClientInfo, ice: e.target.value })}
+                    style={{ background: 'white' }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Line Items */}
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            marginBottom: '0.75rem'
+          }}>
+            <div className="section-title" style={{ fontSize: '0.875rem' }}>
+              <Package size={16} /> Lignes de devis
+            </div>
+            <button onClick={addRow} className="btn btn-primary" style={{ padding: '0.375rem 0.875rem', fontSize: '0.75rem' }}>
+              <Plus size={14} /> Ajouter une ligne
+            </button>
+          </div>
+
+          <div className="report-table-container" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+            <table className="report-table">
+              <thead>
+                <tr style={{ position: 'sticky', top: 0, background: '#f1f5f9', zIndex: 10 }}>
+                  <th style={{ width: '5%' }}>#</th>
+                  <th style={{ width: '40%' }}>Description</th>
+                  <th style={{ width: '10%' }}>Quantité</th>
+                  <th style={{ width: '20%' }}>Prix Unitaire (MAD)</th>
+                  <th style={{ width: '20%' }}>Total (MAD)</th>
+                  <th style={{ width: '5%' }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, index) => (
+                  <tr key={row.id}>
+                    <td style={{ textAlign: 'center' }}>{index + 1}</td>
+                    <td>
+                      <input
+                        type="text"
+                        className="report-input"
+                        value={row.description}
+                        onChange={e => updateRow(row.id, 'description', e.target.value)}
+                        placeholder="Description du produit/service"
+                        style={{ fontSize: '0.75rem' }}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        step="1"
+                        min="1"
+                        className="report-input"
+                        value={row.quantity}
+                        onChange={e => updateRow(row.id, 'quantity', parseInt(e.target.value) || 0)}
+                        style={{ fontSize: '0.75rem', textAlign: 'center' }}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="report-input"
+                        value={row.unitPrice}
+                        onChange={e => updateRow(row.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                        style={{ fontSize: '0.75rem', textAlign: 'right' }}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        className="report-input"
+                        value={formatMoney(row.total)}
+                        disabled
+                        style={{ fontSize: '0.75rem', textAlign: 'right', background: '#f8fafc', fontWeight: 'bold' }}
+                      />
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <button
+                        onClick={() => removeRow(row.id)}
+                        className="action-btn"
+                        disabled={rows.length === 1}
+                        style={{ color: '#ef4444' }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Totals Summary */}
+          <div className="summary-box">
+            <div style={{ textAlign: 'right', minWidth: '250px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.75rem' }}>
+                <span>Sous-total HT:</span>
+                <span style={{ fontWeight: 'bold' }}>{formatMoney(calculateSubtotal())}</span>
+              </div>
+              {applyTax && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.75rem' }}>
+                  <span>TVA ({taxRate}%):</span>
+                  <span>{formatMoney(calculateTax())}</span>
+                </div>
+              )}
+              <div style={{ borderTop: '2px solid #e2e8f0', marginTop: '0.5rem', paddingTop: '0.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1rem', fontWeight: 'bold', color: '#059669' }}>
+                  <span>TOTAL TTC:</span>
+                  <span>{formatMoney(calculateTotal())}</span>
+                </div>
+              </div>
+              <div style={{ fontSize: '0.65rem', color: '#64748b', marginTop: '0.5rem' }}>
+                ({rows.filter(r => r.description && r.quantity > 0 && r.unitPrice > 0).length} ligne(s) valide(s))
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="report-modal-footer">
+          <button onClick={onClose} className="btn btn-outline" disabled={generating}>
+            Annuler
+          </button>
+          <button onClick={resetForm} className="btn btn-outline" disabled={generating}>
+            <RefreshCw size={16} /> Réinitialiser
+          </button>
+          <button onClick={generateInvoicePDF} className="btn btn-primary" disabled={generating} style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
+            {generating ? <Loader size={16} className="spinning" /> : <Printer size={16} />}
+            {generating ? 'Génération...' : 'Générer le DEVIS'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 // ==================== COMPONENTS ====================
@@ -2177,6 +3106,7 @@ const Dashboard = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [timeRange, setTimeRange] = useState('week');
   const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
   const [editReport, setEditReport] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const isRefreshingRef = useRef(false);
@@ -2195,7 +3125,6 @@ const Dashboard = () => {
   
   // Refresh Data - memoized with useCallback to avoid dependency loops
   const refreshData = useCallback(async () => {
-    // Prevent overlapping refresh calls
     if (isRefreshingRef.current) return;
     isRefreshingRef.current = true;
     setRefreshing(true);
@@ -2232,9 +3161,8 @@ const Dashboard = () => {
     return () => window.removeEventListener('reportSaved', handleReportSaved);
   }, [refreshData]);
   
-  // ==================== COMPUTED STATISTICS (includes standalone activations) ====================
+  // ==================== COMPUTED STATISTICS ====================
   
-  // Helper function to get total expected revenue for an activation (includes renewals)
   const getActivationTotalExpected = (act) => {
     let total = safeNumber(act.price);
     if (act.renewal_history && Array.isArray(act.renewal_history)) {
@@ -2247,11 +3175,9 @@ const Dashboard = () => {
     return total;
   };
 
-  // Helper function to get total paid amount for an activation
   const getActivationTotalPaid = (act) => {
     let total = safeNumber(act.amount_paid);
     if (act.payment_history && Array.isArray(act.payment_history)) {
-      // Add any cheque payments that have been encashed
       act.payment_history.forEach(payment => {
         if ((payment.method === 'cheque' || payment.method === 'check') && payment.remise_status === 'encaisse') {
           total += safeNumber(payment.amount);
@@ -2261,7 +3187,6 @@ const Dashboard = () => {
     return total;
   };
 
-  // Revenue, Expenses and Profit Statistics
   const financialStats = useMemo(() => {
     const salesArray = Array.isArray(sales) ? sales : [];
     const activationsArray = Array.isArray(activations) ? activations : [];
@@ -2271,8 +3196,6 @@ const Dashboard = () => {
     const currentMonth = today.toISOString().slice(0, 7);
     const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().slice(0, 7);
     
-    // --- CHIFFRE D'AFFAIRES (expected revenue from both sales AND standalone activations) ---
-    // Sales: total invoice amount
     const currentMonthSalesTotal = salesArray
       .filter(s => s && s.created_at && s.created_at.slice(0, 7) === currentMonth)
       .reduce((sum, s) => sum + safeNumber(s?.total), 0);
@@ -2280,7 +3203,6 @@ const Dashboard = () => {
       .filter(s => s && s.created_at && s.created_at.slice(0, 7) === lastMonth)
       .reduce((sum, s) => sum + safeNumber(s?.total), 0);
     
-    // Standalone Activations (including those without vente_id)
     const currentMonthActivationsExpected = activationsArray
       .filter(a => a && a.created_at && a.created_at.slice(0, 7) === currentMonth)
       .reduce((sum, a) => sum + getActivationTotalExpected(a), 0);
@@ -2295,7 +3217,6 @@ const Dashboard = () => {
     if (totalExpectedRevenueLast > 0) revenueGrowth = ((totalExpectedRevenueCurrent - totalExpectedRevenueLast) / totalExpectedRevenueLast) * 100;
     else if (totalExpectedRevenueCurrent > 0) revenueGrowth = 100;
     
-    // --- ACTUAL PAID REVENUE (for profit calculation) ---
     const currentMonthSalesPaid = salesArray
       .filter(s => s && s.created_at && s.created_at.slice(0, 7) === currentMonth)
       .reduce((sum, s) => sum + safeNumber(s?.amount_paid), 0);
@@ -2312,7 +3233,6 @@ const Dashboard = () => {
       .reduce((sum, a) => sum + getActivationTotalPaid(a), 0);
     const totalPaidRevenueLast = lastMonthSalesPaid + lastMonthActivationsPaid;
     
-    // --- EXPENSES ---
     const currentMonthExpenses = depensesArray
       .filter(d => d && d.date && d.date.slice(0, 7) === currentMonth)
       .reduce((sum, d) => sum + safeNumber(d?.amount), 0);
@@ -2320,7 +3240,6 @@ const Dashboard = () => {
       .filter(d => d && d.date && d.date.slice(0, 7) === lastMonth)
       .reduce((sum, d) => sum + safeNumber(d?.amount), 0);
     
-    // --- PROFIT (Paid Revenue - Expenses) ---
     const profitCurrent = totalPaidRevenueCurrent - currentMonthExpenses;
     const profitLast = totalPaidRevenueLast - lastMonthExpenses;
     
@@ -2328,7 +3247,6 @@ const Dashboard = () => {
     if (profitLast > 0) profitGrowth = ((profitCurrent - profitLast) / profitLast) * 100;
     else if (profitCurrent > 0) profitGrowth = 100;
     
-    // Additional metrics - includes both sales and standalone activations
     const pendingRevenue = salesArray
       .filter(s => s && s.payment_status !== 'paid')
       .reduce((sum, s) => sum + safeNumber(s?.remaining_amount), 0);
@@ -2342,7 +3260,6 @@ const Dashboard = () => {
     const collectedRevenue = salesArray.reduce((sum, s) => sum + safeNumber(s?.amount_paid), 0) +
       activationsArray.reduce((sum, a) => sum + getActivationTotalPaid(a), 0);
     
-    // Calculate average order value using both sales and standalone activations
     const totalTransactions = salesArray.length + activationsArray.length;
     let averageOrderValue = 0;
     if (totalTransactions > 0) {
@@ -2477,7 +3394,6 @@ const Dashboard = () => {
     const activationsArray = Array.isArray(activations) ? activations : [];
     const distribution = {};
     
-    // From sales
     salesArray.forEach(sale => {
       if (sale?.produits && Array.isArray(sale.produits)) {
         sale.produits.forEach(prod => {
@@ -2490,7 +3406,6 @@ const Dashboard = () => {
       }
     });
     
-    // From standalone activations (add product from produit relation)
     activationsArray.forEach(act => {
       if (act?.produit?.nom) {
         const name = act.produit.nom;
@@ -2539,13 +3454,13 @@ const Dashboard = () => {
     return activities.filter(a => a.date).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 8);
   }, [sales, activations]);
   
-  // Quick actions
   const quickActions = [
     { label: 'Nouvelle vente', icon: ShoppingCart, path: '/ventes', color: '#3b82f6' },
     { label: 'Ajouter client', icon: Users, path: '/clients', color: '#10b981' },
     { label: 'Nouveau produit', icon: Package, path: '/produits', color: '#8b5cf6' },
     { label: 'Activation GPS', icon: Wifi, path: '/Activation', color: '#f59e0b' },
-    { label: 'Rapport Manuel', icon: FileText, onClick: () => setReportModalOpen(true), color: '#ef4444' }
+    { label: 'Rapport Manuel', icon: FileText, onClick: () => setReportModalOpen(true), color: '#ef4444' },
+    { label: 'DEVIS Pro', icon: Receipt, onClick: () => setInvoiceModalOpen(true), color: '#059669' }
   ];
   
   const isLoading = (productsLoading || salesLoading) && (!products?.length && !sales?.length);
@@ -2620,7 +3535,7 @@ const Dashboard = () => {
           ))}
         </div>
         
-        {/* Main Stats Cards - 4 per row layout */}
+        {/* Main Stats Cards */}
         <div className="stats-grid">
           <StatCard 
             label="CHIFFRE D'AFFAIRES" 
@@ -2834,7 +3749,7 @@ const Dashboard = () => {
         {/* Saved Reports Section */}
         <SavedReportsSection onEditReport={handleEditReport} showToast={showToast} />
         
-        {/* Footer with info */}
+        {/* Footer */}
         <div className="text-center text-xs text-gray-400 border-t border-gray-100 pt-4 mt-2">
           <div className="flex justify-center gap-4 mb-2 flex-wrap">
             <span>📊 Données en temps réel</span>
@@ -2850,8 +3765,16 @@ const Dashboard = () => {
       {/* Toast Container */}
       <ToastContainer />
 
-      {/* Multi-Row Report Modal (Create) */}
+      {/* Multi-Row Report Modal */}
       <MultiRowReportModal isOpen={reportModalOpen} onClose={() => setReportModalOpen(false)} showToast={showToast} />
+      
+      {/* Premium Invoice Modal with Client Selection */}
+      <PremiumInvoiceModal 
+        isOpen={invoiceModalOpen} 
+        onClose={() => setInvoiceModalOpen(false)} 
+        showToast={showToast}
+        clients={clients || []}
+      />
       
       {/* Edit Report Modal */}
       {editReport && (

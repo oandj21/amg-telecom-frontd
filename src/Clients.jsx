@@ -1,4 +1,4 @@
-import React ,{ useState, useEffect, useMemo, useRef } from 'react';
+import React ,{ useState, useEffect, useMemo, useRef,useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import ReactDOM from 'react-dom';
 import { 
@@ -24,10 +24,22 @@ import {
   fetchSales,
   createStandaloneActivation,
   createInstallation,
-  fetchActivationStats
+  fetchActivationStats,
+  // Invoice actions
+  fetchNextInvoiceNumber,
+  fetchCurrentInvoiceNumber,
+  saveIndividualInvoice,
+  checkIndividualInvoiceStatus,
+  fetchGeneratedIndividualItems,
+  saveCombinedInvoice,
+  checkCombinedInvoiceStatus,
+  fetchCombinedInvoiceItems,
+  removeItemFromCombined,
+  deleteCombinedTrackingAction,
+  fetchCounterInfo
 } from './Store/store';
 
-// ==================== STYLES ====================
+// ==================== STYLES (same as before) ====================
 const styles = `
   /* Base Layout - Mobile First */
   .clients-container {
@@ -1152,6 +1164,22 @@ const styles = `
   .modern-btn-warning {
     background: linear-gradient(135deg, #f59e0b, #d97706);
   }
+  
+  .modern-btn-gray {
+    background: linear-gradient(135deg, #9ca3af, #6b7280);
+  }
+  
+  .modern-btn-red {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+  }
+  
+  .btn-combined-base {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  }
+  
+  .btn-combined-generated {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+  }
 
   .spinning {
     animation: spin 1s linear infinite;
@@ -1242,7 +1270,7 @@ const styles = `
     border-radius: 0.375rem;
   }
 
-  /* Installation Row Styles - for grouped view */
+  /* Installation Row Styles */
   .installation-row {
     background-color: #f0f9ff;
     cursor: pointer;
@@ -1299,7 +1327,7 @@ const styles = `
     transform: rotate(90deg);
   }
 
-  /* Cachet Choice Dialog - Styled */
+  /* Cachet Choice Dialog */
   .cachet-choice-overlay {
     position: fixed;
     inset: 0;
@@ -1572,43 +1600,8 @@ const PLAN_OPTIONS = [
   { value: '12m', label: '12 mois' }
 ];
 
-// ==================== INVOICE NUMBER MANAGER ====================
-// Key for localStorage
-const INVOICE_COUNTER_KEY = 'invoice_counter';
-
-// Get current invoice number (default F01)
-const getCurrentInvoiceNumber = () => {
-  const saved = localStorage.getItem(INVOICE_COUNTER_KEY);
-  if (saved) {
-    return parseInt(saved, 10);
-  }
-  return 1;
-};
-
-// Set invoice number
-const setInvoiceCounter = (counter) => {
-  localStorage.setItem(INVOICE_COUNTER_KEY, counter.toString());
-};
-
-// Get formatted invoice number (F + 3 digits)
-const getFormattedInvoiceNumber = (counter) => {
-  return `F${counter.toString().padStart(2, '0')}`;
-};
-
-// Get next invoice number and increment
-const getNextInvoiceNumber = () => {
-  const current = getCurrentInvoiceNumber();
-  const formatted = getFormattedInvoiceNumber(current);
-  // Increment for next use
-  setInvoiceCounter(current + 1);
-  return formatted;
-};
-
-// Reset to F01
-const resetInvoiceCounter = () => {
-  setInvoiceCounter(1);
-  return 'F01';
-};
+// ==================== INVOICE NUMBER MANAGER (API-based) ====================
+// These functions are now replaced by API calls in the component
 
 // ==================== CONVERT NUMBER TO FRENCH WORDS ====================
 const convertToFrenchWords = (total) => {
@@ -1660,10 +1653,10 @@ const convertToFrenchWords = (total) => {
   return convertToWords(integerPart) + ' DIRHAMS';
 };
 
-// ==================== INSTALLATION INVOICE GENERATION (WITH TVA) ====================
+// ==================== INSTALLATION INVOICE GENERATION ====================
 const generateInstallationInvoiceHTML = (client, group, companyInfo, logoBase64 = null, cacheImageBase64 = null, showCachet = true, invoiceNumber = null) => {
   const invoiceDate = new Date().toLocaleDateString('fr-FR');
-  const finalInvoiceNumber = invoiceNumber || getNextInvoiceNumber();
+  const finalInvoiceNumber = invoiceNumber || 'F01';
   
   const venteProductsHT = group.saleTotalPriceHT || 0;
   const totalActivationsPriceHT = group.activations.reduce((sum, act) => sum + (act.displayPriceTTC / 1.2), 0);
@@ -1823,7 +1816,7 @@ const generateInstallationInvoiceHTML = (client, group, companyInfo, logoBase64 
                   <span style="font-size: 10px; color: #6b7280;">
                     ${group.activations.map(act => `${act.matricule} (${PLAN_LABEL[act.plan] || act.plan || 'Standard'})`).join(', ')}
                   </span>
-                 </td>
+                  </td>
                 <td class="text-center"><strong>${totalQuantity}</strong></td>
                 <td class="text-right">${safeToFixed(unitPriceHT)} MAD</td>
                 <td class="text-right"><strong>${safeToFixed(totalHT)} MAD</strong></td>
@@ -1889,10 +1882,10 @@ const generateInstallationInvoiceHTML = (client, group, companyInfo, logoBase64 
   `;
 };
 
-// ==================== SIMPLE ACTIVATION INVOICE GENERATION (FIXED) ====================
+// ==================== SIMPLE ACTIVATION INVOICE GENERATION ====================
 const generateSimpleActivationInvoiceHTML = (client, activation, companyInfo, logoBase64 = null, cacheImageBase64 = null, showCachet = true, invoiceNumber = null) => {
   const invoiceDate = new Date().toLocaleDateString('fr-FR');
-  const finalInvoiceNumber = invoiceNumber || getNextInvoiceNumber();
+  const finalInvoiceNumber = invoiceNumber || 'F01';
   
   const QUANTITY = 1;
   let priceHT = safeNumber(activation.price || activation.priceHT || activation.activationPriceHT || 0);
@@ -2067,7 +2060,7 @@ const generateSimpleActivationInvoiceHTML = (client, activation, companyInfo, lo
             <table class="financial-math">
               <tr>
                 <td>Montant HT</td>
-                              <td class="text-right">${safeToFixed(priceHT)} MAD</td>
+                <td class="text-right">${safeToFixed(priceHT)} MAD</td>
               </tr>
               <tr>
                 <td>TVA (20%)</td>
@@ -2104,7 +2097,6 @@ const generateSimpleActivationInvoiceHTML = (client, activation, companyInfo, lo
         </div>
         
         <div class="executive-footer">
-
         </div>
       </div>
     </body>
@@ -2606,8 +2598,9 @@ const formatDate = (dateString) => {
   });
 };
 
-// ==================== ACTIVATIONS DETAILS MODAL (WITH OVERLAY) ====================
+// ==================== ACTIVATIONS DETAILS MODAL (WITH DATABASE BACKEND) ====================
 const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
+  const dispatch = useDispatch();
   const [loading, setLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [generatingPdfTTC, setGeneratingPdfTTC] = useState(false);
@@ -2620,9 +2613,14 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   const [cachetChoiceItem, setCachetChoiceItem] = useState(null);
   
   // INVOICE NUMBER STATE
-  const [currentInvoiceNumber, setCurrentInvoiceNumber] = useState(getCurrentInvoiceNumber());
-  const [customInvoiceNumber, setCustomInvoiceNumber] = useState(getFormattedInvoiceNumber(getCurrentInvoiceNumber()));
-  const [isEditingInvoiceNumber, setIsEditingInvoiceNumber] = useState(false);
+  const [currentInvoiceNumber, setCurrentInvoiceNumber] = useState(1);
+  const [customInvoiceNumber, setCustomInvoiceNumber] = useState('F01');
+  
+  // Track generated invoices for this client from DATABASE
+  const [generatedItems, setGeneratedItems] = useState(new Set());
+  const [combinedGenerated, setCombinedGenerated] = useState(false);
+  const [combinedIncludedItems, setCombinedIncludedItems] = useState(new Set());
+  const [combinedInvoiceNumber, setCombinedInvoiceNumber] = useState(null);
   
   // Filter states
   const [startDate, setStartDate] = useState('');
@@ -2643,46 +2641,125 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   const [showPartial, setShowPartial] = useState(true);
   const [showUnpaid, setShowUnpaid] = useState(true);
   
-  // Update custom invoice number display when currentInvoiceNumber changes
-  useEffect(() => {
-    setCustomInvoiceNumber(getFormattedInvoiceNumber(currentInvoiceNumber));
-  }, [currentInvoiceNumber]);
+  // ==================== LOAD INVOICE DATA FROM DATABASE ====================
   
-  // Handle manual invoice number change
-  const handleInvoiceNumberChange = (e) => {
-    const value = e.target.value;
-    // Allow only numbers
-    if (/^\d*$/.test(value)) {
-      const numValue = parseInt(value, 10);
-      if (!isNaN(numValue) && numValue >= 1 && numValue <= 999) {
-        setCurrentInvoiceNumber(numValue);
-        setInvoiceCounter(numValue);
-        setCustomInvoiceNumber(getFormattedInvoiceNumber(numValue));
-        showToast(`Numéro de facture défini sur ${getFormattedInvoiceNumber(numValue)}`, 'success');
-      } else if (value === '') {
-        setCurrentInvoiceNumber(1);
-        setInvoiceCounter(1);
-        setCustomInvoiceNumber('F01');
+const loadInvoiceData = useCallback(async () => {
+  if (!client?.id) return;
+  
+  try {
+    console.log('📦 Loading invoice data for client:', client.id);
+    
+    // Load generated individual items from API
+    const result = await dispatch(fetchGeneratedIndividualItems(client.id)).unwrap();
+    const generatedIds = result.items || [];
+    setGeneratedItems(new Set(generatedIds));
+    
+    console.log('📦 Loaded generated items from API:', generatedIds);
+    
+    // Load combined invoice status
+    const combinedResult = await dispatch(checkCombinedInvoiceStatus(client.id)).unwrap();
+    setCombinedGenerated(combinedResult.data.generated);
+    if (combinedResult.data.invoice_number) {
+      setCombinedInvoiceNumber(combinedResult.data.invoice_number);
+    }
+    
+    // Load combined items
+    const combinedItemsResult = await dispatch(fetchCombinedInvoiceItems(client.id)).unwrap();
+    const combinedIds = combinedItemsResult.items || [];
+    setCombinedIncludedItems(new Set(combinedIds));
+    
+    console.log('📦 Loaded combined items from API:', combinedIds);
+    
+    // ADD THIS: Refresh the invoice counter
+    const counterInfo = await dispatch(fetchCounterInfo()).unwrap();
+    const currentNumber = counterInfo.info.invoice.formatted;
+    const numericValue = parseInt(currentNumber.replace('F', ''), 10);
+    setCurrentInvoiceNumber(numericValue);
+    setCustomInvoiceNumber(currentNumber);
+    
+  } catch (error) {
+    console.error('Error loading invoice data:', error);
+  }
+}, [client?.id, dispatch]);
+  
+  // Load initial invoice number from API
+  useEffect(() => {
+    const loadInitialInvoiceNumber = async () => {
+      try {
+        const result = await dispatch(fetchCurrentInvoiceNumber()).unwrap();
+        const numericValue = parseInt(result.invoice_number.replace('F', ''), 10);
+        setCurrentInvoiceNumber(numericValue);
+        setCustomInvoiceNumber(result.invoice_number);
+      } catch (error) {
+        console.error('Error loading invoice number:', error);
       }
+    };
+    loadInitialInvoiceNumber();
+    
+    if (client?.id) {
+      loadInvoiceData();
+    }
+  }, [client?.id, dispatch, loadInvoiceData]);
+  
+  // ==================== INVOICE TRACKING FUNCTIONS ====================
+  
+const markInvoiceGeneratedAPI = async (clientId, itemId, invoiceNumber) => {
+  try {
+    console.log('💾 SAVING to database:', { clientId, itemId, invoiceNumber });
+    
+    const result = await dispatch(saveIndividualInvoice({ 
+      clientId, 
+      itemId: itemId,
+      invoiceNumber 
+    })).unwrap();
+    
+    console.log('✅ Save API response:', result);
+    
+    // Don't reload here - let the parent handle the refresh
+    return true;
+  } catch (error) {
+    console.error('❌ Error saving invoice:', error);
+    showToast('Erreur lors de l\'enregistrement de la facture', 'error');
+    return false;
+  }
+};
+  
+  const checkIndividualExistsAPI = async (clientId, itemId) => {
+    try {
+      const result = await dispatch(checkIndividualInvoiceStatus({ clientId, itemId })).unwrap();
+      return { generated: result.data.generated, invoiceNumber: result.data.invoice_number };
+    } catch (error) {
+      console.error('Error checking individual invoice:', error);
+      return { generated: false, invoiceNumber: null };
     }
   };
   
-  // Reset invoice number to F01
-  const handleResetInvoiceNumber = () => {
-    const resetNumber = resetInvoiceCounter();
-    setCurrentInvoiceNumber(1);
-    setCustomInvoiceNumber(resetNumber);
-    showToast(`Numéro de facture réinitialisé à ${resetNumber}`, 'success');
+  const markCombinedGeneratedAPI = async (clientId, invoiceNumber, itemIds) => {
+    try {
+      await dispatch(saveCombinedInvoice({ clientId, invoiceNumber, itemIds })).unwrap();
+      setCombinedGenerated(true);
+      setCombinedIncludedItems(new Set(itemIds));
+      setCombinedInvoiceNumber(invoiceNumber);
+    } catch (error) {
+      console.error('Error marking combined generated:', error);
+    }
   };
   
-  const toggleGroup = (groupId) => {
-    setExpandedGroups(prev => ({
-      ...prev,
-      [groupId]: !prev[groupId]
-    }));
+  const removeCombinedItemAPI = async (clientId, itemId) => {
+    try {
+      await dispatch(removeItemFromCombined({ clientId, itemId })).unwrap();
+      setCombinedIncludedItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(itemId);
+        return newSet;
+      });
+    } catch (error) {
+      console.error('Error removing combined item:', error);
+    }
   };
   
-  // Load data and build display items
+  // ==================== LOAD ACTIVATIONS DATA ====================
+  
   useEffect(() => {
     const loadClientActivations = async () => {
       setLoading(true);
@@ -3059,6 +3136,181 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
     return total;
   }, [filteredItems]);
   
+  const generateSummaryPDF = async (includeTVA = true) => {
+    try {
+      if (includeTVA) setGeneratingPdfTTC(true);
+      else setGeneratingPdfHT(true);
+      
+      const { jsPDF } = await import('jspdf');
+      const autoTable = (await import('jspdf-autotable')).default;
+      
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const companyInfo = getCompanyInfo();
+      
+      let logoBase64 = null;
+      try {
+        const response = await fetch('/logo.png');
+        const blob = await response.blob();
+        logoBase64 = await new Promise(resolve => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(blob);
+        });
+      } catch (e) {}
+      
+      if (logoBase64) {
+        doc.addImage(logoBase64, 'PNG', 87.5, 10, 35, 30);
+      }
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.text(companyInfo.name.toUpperCase(), 12, 50);
+      doc.setFont('times', 'normal');
+      doc.setFontSize(9.5);
+      const addressLines = doc.splitTextToSize(companyInfo.address, 70);
+      doc.text(addressLines, 12, 56);
+      doc.text(`Tél: ${companyInfo.phone}`, 12, 68);
+      doc.text(`Email: ${companyInfo.email}`, 12, 73);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.text('RELEVÉ POUR :', 130, 50);
+      doc.setFont('times', 'bold');
+      doc.setFontSize(13);
+      doc.text(client.nom.toUpperCase(), 130, 57);
+      doc.setFont('times', 'normal');
+      doc.setFontSize(10);
+      
+      let y = 63;
+      if (client.adresse) { doc.text(client.adresse, 130, y); y += 5; }
+      if (client.telephone) { doc.text(`Tél: ${client.telephone}`, 130, y); y += 5; }
+      doc.text(`DATE : ${new Date().toLocaleDateString('fr-FR')}`, 130, y + 5);
+      
+      const formatMoney = (val) => `${Number(val || 0).toFixed(2)} DH`;
+      
+      // Filter by payment status for PDF summary
+      const filteredForPDF = filteredItems.filter(item => {
+        if (item.isGroup) {
+          if (item.overallPaymentStatus === 'paid' && showPaid) return true;
+          if (item.overallPaymentStatus === 'partial' && showPartial) return true;
+          if (item.overallPaymentStatus === 'unpaid' && showUnpaid) return true;
+          return false;
+        } else {
+          if (item.paymentStatus === 'paid' && showPaid) return true;
+          if (item.paymentStatus === 'partial' && showPartial) return true;
+          if (item.paymentStatus === 'unpaid' && showUnpaid) return true;
+          return false;
+        }
+      });
+      
+      // FLATTEN: each activation inside a group becomes its own row
+      const rows = [];
+      for (const item of filteredForPDF) {
+        if (item.isGroup) {
+          const productPricePerActivation = item.saleTotalPriceTTC / item.activations.length;
+          
+          for (const act of item.activations) {
+            const totalPriceForRow = productPricePerActivation + act.displayPriceTTC;
+            const price = includeTVA ? totalPriceForRow : (totalPriceForRow / (1 + TVA_RATE));
+            
+            const priceColor = (() => {
+              if (act.paymentStatus === 'paid') return [5, 150, 105];
+              if (act.paymentStatus === 'partial') return [217, 119, 6];
+              return [220, 38, 38];
+            })();
+            
+            rows.push([
+              formatDate(act.date),
+              'Installation + Activation',
+              act.matricule,
+              PLAN_LABEL[act.plan] || act.plan || '-',
+              { content: formatMoney(price), styles: { textColor: priceColor, fontStyle: 'bold' } }
+            ]);
+          }
+        } else {
+          const price = includeTVA ? item.displayPriceTTC : item.priceHT;
+          const priceColor = (() => {
+            if (item.paymentStatus === 'paid') return [5, 150, 105];
+            if (item.paymentStatus === 'partial') return [217, 119, 6];
+            return [220, 38, 38];
+          })();
+          
+          rows.push([
+            formatDate(item.date),
+            item.typeLabel || 'Activation',
+            item.matricule,
+            PLAN_LABEL[item.plan] || item.plan || '-',
+            { content: formatMoney(price), styles: { textColor: priceColor, fontStyle: 'bold' } }
+          ]);
+        }
+      }
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      const titleText = includeTVA 
+        ? 'DÉTAIL DES ACTIVATIONS (Prix TTC - TVA incluse)'
+        : 'DÉTAIL DES ACTIVATIONS (Prix HT - TVA exclue)';
+      doc.text(titleText, 105, 108, { align: 'center' });
+      
+      autoTable(doc, {
+        startY: 116,
+        head: [[
+          { content: "Date", styles: { textColor: [59, 130, 246] } },
+          { content: "Type", styles: { textColor: [139, 92, 246] } },
+          { content: "Matricule", styles: { textColor: [16, 185, 129] } },
+          { content: "Plan", styles: { textColor: [245, 158, 11] } },
+          { content: includeTVA ? "Prix TTC" : "Prix HT", styles: { textColor: [239, 68, 68] } }
+        ]],
+        body: rows,
+        theme: 'grid',
+        styles: { font: 'times', fontSize: 9, cellPadding: 3, valign: 'middle' },
+        headStyles: { fillColor: [248, 250, 252], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', lineWidth: 0.3 },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 35 },
+          1: { halign: 'center', cellWidth: 45 },
+          2: { halign: 'center', cellWidth: 55 },
+          3: { halign: 'center', cellWidth: 30 },
+          4: { halign: 'right', cellWidth: 35 }
+        },
+        margin: { left: 10, right: 10 },
+        didDrawPage: () => { doc.setDrawColor(200); doc.rect(5, 5, 200, 287); }
+      });
+      
+      let total = 0;
+      for (const item of filteredForPDF) {
+        if (item.isGroup) {
+          const productPricePerActivation = item.saleTotalPriceTTC / item.activations.length;
+          for (const act of item.activations) {
+            const totalPriceForRow = productPricePerActivation + act.displayPriceTTC;
+            total += includeTVA ? totalPriceForRow : (totalPriceForRow / (1 + TVA_RATE));
+          }
+        } else {
+          total += includeTVA ? item.displayPriceTTC : item.priceHT;
+        }
+      }
+      
+      const finalY = doc.lastAutoTable.finalY + 15;
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(145, finalY - 9, 55, 14, 3, 3, 'FD');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      const totalLabel = includeTVA ? 'TOTAL TTC :' : 'TOTAL HT :';
+      doc.text(totalLabel, 150, finalY);
+      doc.setFont('times', 'bold');
+      doc.text(formatMoney(total), 192, finalY, { align: 'right' });
+      
+      const fileNameSuffix = includeTVA ? 'TTC' : 'HT';
+      doc.save(`Releve_${client.nom.replace(/\s+/g, '_')}_${fileNameSuffix}.pdf`);
+      showToast(`PDF généré avec succès (${includeTVA ? 'TTC - TVA incluse' : 'HT - TVA exclue'})`, 'success');
+      
+    } catch (err) {
+      console.error(err);
+      showToast('Erreur lors de la génération du PDF', 'error');
+    } finally {
+      if (includeTVA) setGeneratingPdfTTC(false);
+      else setGeneratingPdfHT(false);
+    }
+  };
+  
   // Handle checkbox selection
   const toggleRowSelection = (rowId) => {
     const newSelected = new Set(selectedRows);
@@ -3153,10 +3405,26 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
     showToast('Tous les prix ont été réinitialisés', 'info');
   };
   
-  // Generate invoice for a single item (group or standalone) with custom invoice number
-  const handleGenerateSingleInvoice = async (item, showCachet) => {
+// Generate invoice for a single item (group or standalone)
+const handleGenerateSingleInvoice = async (item, showCachet) => {
+  let invoiceNumberToUse = customInvoiceNumber;
+  let shouldIncrement = true;
+  
+  console.log('Generating invoice for item:', item.id, 'Type:', item.isGroup ? 'Group' : 'Single');
+  
+  // Check if this item already has an individual invoice
+  const existing = await checkIndividualExistsAPI(client.id, item.id);
+  
+  if (existing.generated && existing.invoiceNumber) {
+    invoiceNumberToUse = existing.invoiceNumber;
+    shouldIncrement = false;
+  }
+  
+  setGeneratingInvoice(item.id);
+  
+  try {
+    // Generate PDF
     if (item.isGroup) {
-      setGeneratingInvoice(item.id);
       const groupForInvoice = {
         type: item.type,
         saleTotalPriceHT: item.saleTotalPriceHT,
@@ -3168,10 +3436,8 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
           displayPriceTTC: act.displayPriceTTC
         }))
       };
-      await generateInvoicePDF(client, groupForInvoice, showToast, () => {}, showCachet, customInvoiceNumber);
-      setGeneratingInvoice(null);
+      await generateInvoicePDF(client, groupForInvoice, showToast, () => {}, showCachet, invoiceNumberToUse);
     } else {
-      setGeneratingInvoice(item.id);
       const invoiceItem = {
         id: item.id,
         type: item.type,
@@ -3180,249 +3446,371 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
         priceHT: item.priceHT,
         priceTTC: item.displayPriceTTC
       };
-      await generateSimpleActivationInvoicePDF(client, invoiceItem, showToast, () => {}, showCachet, customInvoiceNumber);
-      setGeneratingInvoice(null);
-    }
-    // Increment invoice counter after generation
-    const nextNumber = getCurrentInvoiceNumber() + 1;
-    setCurrentInvoiceNumber(nextNumber);
-    setInvoiceCounter(nextNumber);
-    setCustomInvoiceNumber(getFormattedInvoiceNumber(nextNumber));
-  };
-  
-  // Generate combined invoice for selected items (aggregated into one line) with custom invoice number
-  const handleGenerateCombinedInvoice = async (showCachet) => {
-    const selected = filteredItems.filter(item => selectedRows.has(item.id));
-    if (selected.length === 0) {
-      showToast('Veuillez sélectionner au moins un élément', 'error');
-      return;
+      await generateSimpleActivationInvoicePDF(client, invoiceItem, showToast, () => {}, showCachet, invoiceNumberToUse);
     }
     
-    setGeneratingCombined(true);
-    try {
-      const companyInfo = getCompanyInfo();
-      const [logoBase64, cacheImageBase64] = await Promise.all([
-        (async () => {
-          try {
-            const response = await fetch('/logo.png');
-            if (response.ok) {
-              const blob = await response.blob();
-              return new Promise(resolve => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result);
-                reader.readAsDataURL(blob);
-              });
-            }
-            return null;
-          } catch (e) { return null; }
-        })(),
-        getCacheImageBase64()
-      ]);
+    // Handle combined removal
+    if (combinedIncludedItems.has(item.id)) {
+      await removeCombinedItemAPI(client.id, item.id);
+      setCombinedIncludedItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(item.id);
+        return newSet;
+      });
+    }
+    
+    // Update local state immediately without waiting for API
+    if (!existing.generated) {
+      setGeneratedItems(prev => {
+        const newSet = new Set(prev);
+        newSet.add(item.id);
+        return newSet;
+      });
       
-      let totalQuantity = 0;
-      let totalHT = 0;
+      // Async save to database (don't await - let it run in background)
+      dispatch(saveIndividualInvoice({ 
+        clientId: client.id, 
+        itemId: item.id,
+        invoiceNumber: invoiceNumberToUse 
+      })).catch(console.error);
+    }
+    
+    // Handle counter increment
+    if (shouldIncrement) {
+      showToast(`Facture générée avec le numéro ${invoiceNumberToUse}`, 'success');
       
-      for (const item of selected) {
-        if (item.isGroup) {
-          const groupQty = (item.totalProductQuantity || 0) + item.activations.length;
-          const groupHT = item.grandTotalTTC / (1 + TVA_RATE);
-          totalQuantity += groupQty;
-          totalHT += groupHT;
-        } else {
-          const itemHT = item.displayPriceTTC / (1 + TVA_RATE);
-          totalQuantity += 1;
-          totalHT += itemHT;
-        }
-      }
-      
-      const unitPriceHT = totalQuantity > 0 ? totalHT / totalQuantity : 0;
-      const totalTTC = calculateTTC(totalHT);
-      const tvaAmount = totalTTC - totalHT;
-      const invoiceDate = new Date().toLocaleDateString('fr-FR');
-      const finalInvoiceNumber = customInvoiceNumber;
-      const description = `ACTIVATION GPS`;
-      
-      const html = `
-        <!DOCTYPE html>
-        <html lang="fr">
-        <head>
-          <meta charset="UTF-8">
-          <title>Facture ${finalInvoiceNumber}</title>
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
-            * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; background-color: #ffffff; line-height: 1.5; padding: 35px 40px 60px 40px; font-size: 12px; }
-            .invoice-container { max-width: 850px; margin: 0 auto; box-sizing: border-box; page-break-after: avoid; position: relative; min-height: 100%; }
-            .header-top { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 25px; }
-            .logo-wrapper { width: 130px; height: 130px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 8px; }
-            .invoice-logo { width: 100%; height: 100%; object-fit: cover; }
-            .company-name-placeholder { font-size: 20px; font-weight: 700; color: #0f172a; font-family: 'Playfair Display', serif; }
-            .corporate-meta-box { text-align: right; }
-            .document-type-badge { font-family: 'Playfair Display', serif; font-size: 28px; font-style: italic; color: #0f172a; margin-bottom: 4px; font-weight: 600; }
-            .invoice-id-badge { font-size: 14px; font-weight: 700; color: #475569; letter-spacing: 0.05em; margin-bottom: 4px; }
-            .invoice-date-line { font-size: 12px; color: #94a3b8; }
-            .parties-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 30px; }
-            .party-card .block-title { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; }
-            .party-card .party-name { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
-            .party-card .party-details { color: #475569; line-height: 1.5; font-size: 12px; }
-            .table-wrapper { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 25px; }
-            .invoice-table { width: 100%; border-collapse: collapse; }
-            .invoice-table th { background-color: #f8fafc; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; padding: 12px 8px; border-bottom: 1px solid #e2e8f0; text-align: left; }
-            .invoice-table td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; color: #334155; font-size: 12px; }
-            .invoice-table tr:last-child td { border-bottom: 1px solid #e2e8f0; }
-            .text-center { text-align: center; }
-            .text-right { text-align: right; }
-            .summary-container { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; margin-bottom: 25px; }
-            .legal-wordings { border-left: 2px solid #e2e8f0; padding-left: 18px; margin-top: 5px; }
-            .wording-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.05em; margin-bottom: 4px; }
-            .wording-value { font-family: 'Playfair Display', serif; font-size: 14px; font-style: italic; color: #334155; font-weight: 600; line-height: 1.4; }
-            .financial-math { width: 100%; border-collapse: collapse; }
-            .financial-math td { padding: 6px 8px; font-size: 12px; color: #475569; }
-            .financial-math tr.premium-total td { font-size: 16px; font-weight: 700; color: #0f172a; border-top: 1px solid #e2e8f0; padding-top: 10px; padding-bottom: 10px; }
-            .payment-routing { border-top: 1px solid #e2e8f0; padding-top: 15px; margin-bottom: 30px; }
-            .routing-title { font-size: 11px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
-            .routing-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; font-size: 11px; color: #475569; }
-            .routing-item strong { color: #0f172a; display: block; margin-bottom: 2px; }
-            .executive-footer { border-top: 2px solid #0f172a; padding-top: 15px; padding-bottom: 10px; text-align: center; font-size: 10px; color: #64748b; line-height: 1.6; margin-top: 20px; }
-            .executive-footer .footer-company-name { font-weight: 700; color: #0f172a; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
-            .bank-info { margin-top: 12px; font-size: 11px; color: #475569; border-top: 1px dashed #e2e8f0; padding-top: 10px; }
-            .bank-info strong { color: #0f172a; }
-            .signature-section { margin-top: 40px; margin-bottom: 30px; display: flex; justify-content: flex-end; padding-right: 20px; }
-            .signature-box { text-align: center; width: 200px; }
-            .signature-label { font-size: 11px; font-weight: bold; margin-bottom: 10px; text-decoration: underline; color: #1f2937; }
-            .signature-image { margin-top: 10px; display: flex; justify-content: center; }
-            .signature-img { max-width: 150px; max-height: 80px; object-fit: contain; }
-            @media print { body { padding: 0 0 40px 0; } .executive-footer { position: fixed; bottom: 0; left: 0; right: 0; background: white; } }
-          </style>
-        </head>
-        <body>
-          <div class="invoice-container">
-            <div class="header-top">
-              <div class="logo-wrapper">
-                ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" class="invoice-logo"/>` : `<span class="company-name-placeholder">${companyInfo.name}</span>`}
-              </div>
-              <div class="corporate-meta-box">
-                <div class="document-type-badge">FACTURE</div>
-                <div class="invoice-id-badge">N° ${currentYear}/${finalInvoiceNumber}</div>
-                <div class="invoice-date-line">Date: ${invoiceDate}</div>
-              </div>
-            </div>
-            
-            <div class="parties-grid">
-              <div class="party-card">
-                <div class="block-title">Émetteur</div>
-                <div class="party-name">${companyInfo.name}</div>
-                <div class="party-details">
-                  ${companyInfo.address}<br>
-                  Téléphone: ${companyInfo.phone}<br>
-                  Email: ${companyInfo.email}
-                </div>
-              </div>
-              <div class="party-card">
-                <div class="block-title">Facturé à</div>
-                <div class="party-name">${client.nom}</div>
-                <div class="party-details">
-                  ${client.adresse ? `${client.adresse}<br>` : ''}
-                  Téléphone: ${client.telephone || '-'}<br>
-                  ${client.ice_client ? `ICE: ${client.ice_client}<br>` : ''}
-                  ${client.email ? `Email: ${client.email}` : ''}
-                </div>
-              </div>
-            </div>
-            
-            <div class="table-wrapper">
-              <table class="invoice-table">
-                <thead>
-                  <tr>
-                    <th style="width: 60%;">Désignation</th>
-                    <th class="text-center" style="width: 10%;">Qté</th>
-                    <th class="text-right" style="width: 15%;">P.U HT</th>
-                    <th class="text-right" style="width: 15%;">Montant HT</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td><strong>${description}</strong></td>
-                    <td class="text-center"><strong>${totalQuantity}</strong></td>
-                    <td class="text-right">${safeToFixed(unitPriceHT)} MAD</td>
-                    <td class="text-right"><strong>${safeToFixed(totalHT)} MAD</strong></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            
-            <div class="summary-container">
-              <div class="legal-wordings">
-                <div class="wording-label">Arrêté la présente facture à la somme de :</div>
-                <div class="wording-value">${convertToFrenchWords(totalTTC)}</div>
-                <div class="bank-info" style="margin-top: 15px;">
-                  <strong>Informations de paiement</strong><br>
-                  ${companyInfo.rib ? `RIB: ${companyInfo.rib}` : ''}
-                </div>
-              </div>
-              <div>
-                <table class="financial-math">
-                  <tr><td>Montant HT</td><td class="text-right">${safeToFixed(totalHT)} MAD</td></tr>
-                  <tr><td>TVA (20%)</td><td class="text-right">${safeToFixed(tvaAmount)} MAD</td></tr>
-                  <tr class="premium-total"><td><strong>TOTAL TTC</strong></td><td class="text-right"><strong>${safeToFixed(totalTTC)} MAD</strong></td></tr>
-                </table>
-              </div>
-            </div>
-            
-            <div class="signature-section">
-              <div class="signature-box">
-                <div class="signature-label">Cachet & signature</div>
-                ${showCachet && cacheImageBase64 ? `<div class="signature-image"><img src="${cacheImageBase64}" alt="Cachet" class="signature-img" /></div>` : '<div style="height: 50px;"></div>'}
-              </div>
-            </div>
-            
-            <div class="payment-routing">
-              <div class="routing-title">Règlement & Informations Légales</div>
-              <div class="routing-grid">
-                <div class="routing-item"><strong>ICE</strong> ${companyInfo.ice || '-'}</div>
-                <div class="routing-item"><strong>RC</strong> ${companyInfo.rc || '-'}</div>
-                <div class="routing-item"><strong>Patente</strong> ${companyInfo.patente || '-'}</div>
-                <div class="routing-item"><strong>IF</strong> ${companyInfo.tax_number || '-'}</div>
-                <div class="routing-item"><strong>CNSS</strong> ${companyInfo.cnss || '-'}</div>
-              </div>
-            </div>
-            
-            <div class="executive-footer">
+      // Get new counter value
+      const counterInfo = await dispatch(fetchCounterInfo()).unwrap();
+      const nextNumber = counterInfo.info.invoice.formatted;
+      const numericValue = parseInt(nextNumber.replace('F', ''), 10);
+      setCurrentInvoiceNumber(numericValue);
+      setCustomInvoiceNumber(nextNumber);
+    } else {
+      showToast(`Facture régénérée avec le numéro ${invoiceNumberToUse}`, 'success');
+    }
+    
+  } catch (error) {
+    console.error('Error generating invoice:', error);
+    showToast('Erreur lors de la génération de la facture', 'error');
+  } finally {
+    setGeneratingInvoice(null);
+  }
+};
 
+// Generate combined invoice for selected items
+// For combined invoices: ALWAYS generate a new number (increment counter)
+const handleGenerateCombinedInvoice = async (showCachet) => {
+  const selected = filteredItems.filter(item => selectedRows.has(item.id));
+  if (selected.length === 0) {
+    showToast('Veuillez sélectionner au moins un élément', 'error');
+    return;
+  }
+  
+  // ALWAYS use the current invoice number for combined invoices
+  let invoiceNumberToUse = customInvoiceNumber;
+  
+  console.log('Generating combined invoice for items:', selected.map(i => i.id));
+  console.log('Using NEW invoice number:', invoiceNumberToUse);
+  
+  setGeneratingCombined(true);
+  let element = null;
+  try {
+    const companyInfo = getCompanyInfo();
+    const [logoBase64, cacheImageBase64] = await Promise.all([
+      (async () => {
+        try {
+          const response = await fetch('/logo.png');
+          if (response.ok) {
+            const blob = await response.blob();
+            return new Promise(resolve => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result);
+              reader.readAsDataURL(blob);
+            });
+          }
+          return null;
+        } catch (e) { return null; }
+      })(),
+      getCacheImageBase64()
+    ]);
+    
+    let totalQuantity = 0;
+    let totalHT = 0;
+    
+    for (const item of selected) {
+      if (item.isGroup) {
+        const groupQty = (item.totalProductQuantity || 0) + item.activations.length;
+        const groupHT = item.grandTotalTTC / (1 + TVA_RATE);
+        totalQuantity += groupQty;
+        totalHT += groupHT;
+      } else {
+        const itemHT = item.displayPriceTTC / (1 + TVA_RATE);
+        totalQuantity += 1;
+        totalHT += itemHT;
+      }
+    }
+    
+    const unitPriceHT = totalQuantity > 0 ? totalHT / totalQuantity : 0;
+    const totalTTC = calculateTTC(totalHT);
+    const tvaAmount = totalTTC - totalHT;
+    const invoiceDate = new Date().toLocaleDateString('fr-FR');
+    const finalInvoiceNumber = invoiceNumberToUse;
+    const description = `ACTIVATION GPS`;
+    
+    const html = generateCombinedInvoiceHTML(client, selected, totalQuantity, unitPriceHT, totalHT, totalTTC, tvaAmount, invoiceDate, finalInvoiceNumber, description, logoBase64, cacheImageBase64, companyInfo, showCachet);
+    
+    element = document.createElement('div');
+    element.innerHTML = html;
+    document.body.appendChild(element);
+    
+    const opt = {
+      margin: [6, 8, 6, 8],
+      filename: `Facture_Combinee_${client.nom.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: 'avoid-all' }
+    };
+    
+    await html2pdf().set(opt).from(element).save();
+    showToast(`Facture combinée générée avec succès (${selected.length} élément(s))${!showCachet ? ' (sans cachet)' : ''}`, 'success');
+    
+    // IMPORTANT: Mark each selected item as "included in combined" (red)
+    const selectedItemIds = selected.map(item => item.id);
+    
+    // Save to backend
+    await markCombinedGeneratedAPI(client.id, finalInvoiceNumber, selectedItemIds);
+    
+    // Update local state: remove these items from generatedItems (if they were individually generated)
+    // and add them to combinedIncludedItems
+    setGeneratedItems(prev => {
+      const newSet = new Set(prev);
+      selectedItemIds.forEach(id => newSet.delete(id));
+      console.log('Removed from generatedItems:', selectedItemIds, 'New set:', Array.from(newSet));
+      return newSet;
+    });
+    
+    setCombinedIncludedItems(prev => {
+      const newSet = new Set(prev);
+      selectedItemIds.forEach(id => newSet.add(id));
+      console.log('Added to combinedIncludedItems:', selectedItemIds, 'New set:', Array.from(newSet));
+      return newSet;
+    });
+    
+    setCombinedGenerated(true);
+    setCombinedInvoiceNumber(finalInvoiceNumber);
+    
+    // Clear selection
+    setSelectedRows(new Set());
+    
+    // Wait a moment for the backend to process the increment
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Get the updated counter from backend
+    try {
+      const counterInfo = await dispatch(fetchCounterInfo()).unwrap();
+      const nextNumber = counterInfo.info.invoice.formatted;
+      const numericValue = parseInt(nextNumber.replace('F', ''), 10);
+      setCurrentInvoiceNumber(numericValue);
+      setCustomInvoiceNumber(nextNumber);
+      showToast(`Prochain numéro de facture: ${nextNumber}`, 'info');
+    } catch (error) {
+      console.error('Error getting next invoice number:', error);
+      // Fallback
+      try {
+        const nextResult = await dispatch(fetchNextInvoiceNumber()).unwrap();
+        const nextNumber = nextResult.invoice_number;
+        const numericValue = parseInt(nextNumber.replace('F', ''), 10);
+        setCurrentInvoiceNumber(numericValue);
+        setCustomInvoiceNumber(nextNumber);
+      } catch (e) {
+        console.error('Fallback also failed:', e);
+      }
+    }
+    
+    // Force a final refresh of the data to ensure consistency
+    await loadInvoiceData();
+    
+  } catch (error) {
+    console.error('Combined PDF error:', error);
+    showToast('Erreur lors de la génération de la facture combinée', 'error');
+  } finally {
+    setGeneratingCombined(false);
+    if (element && element.parentNode) {
+      document.body.removeChild(element);
+    }
+  }
+};
+
+// Helper function to generate combined invoice HTML
+const generateCombinedInvoiceHTML = (client, selected, totalQuantity, unitPriceHT, totalHT, totalTTC, tvaAmount, invoiceDate, finalInvoiceNumber, description, logoBase64, cacheImageBase64, companyInfo, showCachet) => {
+  return `
+    <!DOCTYPE html>
+    <html lang="fr">
+    <head>
+      <meta charset="UTF-8">
+      <title>Facture ${finalInvoiceNumber}</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          color: #1e293b;
+          background-color: #ffffff;
+          line-height: 1.5;
+          padding: 35px 40px 60px 40px;
+          font-size: 12px;
+        }
+        .invoice-container { max-width: 850px; margin: 0 auto; box-sizing: border-box; page-break-after: avoid; position: relative; min-height: 100%; }
+        .header-top { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 25px; }
+        .logo-wrapper { width: 130px; height: 130px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 8px; }
+        .invoice-logo { width: 100%; height: 100%; object-fit: cover; }
+        .company-name-placeholder { font-size: 20px; font-weight: 700; color: #0f172a; font-family: 'Playfair Display', serif; }
+        .corporate-meta-box { text-align: right; }
+        .document-type-badge { font-family: 'Playfair Display', serif; font-size: 28px; font-style: italic; color: #0f172a; margin-bottom: 4px; font-weight: 600; }
+        .invoice-id-badge { font-size: 14px; font-weight: 700; color: #475569; letter-spacing: 0.05em; margin-bottom: 4px; }
+        .invoice-date-line { font-size: 12px; color: #94a3b8; }
+        .parties-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 30px; }
+        .party-card .block-title { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; }
+        .party-card .party-name { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+        .party-card .party-details { color: #475569; line-height: 1.5; font-size: 12px; }
+        .table-wrapper { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 25px; }
+        .invoice-table { width: 100%; border-collapse: collapse; }
+        .invoice-table th { background-color: #f8fafc; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; padding: 12px 8px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+        .invoice-table td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; color: #334155; font-size: 12px; }
+        .invoice-table tr:last-child td { border-bottom: 1px solid #e2e8f0; }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .summary-container { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; margin-bottom: 25px; }
+        .legal-wordings { border-left: 2px solid #e2e8f0; padding-left: 18px; margin-top: 5px; }
+        .wording-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.05em; margin-bottom: 4px; }
+        .wording-value { font-family: 'Playfair Display', serif; font-size: 14px; font-style: italic; color: #334155; font-weight: 600; line-height: 1.4; }
+        .financial-math { width: 100%; border-collapse: collapse; }
+        .financial-math td { padding: 6px 8px; font-size: 12px; color: #475569; }
+        .financial-math tr.premium-total td { font-size: 16px; font-weight: 700; color: #0f172a; border-top: 1px solid #e2e8f0; padding-top: 10px; padding-bottom: 10px; }
+        .payment-routing { border-top: 1px solid #e2e8f0; padding-top: 15px; margin-bottom: 30px; }
+        .routing-title { font-size: 11px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+        .routing-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; font-size: 11px; color: #475569; }
+        .routing-item strong { color: #0f172a; display: block; margin-bottom: 2px; }
+        .executive-footer { border-top: 2px solid #0f172a; padding-top: 15px; padding-bottom: 10px; text-align: center; font-size: 10px; color: #64748b; line-height: 1.6; margin-top: 20px; }
+        .bank-info { margin-top: 12px; font-size: 11px; color: #475569; border-top: 1px dashed #e2e8f0; padding-top: 10px; }
+        .bank-info strong { color: #0f172a; }
+        .signature-section { margin-top: 40px; margin-bottom: 30px; display: flex; justify-content: flex-end; padding-right: 20px; }
+        .signature-box { text-align: center; width: 200px; }
+        .signature-label { font-size: 11px; font-weight: bold; margin-bottom: 10px; text-decoration: underline; color: #1f2937; }
+        .signature-image { margin-top: 10px; display: flex; justify-content: center; }
+        .signature-img { max-width: 150px; max-height: 80px; object-fit: contain; }
+        @media print { body { padding: 0; } .executive-footer { position: fixed; bottom: 0; left: 0; right: 0; background: white; } }
+      </style>
+    </head>
+    <body>
+      <div class="invoice-container">
+        <div class="header-top">
+          <div class="logo-wrapper">
+            ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" class="invoice-logo"/>` : `<span class="company-name-placeholder">${companyInfo.name}</span>`}
+          </div>
+          <div class="corporate-meta-box">
+            <div class="document-type-badge">FACTURE</div>
+            <div class="invoice-id-badge">N° ${currentYear}/${finalInvoiceNumber}</div>
+            <div class="invoice-date-line">Date: ${invoiceDate}</div>
+          </div>
+        </div>
+        
+        <div class="parties-grid">
+          <div class="party-card">
+            <div class="block-title">Émetteur</div>
+            <div class="party-name">${companyInfo.name}</div>
+            <div class="party-details">
+              ${companyInfo.address}<br>
+              Téléphone: ${companyInfo.phone}<br>
+              Email: ${companyInfo.email}
             </div>
           </div>
-        </body>
-        </html>
-      `;
-      
-      const element = document.createElement('div');
-      element.innerHTML = html;
-      document.body.appendChild(element);
-      const opt = {
-        margin: [6, 8, 6, 8],
-        filename: `Facture_Combinee_${client.nom.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: 'avoid-all' }
-      };
-      await html2pdf().set(opt).from(element).save();
-      showToast(`Facture combinée générée avec succès (${selected.length} élément(s))${!showCachet ? ' (sans cachet)' : ''}`, 'success');
-      document.body.removeChild(element);
-      
-      // Increment invoice counter after generation
-      const nextNumber = getCurrentInvoiceNumber() + 1;
-      setCurrentInvoiceNumber(nextNumber);
-      setInvoiceCounter(nextNumber);
-      setCustomInvoiceNumber(getFormattedInvoiceNumber(nextNumber));
-      
-    } catch (error) {
-      console.error('Combined PDF error:', error);
-      showToast('Erreur lors de la génération de la facture combinée', 'error');
-    } finally {
-      setGeneratingCombined(false);
-    }
-  };
+          <div class="party-card">
+            <div class="block-title">Facturé à</div>
+            <div class="party-name">${client.nom}</div>
+            <div class="party-details">
+              ${client.adresse ? `${client.adresse}<br>` : ''}
+              Téléphone: ${client.telephone || '-'}<br>
+              ${client.ice_client ? `ICE: ${client.ice_client}<br>` : ''}
+              ${client.email ? `Email: ${client.email}` : ''}
+            </div>
+          </div>
+        </div>
+        
+        <div class="table-wrapper">
+          <table class="invoice-table">
+            <thead>
+              <tr>
+                <th style="width: 60%;">Désignation</th>
+                <th class="text-center" style="width: 10%;">Qté</th>
+                <th class="text-right" style="width: 15%;">P.U HT</th>
+                <th class="text-right" style="width: 15%;">Montant HT</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>${description}</strong><br>
+                  <span style="font-size: 10px; color: #6b7280;">
+                    ${selected.map(item => {
+                      if (item.isGroup) {
+                        return item.activations.map(a => `${a.matricule} (${PLAN_LABEL[a.plan] || a.plan || 'Standard'})`).join(', ');
+                      } else {
+                        return `${item.matricule} (${PLAN_LABEL[item.plan] || item.plan || 'Standard'})`;
+                      }
+                    }).join(', ')}
+                  </span>
+                </td>
+                <td class="text-center"><strong>${totalQuantity}</strong></td>
+                <td class="text-right">${safeToFixed(unitPriceHT)} MAD</td>
+                <td class="text-right"><strong>${safeToFixed(totalHT)} MAD</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <div class="summary-container">
+          <div class="legal-wordings">
+            <div class="wording-label">Arrêté la présente facture à la somme de :</div>
+            <div class="wording-value">${convertToFrenchWords(totalTTC)}</div>
+            <div class="bank-info" style="margin-top: 15px;">
+              <strong>Informations de paiement</strong><br>
+              ${companyInfo.rib ? `RIB: ${companyInfo.rib}` : ''}
+            </div>
+          </div>
+          <div>
+            <table class="financial-math">
+              <tr><td>Montant HT</td><td class="text-right">${safeToFixed(totalHT)} MAD</td></tr>
+              <tr><td>TVA (20%)</td><td class="text-right">${safeToFixed(tvaAmount)} MAD</td></tr>
+              <tr class="premium-total"><td><strong>TOTAL TTC</strong></td><td class="text-right"><strong>${safeToFixed(totalTTC)} MAD</strong></td></tr>
+            </table>
+          </div>
+        </div>
+        
+        <div class="signature-section">
+          <div class="signature-box">
+            <div class="signature-label">Cachet & signature</div>
+            ${showCachet && cacheImageBase64 ? `<div class="signature-image"><img src="${cacheImageBase64}" alt="Cachet" class="signature-img" /></div>` : '<div style="height: 50px;"></div>'}
+          </div>
+        </div>
+        
+        <div class="payment-routing">
+          <div class="routing-title">Règlement & Informations Légales</div>
+          <div class="routing-grid">
+            <div class="routing-item"><strong>ICE</strong> ${companyInfo.ice || '-'}</div>
+            <div class="routing-item"><strong>RC</strong> ${companyInfo.rc || '-'}</div>
+            <div class="routing-item"><strong>Patente</strong> ${companyInfo.patente || '-'}</div>
+            <div class="routing-item"><strong>IF</strong> ${companyInfo.tax_number || '-'}</div>
+            <div class="routing-item"><strong>CNSS</strong> ${companyInfo.cnss || '-'}</div>
+          </div>
+        </div>
+        
+        <div class="executive-footer"></div>
+      </div>
+    </body>
+    </html>
+  `;
+};
   
   const openCachetChoiceCombined = () => {
     if (selectedRows.size === 0) {
@@ -3432,204 +3820,42 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
     setShowCachetPromptCombined(true);
   };
   
-  // Generate summary PDF (TTC/HT) for filtered items - FLATTENED VERSION with product + activation prices combined
-const generateSummaryPDF = async (includeTVA = true) => {
-  try {
-    if (includeTVA) setGeneratingPdfTTC(true);
-    else setGeneratingPdfHT(true);
-    
-    const { jsPDF } = await import('jspdf');
-    const autoTable = (await import('jspdf-autotable')).default;
-    
-    const doc = new jsPDF('p', 'mm', 'a4');
-    const companyInfo = getCompanyInfo();
-    
-    let logoBase64 = null;
-    try {
-      const response = await fetch('/logo.png');
-      const blob = await response.blob();
-      logoBase64 = await new Promise(resolve => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.readAsDataURL(blob);
-      });
-    } catch (e) {}
-    
-    if (logoBase64) {
-      doc.addImage(logoBase64, 'PNG', 87.5, 10, 35, 30);
-    }
-    
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text(companyInfo.name.toUpperCase(), 12, 50);
-    doc.setFont('times', 'normal');
-    doc.setFontSize(9.5);
-    const addressLines = doc.splitTextToSize(companyInfo.address, 70);
-    doc.text(addressLines, 12, 56);
-    doc.text(`Tél: ${companyInfo.phone}`, 12, 68);
-    doc.text(`Email: ${companyInfo.email}`, 12, 73);
-    
-    doc.setFont('helvetica', 'bold');
-    doc.text('RELEVÉ POUR :', 130, 50);
-    doc.setFont('times', 'bold');
-    doc.setFontSize(13);
-    doc.text(client.nom.toUpperCase(), 130, 57);
-    doc.setFont('times', 'normal');
-    doc.setFontSize(10);
-    
-    let y = 63;
-    if (client.adresse) { doc.text(client.adresse, 130, y); y += 5; }
-    if (client.telephone) { doc.text(`Tél: ${client.telephone}`, 130, y); y += 5; }
-    doc.text(`DATE : ${new Date().toLocaleDateString('fr-FR')}`, 130, y + 5);
-    
-    const formatMoney = (val) => `${Number(val || 0).toFixed(2)} DH`;
-    
-    // Filter by payment status for PDF summary
-    const filteredForPDF = filteredItems.filter(item => {
-      if (item.isGroup) {
-        if (item.overallPaymentStatus === 'paid' && showPaid) return true;
-        if (item.overallPaymentStatus === 'partial' && showPartial) return true;
-        if (item.overallPaymentStatus === 'unpaid' && showUnpaid) return true;
-        return false;
-      } else {
-        if (item.paymentStatus === 'paid' && showPaid) return true;
-        if (item.paymentStatus === 'partial' && showPartial) return true;
-        if (item.paymentStatus === 'unpaid' && showUnpaid) return true;
-        return false;
-      }
-    });
-    
-    // FLATTEN: each activation inside a group becomes its own row
-    // Price = product price (from sale) + activation price
-    const rows = [];
-    for (const item of filteredForPDF) {
-      if (item.isGroup) {
-        // For each activation in the group, calculate total price = (product price per activation) + activation price
-        const productPricePerActivation = item.saleTotalPriceTTC / item.activations.length;
-        
-        for (const act of item.activations) {
-          // Total price for this activation row = product price share + activation price
-          const totalPriceForRow = productPricePerActivation + act.displayPriceTTC;
-          const price = includeTVA ? totalPriceForRow : (totalPriceForRow / (1 + TVA_RATE));
-          
-          const priceColor = (() => {
-            if (act.paymentStatus === 'paid') return [5, 150, 105];
-            if (act.paymentStatus === 'partial') return [217, 119, 6];
-            return [220, 38, 38];
-          })();
-          
-          rows.push([
-            formatDate(act.date),
-            'Installation + Activation',
-            act.matricule,
-            PLAN_LABEL[act.plan] || act.plan || '-',
-            { content: formatMoney(price), styles: { textColor: priceColor, fontStyle: 'bold' } }
-          ]);
-        }
-      } else {
-        // Standalone activation or renewal
-        const price = includeTVA ? item.displayPriceTTC : item.priceHT;
-        const priceColor = (() => {
-          if (item.paymentStatus === 'paid') return [5, 150, 105];
-          if (item.paymentStatus === 'partial') return [217, 119, 6];
-          return [220, 38, 38];
-        })();
-        
-        rows.push([
-          formatDate(item.date),
-          item.typeLabel || 'Activation',
-          item.matricule,
-          PLAN_LABEL[item.plan] || item.plan || '-',
-          { content: formatMoney(price), styles: { textColor: priceColor, fontStyle: 'bold' } }
-        ]);
-      }
-    }
-    
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    const titleText = includeTVA 
-      ? 'DÉTAIL DES ACTIVATIONS (Prix TTC - TVA incluse)'
-      : 'DÉTAIL DES ACTIVATIONS (Prix HT - TVA exclue)';
-    doc.text(titleText, 105, 108, { align: 'center' });
-    
-    autoTable(doc, {
-      startY: 116,
-      head: [[
-        { content: "Date", styles: { textColor: [59, 130, 246] } },
-        { content: "Type", styles: { textColor: [139, 92, 246] } },
-        { content: "Matricule", styles: { textColor: [16, 185, 129] } },
-        { content: "Plan", styles: { textColor: [245, 158, 11] } },
-        { content: includeTVA ? "Prix TTC" : "Prix HT", styles: { textColor: [239, 68, 68] } }
-      ]],
-      body: rows,
-      theme: 'grid',
-      styles: { font: 'times', fontSize: 9, cellPadding: 3, valign: 'middle' },
-      headStyles: { fillColor: [248, 250, 252], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', lineWidth: 0.3 },
-      columnStyles: {
-        0: { halign: 'center', cellWidth: 35 },
-        1: { halign: 'center', cellWidth: 45 },
-        2: { halign: 'center', cellWidth: 55 },
-        3: { halign: 'center', cellWidth: 30 },
-        4: { halign: 'right', cellWidth: 35 }
-      },
-      margin: { left: 10, right: 10 },
-      didDrawPage: () => { doc.setDrawColor(200); doc.rect(5, 5, 200, 287); }
-    });
-    
-    let total = 0;
-    for (const item of filteredForPDF) {
-      if (item.isGroup) {
-        const productPricePerActivation = item.saleTotalPriceTTC / item.activations.length;
-        for (const act of item.activations) {
-          const totalPriceForRow = productPricePerActivation + act.displayPriceTTC;
-          total += includeTVA ? totalPriceForRow : (totalPriceForRow / (1 + TVA_RATE));
-        }
-      } else {
-        total += includeTVA ? item.displayPriceTTC : item.priceHT;
-      }
-    }
-    
-    const finalY = doc.lastAutoTable.finalY + 15;
-    doc.setFillColor(248, 250, 252);
-    doc.roundedRect(145, finalY - 9, 55, 14, 3, 3, 'FD');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    const totalLabel = includeTVA ? 'TOTAL TTC :' : 'TOTAL HT :';
-    doc.text(totalLabel, 150, finalY);
-    doc.setFont('times', 'bold');
-    doc.text(formatMoney(total), 192, finalY, { align: 'right' });
-    
-    const fileNameSuffix = includeTVA ? 'TTC' : 'HT';
-    doc.save(`Releve_${client.nom.replace(/\s+/g, '_')}_${fileNameSuffix}.pdf`);
-    showToast(`PDF généré avec succès (${includeTVA ? 'TTC - TVA incluse' : 'HT - TVA exclue'})`, 'success');
-    
-  } catch (err) {
-    console.error(err);
-    showToast('Erreur lors de la génération du PDF', 'error');
-  } finally {
-    if (includeTVA) setGeneratingPdfTTC(false);
-    else setGeneratingPdfHT(false);
-  }
-};
-  
-  const exportToExcel = async () => {
-    setExportingExcel(true);
-    try {
-      await exportClientActivationsToExcel(client, filteredItems);
-      showToast('Export Excel réussi', 'success');
-    } catch (err) {
-      showToast('Erreur lors de l\'export Excel', 'error');
-    } finally {
-      setExportingExcel(false);
-    }
-  };
-  
   const getPaymentStatusColor = (paymentStatus) => {
     switch (paymentStatus) {
       case 'paid': return { color: '#059669', bg: '#d1fae5', label: 'Payé' };
       case 'partial': return { color: '#d97706', bg: '#fed7aa', label: 'Partiel' };
       default: return { color: '#dc2626', bg: '#fee2e2', label: 'Non payé' };
     }
+  };
+  
+  const handleInvoiceNumberChange = (e) => {
+    const value = e.target.value;
+    if (/^\d*$/.test(value)) {
+      const numValue = parseInt(value, 10);
+      if (!isNaN(numValue) && numValue >= 1 && numValue <= 999) {
+        setCurrentInvoiceNumber(numValue);
+        setCustomInvoiceNumber('F' + numValue.toString().padStart(2, '0'));
+      }
+    }
+  };
+  
+  const handleResetInvoiceNumber = async () => {
+    try {
+      await dispatch(resetInvoiceCounterAction()).unwrap();
+      setCurrentInvoiceNumber(1);
+      setCustomInvoiceNumber('F01');
+      showToast('Compteur de factures réinitialisé à F01', 'success');
+    } catch (error) {
+      console.error('Error resetting counter:', error);
+      showToast('Erreur lors de la réinitialisation', 'error');
+    }
+  };
+  
+  const toggleGroup = (groupId) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupId]: !prev[groupId]
+    }));
   };
   
   // MODAL WITH OVERLAY AND PORTALS
@@ -3691,13 +3917,20 @@ const generateSummaryPDF = async (includeTVA = true) => {
                   <button onClick={resetAllPrices} className="modern-btn modern-btn-secondary" style={{ marginRight: '0.5rem' }}>
                     <RefreshCw size={14} /> Réinitialiser prix
                   </button>
-                  <button onClick={exportToExcel} disabled={exportingExcel} className="modern-btn modern-btn-secondary">
+                  <button onClick={() => {
+                    setExportingExcel(true);
+                    exportClientActivationsToExcel(client, filteredItems).finally(() => setExportingExcel(false));
+                  }} disabled={exportingExcel} className="modern-btn modern-btn-secondary">
                     {exportingExcel ? <Loader size={14} className="spinning" /> : <FileSpreadsheet size={14} />}
                     {exportingExcel ? 'Export...' : 'Excel'}
                   </button>
                 </div>
                 <div>
-                  <button onClick={openCachetChoiceCombined} disabled={selectedRows.size === 0} className="modern-btn modern-btn-success">
+                  <button 
+                    onClick={openCachetChoiceCombined} 
+                    disabled={selectedRows.size === 0} 
+                    className={`modern-btn ${combinedGenerated ? 'modern-btn-red' : 'modern-btn-success'}`}
+                  >
                     {generatingCombined ? <Loader size={14} className="spinning" /> : <Printer size={14} />}
                     {generatingCombined ? 'Génération...' : `Combiner (${selectedRows.size})`}
                   </button>
@@ -3748,7 +3981,7 @@ const generateSummaryPDF = async (includeTVA = true) => {
                 </button>
                 <div className="date-filter-field" style={{ marginLeft: 'auto' }}>
                   <span style={{ fontSize: '0.7rem', color: '#475569' }}>
-                    Total: {filteredItems.length} élément(s) | HT: {safeToFixed(totalHTFiltered)} MAD | TTC: {safeToFixed(totalTTCFiltered)} MAD
+                    Total: ${filteredItems.length} élément(s) | HT: ${safeToFixed(totalHTFiltered)} MAD | TTC: ${safeToFixed(totalTTCFiltered)} MAD
                   </span>
                 </div>
               </div>
@@ -3783,6 +4016,32 @@ const generateSummaryPDF = async (includeTVA = true) => {
                       const isGenerating = generatingInvoice === item.id;
                       const isExpanded = isGroup && expandedGroups[item.id];
                       
+                      // Determine button style based on database tracking
+                      const isSelected = selectedRows.has(item.id);
+                      const isCombinedIncluded = combinedIncludedItems.has(item.id);
+                      const isItemGenerated = generatedItems.has(item.id);
+                      
+                      let buttonClass = 'modern-btn-success'; // Default blue for new/available
+let buttonTitle = 'Générer facture';
+
+if (isSelected) {
+  // Selected for combined invoice - shows red selection indicator
+  buttonClass = 'modern-btn-red';
+  buttonTitle = 'Sélectionné pour combinaison';
+} else if (isCombinedIncluded) {
+  // Already part of a combined invoice - RED (highest priority)
+  buttonClass = 'modern-btn-red';
+  buttonTitle = 'Facture combinée générée';
+} else if (isItemGenerated) {
+  // Individual invoice generated - GRAY
+  buttonClass = 'modern-btn-gray';
+  buttonTitle = 'Facture individuelle générée';
+} else {
+  // No invoice generated - BLUE
+  buttonClass = 'modern-btn-success';
+  buttonTitle = 'Générer facture';
+}
+                      
                       return (
                         <React.Fragment key={item.id}>
                           <tr className={isGroup ? `installation-row ${isExpanded ? 'expanded' : ''}` : ''}>
@@ -3799,7 +4058,7 @@ const generateSummaryPDF = async (includeTVA = true) => {
                                   <ChevronRight size={14} className={isExpanded ? 'rotated' : ''} />
                                 </span>
                               )}
-                            </td>
+                                                        </td>
                             <td>
                               {isGroup ? item.activations.map(a => a.matricule).join(', ') : item.matricule}
                               {isGroup && item.activations.length > 1 && (
@@ -3838,7 +4097,12 @@ const generateSummaryPDF = async (includeTVA = true) => {
                             <td style={{ color: '#059669' }}>{safeToFixed(amountPaid)} MAD</td>
                             <td style={{ color: '#dc2626' }}>{safeToFixed(remaining)} MAD</td>
                             <td>
-                              <button onClick={() => setCachetChoiceItem(item)} disabled={isGenerating} className="modern-btn modern-btn-success" style={{ padding: '4px 8px', fontSize: '11px', background: 'linear-gradient(135deg, #3b82f6, #2563eb)' }}>
+                              <button 
+                                onClick={() => setCachetChoiceItem(item)} 
+                                disabled={isGenerating} 
+                                className={`modern-btn ${buttonClass}`} 
+                                style={{ padding: '4px 8px', fontSize: '11px' }}
+                              >
                                 {isGenerating ? <Loader size={12} className="spinning" /> : <Download size={12} />}
                               </button>
                             </td>
@@ -3895,7 +4159,7 @@ const generateSummaryPDF = async (includeTVA = true) => {
         </div>
       </div>
       
-      {/* PORTALS FOR CACHET CHOICE DIALOGS (rendered outside modal overlay) */}
+      {/* PORTALS FOR CACHET CHOICE DIALOGS */}
       {showCachetPromptCombined && ReactDOM.createPortal(
         <CachetChoicePrompt onClose={() => setShowCachetPromptCombined(false)} onConfirm={async (showCachet) => { setShowCachetPromptCombined(false); await handleGenerateCombinedInvoice(showCachet); }} />,
         document.body
