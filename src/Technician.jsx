@@ -376,7 +376,7 @@ const styles = `
   }
   @media (max-width: 640px) {
     .pdf-modal-container, .edit-modal-container {
-      max-width: 95%;
+      max-width: 100%;
       border-radius: 20px;
     }
   }
