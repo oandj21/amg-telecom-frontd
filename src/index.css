@@ -294,7 +294,7 @@ textarea {
   padding: 0.5rem 0.75rem;
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   line-height: 1.25rem;
   color: hsl(var(--foreground));
   background-color: hsl(var(--background));
@@ -958,7 +958,7 @@ button:disabled {
 }
 
 .text-sm {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   line-height: 1.25rem;
 }
 
@@ -1624,7 +1624,7 @@ button:disabled {
 }
 
 .text-sm {
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   line-height: 1.25rem;
 }
 

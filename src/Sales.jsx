@@ -70,7 +70,7 @@ const styles = `
   }
   
   .sales-subtitle {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #6b7280;
     margin-top: 0.25rem;
   }
@@ -121,7 +121,7 @@ const styles = `
     padding: 0.5rem 0.75rem 0.5rem 2.25rem;
     border: 1px solid #d1d5db;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     outline: none;
     transition: all 0.2s;
   }
@@ -135,7 +135,7 @@ const styles = `
     padding: 0.5rem 0.75rem;
     border: 1px solid #d1d5db;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     background: white;
     cursor: pointer;
     width: auto;
@@ -195,7 +195,7 @@ const styles = `
     align-items: center;
     justify-content: space-between;
     transition: all 0.2s ease;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #1e293b;
   }
   
@@ -287,7 +287,7 @@ const styles = `
     padding: 0.625rem 0.75rem;
     cursor: pointer;
     transition: all 0.15s ease;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #334155;
     border-bottom: 1px solid #f1f5f9;
     display: flex;
@@ -399,7 +399,7 @@ const styles = `
     background: #f8fafc;
     border: 1px solid #e2e8f0;
     border-radius: 0.75rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #1e293b;
     transition: all 0.2s ease;
   }
@@ -578,7 +578,7 @@ const styles = `
     display: flex;
     justify-content: space-between;
     padding: 0.5rem 0;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #cbd5e1;
   }
   
@@ -710,7 +710,7 @@ const styles = `
     gap: 0.5rem;
     padding: 0.5rem 1rem;
     border-radius: 0.75rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -860,7 +860,7 @@ const styles = `
     padding: 0.5rem 0.75rem;
     border: 1px solid #e2e8f0;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     transition: all 0.2s ease;
   }
   
@@ -874,7 +874,7 @@ const styles = `
     padding: 0.5rem 0.75rem;
     border: 1px solid #e2e8f0;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     background: white;
     cursor: pointer;
   }
@@ -996,7 +996,7 @@ const styles = `
   }
   
   .sales-detail-value {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: #111827;
   }
@@ -1042,7 +1042,7 @@ const styles = `
     display: flex;
     justify-content: space-between;
     padding: 0.25rem 0;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #6b7280;
   }
   
@@ -1184,7 +1184,7 @@ const styles = `
   .confirm-btn {
     padding: 0.625rem 1.25rem;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -1217,7 +1217,7 @@ const styles = `
   .sales-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
   
   .sales-table thead tr {
@@ -1277,7 +1277,7 @@ const styles = `
     border: 1px solid #d1d5db;
     background: white;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: #374151;
     cursor: pointer;
@@ -1297,7 +1297,7 @@ const styles = `
   
   .sales-pagination-info {
     padding: 0.5rem 1rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #6b7280;
   }
   
@@ -1442,7 +1442,7 @@ const styles = `
     gap: 0.5rem;
     padding: 0.5rem 1rem;
     border-radius: 0.75rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;

@@ -25,19 +25,19 @@ import {
   createStandaloneActivation,
   createInstallation,
   fetchActivationStats,
-  // Invoice actions
   fetchNextInvoiceNumber,
   fetchCurrentInvoiceNumber,
   saveIndividualInvoice,
   checkIndividualInvoiceStatus,
   fetchGeneratedIndividualItems,
   saveCombinedInvoice,
-  checkCombinedInvoiceStatus,
-  fetchCombinedInvoiceItems,
-  removeItemFromCombined,
-  deleteCombinedTrackingAction,
-  fetchCounterInfo
+  fetchCounterInfo,
+  fetchClientDevis,
+  fetchCompanyInfo
 } from './Store/store';
+import axios from 'axios';
+
+const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
 
 // ==================== STYLES (same as before) ====================
 const styles = `
@@ -114,7 +114,7 @@ const styles = `
   
   @media (min-width: 640px) {
     .clients-subtitle {
-      font-size: 0.875rem;
+      font-size: 0.75rem;
     }
   }
   
@@ -206,7 +206,7 @@ const styles = `
   
   @media (min-width: 768px) {
     .clients-table {
-      font-size: 0.875rem;
+      font-size: 0.75rem;
       min-width: auto;
     }
   }
@@ -373,7 +373,7 @@ const styles = `
   @media (min-width: 640px) {
     .clients-btn {
       gap: 0.5rem;
-      font-size: 0.875rem;
+      font-size: 0.75rem;
     }
   }
   
@@ -607,7 +607,7 @@ const styles = `
   
   @media (min-width: 640px) {
     .clients-label {
-      font-size: 0.875rem;
+      font-size: 0.75rem;
     }
   }
   
@@ -623,7 +623,7 @@ const styles = `
     padding: 0.5rem 0.75rem;
     border: 1px solid #d1d5db;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     background: white;
     color: #111827;
     -webkit-appearance: none;
@@ -647,7 +647,7 @@ const styles = `
     padding: 0.5rem 2rem 0.5rem 0.75rem;
     border: 1px solid #d1d5db;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     background: white;
     color: #111827;
     cursor: pointer;
@@ -817,7 +817,7 @@ const styles = `
   .clients-toast-message { flex: 1; font-size: 0.75rem; }
   
   @media (min-width: 640px) {
-    .clients-toast-message { font-size: 0.875rem; }
+    .clients-toast-message { font-size: 0.75rem; }
   }
   
   .clients-toast-close { 
@@ -847,7 +847,7 @@ const styles = `
   @media (min-width: 640px) {
     .error-message {
       padding: 0.75rem;
-      font-size: 0.875rem;
+      font-size: 0.75rem;
     }
   }
   
@@ -981,7 +981,7 @@ const styles = `
   }
   
   .activation-item-title {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: #2563eb;
   }
@@ -1222,7 +1222,7 @@ const styles = `
     font-weight: 700;
     color: #0284c7;
     font-family: monospace;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
   
   .invoice-number-input {
@@ -1230,7 +1230,7 @@ const styles = `
     padding: 0.375rem 0.5rem;
     border: 1px solid #e2e8f0;
     border-radius: 0.375rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     text-align: center;
     font-family: monospace;
@@ -1393,7 +1393,7 @@ const styles = `
   }
   
   .cachet-choice-description {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #64748b;
     margin-top: 0.5rem;
     margin-bottom: 1rem;
@@ -1419,7 +1419,7 @@ const styles = `
   }
   
   .cachet-choice-message p {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #475569;
     line-height: 1.5;
   }
@@ -1438,7 +1438,7 @@ const styles = `
     gap: 0.5rem;
     padding: 0.75rem 1.25rem;
     border-radius: 0.75rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -1552,7 +1552,6 @@ const styles = `
 `;
 
 // ==================== HELPER FUNCTIONS ====================
-const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
 const safeNumber = (value) => { const n = Number(value); return isNaN(n) ? 0 : n; };
 const safeToFixed = (value, decimals = 2) => safeNumber(value).toFixed(decimals);
 const TVA_RATE = 0.20;
@@ -1599,9 +1598,6 @@ const PLAN_OPTIONS = [
   { value: '6m', label: '6 mois' },
   { value: '12m', label: '12 mois' }
 ];
-
-// ==================== INVOICE NUMBER MANAGER (API-based) ====================
-// These functions are now replaced by API calls in the component
 
 // ==================== CONVERT NUMBER TO FRENCH WORDS ====================
 const convertToFrenchWords = (total) => {
@@ -2038,9 +2034,9 @@ const generateSimpleActivationInvoiceHTML = (client, activation, companyInfo, lo
             </thead>
             <tbody>
               <tr>
-                <td><strong>${description}</strong> (${planLabel})</td>
+                <td><strong>${description}</strong> (${planLabel})</strong></td>
                 <td class="text-center"><strong>${QUANTITY}</strong></td>
-                <td class="text-right">${safeToFixed(priceHT)} MAD</td>
+                <td class="text-right">${safeToFixed(priceHT)} MAD</strong></td>
                 <td class="text-right"><strong>${safeToFixed(priceHT)} MAD</strong></td>
               </tr>
             </tbody>
@@ -2059,12 +2055,12 @@ const generateSimpleActivationInvoiceHTML = (client, activation, companyInfo, lo
           <div>
             <table class="financial-math">
               <tr>
-                <td>Montant HT</td>
-                <td class="text-right">${safeToFixed(priceHT)} MAD</td>
+                <td>Montant HT</strong></td>
+                <td class="text-right">${safeToFixed(priceHT)} MAD</strong></td>
               </tr>
               <tr>
-                <td>TVA (20%)</td>
-                <td class="text-right">${safeToFixed(priceTTC - priceHT)} MAD</td>
+                <td>TVA (20%)</strong></td>
+                <td class="text-right">${safeToFixed(priceTTC - priceHT)} MAD</strong></td>
               </tr>
               <tr class="premium-total">
                 <td><strong>TOTAL TTC</strong></td>
@@ -2598,7 +2594,7 @@ const formatDate = (dateString) => {
   });
 };
 
-// ==================== ACTIVATIONS DETAILS MODAL (WITH DATABASE BACKEND) ====================
+// ==================== ACTIVATIONS DETAILS MODAL (WITH DATABASE BACKEND AND COMBINED INVOICE FIX) ====================
 const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   const dispatch = useDispatch();
   const [loading, setLoading] = useState(true);
@@ -2616,11 +2612,11 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   const [currentInvoiceNumber, setCurrentInvoiceNumber] = useState(1);
   const [customInvoiceNumber, setCustomInvoiceNumber] = useState('F01');
   
-  // Track generated invoices for this client from DATABASE
+  // Track generated individual invoices from DATABASE
   const [generatedItems, setGeneratedItems] = useState(new Set());
-  const [combinedGenerated, setCombinedGenerated] = useState(false);
-  const [combinedIncludedItems, setCombinedIncludedItems] = useState(new Set());
-  const [combinedInvoiceNumber, setCombinedInvoiceNumber] = useState(null);
+  
+  // Track items that are part of ANY combined invoice (red button)
+  const [combinedItemsMap, setCombinedItemsMap] = useState(new Map()); // itemId -> invoiceNumber
   
   // Filter states
   const [startDate, setStartDate] = useState('');
@@ -2641,46 +2637,58 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   const [showPartial, setShowPartial] = useState(true);
   const [showUnpaid, setShowUnpaid] = useState(true);
   
-  // ==================== LOAD INVOICE DATA FROM DATABASE ====================
-  
-const loadInvoiceData = useCallback(async () => {
-  if (!client?.id) return;
-  
-  try {
-    console.log('📦 Loading invoice data for client:', client.id);
-    
-    // Load generated individual items from API
-    const result = await dispatch(fetchGeneratedIndividualItems(client.id)).unwrap();
-    const generatedIds = result.items || [];
-    setGeneratedItems(new Set(generatedIds));
-    
-    console.log('📦 Loaded generated items from API:', generatedIds);
-    
-    // Load combined invoice status
-    const combinedResult = await dispatch(checkCombinedInvoiceStatus(client.id)).unwrap();
-    setCombinedGenerated(combinedResult.data.generated);
-    if (combinedResult.data.invoice_number) {
-      setCombinedInvoiceNumber(combinedResult.data.invoice_number);
+  // ==================== HELPER: CHECK EXISTING COMBINED INVOICE ====================
+  const checkExistingCombinedInvoice = async (clientId, itemIds) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        `${API_URL}/invoices/track-combined/check`,
+        { client_id: clientId, item_ids: itemIds },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error checking combined invoice:', error);
+      return { exists: false, invoice_number: null };
     }
+  };
+
+  // ==================== LOAD INVOICE DATA FROM DATABASE ====================
+  const loadInvoiceData = useCallback(async () => {
+    if (!client?.id) return;
     
-    // Load combined items
-    const combinedItemsResult = await dispatch(fetchCombinedInvoiceItems(client.id)).unwrap();
-    const combinedIds = combinedItemsResult.items || [];
-    setCombinedIncludedItems(new Set(combinedIds));
-    
-    console.log('📦 Loaded combined items from API:', combinedIds);
-    
-    // ADD THIS: Refresh the invoice counter
-    const counterInfo = await dispatch(fetchCounterInfo()).unwrap();
-    const currentNumber = counterInfo.info.invoice.formatted;
-    const numericValue = parseInt(currentNumber.replace('F', ''), 10);
-    setCurrentInvoiceNumber(numericValue);
-    setCustomInvoiceNumber(currentNumber);
-    
-  } catch (error) {
-    console.error('Error loading invoice data:', error);
-  }
-}, [client?.id, dispatch]);
+    try {
+      const token = localStorage.getItem('token');
+      console.log('📦 Loading invoice data for client:', client.id);
+      
+      // Load generated individual items from API
+      const result = await dispatch(fetchGeneratedIndividualItems(client.id)).unwrap();
+      const generatedIds = result.items || [];
+      setGeneratedItems(new Set(generatedIds));
+      console.log('📦 Loaded generated items from API:', generatedIds);
+      
+      // Load ALL combined items (any combined invoice) - new endpoint
+      const allCombinedResponse = await axios.get(
+        `${API_URL}/invoices/track-combined/all-items/${client.id}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const combinedItemIds = allCombinedResponse.data.items || [];
+      const combinedMap = new Map();
+      combinedItemIds.forEach(id => combinedMap.set(id, 'combined'));
+      setCombinedItemsMap(combinedMap);
+      console.log('📦 Loaded combined items from API:', combinedItemIds);
+      
+      // Load counter info
+      const counterInfo = await dispatch(fetchCounterInfo()).unwrap();
+      const currentNumber = counterInfo.info.invoice.formatted;
+      const numericValue = parseInt(currentNumber.replace('F', ''), 10);
+      setCurrentInvoiceNumber(numericValue);
+      setCustomInvoiceNumber(currentNumber);
+      
+    } catch (error) {
+      console.error('Error loading invoice data:', error);
+    }
+  }, [client?.id, dispatch]);
   
   // Load initial invoice number from API
   useEffect(() => {
@@ -2703,26 +2711,24 @@ const loadInvoiceData = useCallback(async () => {
   
   // ==================== INVOICE TRACKING FUNCTIONS ====================
   
-const markInvoiceGeneratedAPI = async (clientId, itemId, invoiceNumber) => {
-  try {
-    console.log('💾 SAVING to database:', { clientId, itemId, invoiceNumber });
-    
-    const result = await dispatch(saveIndividualInvoice({ 
-      clientId, 
-      itemId: itemId,
-      invoiceNumber 
-    })).unwrap();
-    
-    console.log('✅ Save API response:', result);
-    
-    // Don't reload here - let the parent handle the refresh
-    return true;
-  } catch (error) {
-    console.error('❌ Error saving invoice:', error);
-    showToast('Erreur lors de l\'enregistrement de la facture', 'error');
-    return false;
-  }
-};
+  const markInvoiceGeneratedAPI = async (clientId, itemId, invoiceNumber) => {
+    try {
+      console.log('💾 SAVING to database:', { clientId, itemId, invoiceNumber });
+      
+      const result = await dispatch(saveIndividualInvoice({ 
+        clientId, 
+        itemId: itemId,
+        invoiceNumber 
+      })).unwrap();
+      
+      console.log('✅ Save API response:', result);
+      return true;
+    } catch (error) {
+      console.error('❌ Error saving invoice:', error);
+      showToast('Erreur lors de l\'enregistrement de la facture', 'error');
+      return false;
+    }
+  };
   
   const checkIndividualExistsAPI = async (clientId, itemId) => {
     try {
@@ -2731,30 +2737,6 @@ const markInvoiceGeneratedAPI = async (clientId, itemId, invoiceNumber) => {
     } catch (error) {
       console.error('Error checking individual invoice:', error);
       return { generated: false, invoiceNumber: null };
-    }
-  };
-  
-  const markCombinedGeneratedAPI = async (clientId, invoiceNumber, itemIds) => {
-    try {
-      await dispatch(saveCombinedInvoice({ clientId, invoiceNumber, itemIds })).unwrap();
-      setCombinedGenerated(true);
-      setCombinedIncludedItems(new Set(itemIds));
-      setCombinedInvoiceNumber(invoiceNumber);
-    } catch (error) {
-      console.error('Error marking combined generated:', error);
-    }
-  };
-  
-  const removeCombinedItemAPI = async (clientId, itemId) => {
-    try {
-      await dispatch(removeItemFromCombined({ clientId, itemId })).unwrap();
-      setCombinedIncludedItems(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(itemId);
-        return newSet;
-      });
-    } catch (error) {
-      console.error('Error removing combined item:', error);
     }
   };
   
@@ -3405,412 +3387,409 @@ const markInvoiceGeneratedAPI = async (clientId, itemId, invoiceNumber) => {
     showToast('Tous les prix ont été réinitialisés', 'info');
   };
   
-// Generate invoice for a single item (group or standalone)
-const handleGenerateSingleInvoice = async (item, showCachet) => {
-  let invoiceNumberToUse = customInvoiceNumber;
-  let shouldIncrement = true;
-  
-  console.log('Generating invoice for item:', item.id, 'Type:', item.isGroup ? 'Group' : 'Single');
-  
-  // Check if this item already has an individual invoice
-  const existing = await checkIndividualExistsAPI(client.id, item.id);
-  
-  if (existing.generated && existing.invoiceNumber) {
-    invoiceNumberToUse = existing.invoiceNumber;
-    shouldIncrement = false;
-  }
-  
-  setGeneratingInvoice(item.id);
-  
-  try {
-    // Generate PDF
-    if (item.isGroup) {
-      const groupForInvoice = {
-        type: item.type,
-        saleTotalPriceHT: item.saleTotalPriceHT,
-        saleTotalPriceTTC: item.saleTotalPriceTTC,
-        totalProductQuantity: item.totalProductQuantity,
-        activations: item.activations.map(act => ({
-          matricule: act.matricule,
-          plan: act.plan,
-          displayPriceTTC: act.displayPriceTTC
-        }))
-      };
-      await generateInvoicePDF(client, groupForInvoice, showToast, () => {}, showCachet, invoiceNumberToUse);
-    } else {
-      const invoiceItem = {
-        id: item.id,
-        type: item.type,
-        matricule: item.matricule,
-        plan: item.plan,
-        priceHT: item.priceHT,
-        priceTTC: item.displayPriceTTC
-      };
-      await generateSimpleActivationInvoicePDF(client, invoiceItem, showToast, () => {}, showCachet, invoiceNumberToUse);
+  // Generate invoice for a single item (group or standalone)
+  const handleGenerateSingleInvoice = async (item, showCachet) => {
+    let invoiceNumberToUse = customInvoiceNumber;
+    let shouldIncrement = true;
+    
+    console.log('Generating invoice for item:', item.id, 'Type:', item.isGroup ? 'Group' : 'Single');
+    
+    // Check if this item already has an individual invoice
+    const existing = await checkIndividualExistsAPI(client.id, item.id);
+    
+    if (existing.generated && existing.invoiceNumber) {
+      invoiceNumberToUse = existing.invoiceNumber;
+      shouldIncrement = false;
     }
     
-    // Handle combined removal
-    if (combinedIncludedItems.has(item.id)) {
-      await removeCombinedItemAPI(client.id, item.id);
-      setCombinedIncludedItems(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(item.id);
-        return newSet;
-      });
-    }
+    setGeneratingInvoice(item.id);
     
-    // Update local state immediately without waiting for API
-    if (!existing.generated) {
-      setGeneratedItems(prev => {
-        const newSet = new Set(prev);
-        newSet.add(item.id);
-        return newSet;
-      });
-      
-      // Async save to database (don't await - let it run in background)
-      dispatch(saveIndividualInvoice({ 
-        clientId: client.id, 
-        itemId: item.id,
-        invoiceNumber: invoiceNumberToUse 
-      })).catch(console.error);
-    }
-    
-    // Handle counter increment
-    if (shouldIncrement) {
-      showToast(`Facture générée avec le numéro ${invoiceNumberToUse}`, 'success');
-      
-      // Get new counter value
-      const counterInfo = await dispatch(fetchCounterInfo()).unwrap();
-      const nextNumber = counterInfo.info.invoice.formatted;
-      const numericValue = parseInt(nextNumber.replace('F', ''), 10);
-      setCurrentInvoiceNumber(numericValue);
-      setCustomInvoiceNumber(nextNumber);
-    } else {
-      showToast(`Facture régénérée avec le numéro ${invoiceNumberToUse}`, 'success');
-    }
-    
-  } catch (error) {
-    console.error('Error generating invoice:', error);
-    showToast('Erreur lors de la génération de la facture', 'error');
-  } finally {
-    setGeneratingInvoice(null);
-  }
-};
-
-// Generate combined invoice for selected items
-// For combined invoices: ALWAYS generate a new number (increment counter)
-const handleGenerateCombinedInvoice = async (showCachet) => {
-  const selected = filteredItems.filter(item => selectedRows.has(item.id));
-  if (selected.length === 0) {
-    showToast('Veuillez sélectionner au moins un élément', 'error');
-    return;
-  }
-  
-  // ALWAYS use the current invoice number for combined invoices
-  let invoiceNumberToUse = customInvoiceNumber;
-  
-  console.log('Generating combined invoice for items:', selected.map(i => i.id));
-  console.log('Using NEW invoice number:', invoiceNumberToUse);
-  
-  setGeneratingCombined(true);
-  let element = null;
-  try {
-    const companyInfo = getCompanyInfo();
-    const [logoBase64, cacheImageBase64] = await Promise.all([
-      (async () => {
-        try {
-          const response = await fetch('/logo.png');
-          if (response.ok) {
-            const blob = await response.blob();
-            return new Promise(resolve => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result);
-              reader.readAsDataURL(blob);
-            });
-          }
-          return null;
-        } catch (e) { return null; }
-      })(),
-      getCacheImageBase64()
-    ]);
-    
-    let totalQuantity = 0;
-    let totalHT = 0;
-    
-    for (const item of selected) {
-      if (item.isGroup) {
-        const groupQty = (item.totalProductQuantity || 0) + item.activations.length;
-        const groupHT = item.grandTotalTTC / (1 + TVA_RATE);
-        totalQuantity += groupQty;
-        totalHT += groupHT;
-      } else {
-        const itemHT = item.displayPriceTTC / (1 + TVA_RATE);
-        totalQuantity += 1;
-        totalHT += itemHT;
-      }
-    }
-    
-    const unitPriceHT = totalQuantity > 0 ? totalHT / totalQuantity : 0;
-    const totalTTC = calculateTTC(totalHT);
-    const tvaAmount = totalTTC - totalHT;
-    const invoiceDate = new Date().toLocaleDateString('fr-FR');
-    const finalInvoiceNumber = invoiceNumberToUse;
-    const description = `ACTIVATION GPS`;
-    
-    const html = generateCombinedInvoiceHTML(client, selected, totalQuantity, unitPriceHT, totalHT, totalTTC, tvaAmount, invoiceDate, finalInvoiceNumber, description, logoBase64, cacheImageBase64, companyInfo, showCachet);
-    
-    element = document.createElement('div');
-    element.innerHTML = html;
-    document.body.appendChild(element);
-    
-    const opt = {
-      margin: [6, 8, 6, 8],
-      filename: `Facture_Combinee_${client.nom.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: 'avoid-all' }
-    };
-    
-    await html2pdf().set(opt).from(element).save();
-    showToast(`Facture combinée générée avec succès (${selected.length} élément(s))${!showCachet ? ' (sans cachet)' : ''}`, 'success');
-    
-    // IMPORTANT: Mark each selected item as "included in combined" (red)
-    const selectedItemIds = selected.map(item => item.id);
-    
-    // Save to backend
-    await markCombinedGeneratedAPI(client.id, finalInvoiceNumber, selectedItemIds);
-    
-    // Update local state: remove these items from generatedItems (if they were individually generated)
-    // and add them to combinedIncludedItems
-    setGeneratedItems(prev => {
-      const newSet = new Set(prev);
-      selectedItemIds.forEach(id => newSet.delete(id));
-      console.log('Removed from generatedItems:', selectedItemIds, 'New set:', Array.from(newSet));
-      return newSet;
-    });
-    
-    setCombinedIncludedItems(prev => {
-      const newSet = new Set(prev);
-      selectedItemIds.forEach(id => newSet.add(id));
-      console.log('Added to combinedIncludedItems:', selectedItemIds, 'New set:', Array.from(newSet));
-      return newSet;
-    });
-    
-    setCombinedGenerated(true);
-    setCombinedInvoiceNumber(finalInvoiceNumber);
-    
-    // Clear selection
-    setSelectedRows(new Set());
-    
-    // Wait a moment for the backend to process the increment
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Get the updated counter from backend
     try {
-      const counterInfo = await dispatch(fetchCounterInfo()).unwrap();
-      const nextNumber = counterInfo.info.invoice.formatted;
-      const numericValue = parseInt(nextNumber.replace('F', ''), 10);
-      setCurrentInvoiceNumber(numericValue);
-      setCustomInvoiceNumber(nextNumber);
-      showToast(`Prochain numéro de facture: ${nextNumber}`, 'info');
-    } catch (error) {
-      console.error('Error getting next invoice number:', error);
-      // Fallback
-      try {
-        const nextResult = await dispatch(fetchNextInvoiceNumber()).unwrap();
-        const nextNumber = nextResult.invoice_number;
+      // Generate PDF
+      if (item.isGroup) {
+        const groupForInvoice = {
+          type: item.type,
+          saleTotalPriceHT: item.saleTotalPriceHT,
+          saleTotalPriceTTC: item.saleTotalPriceTTC,
+          totalProductQuantity: item.totalProductQuantity,
+          activations: item.activations.map(act => ({
+            matricule: act.matricule,
+            plan: act.plan,
+            displayPriceTTC: act.displayPriceTTC
+          }))
+        };
+        await generateInvoicePDF(client, groupForInvoice, showToast, () => {}, showCachet, invoiceNumberToUse);
+      } else {
+        const invoiceItem = {
+          id: item.id,
+          type: item.type,
+          matricule: item.matricule,
+          plan: item.plan,
+          priceHT: item.priceHT,
+          priceTTC: item.displayPriceTTC
+        };
+        await generateSimpleActivationInvoicePDF(client, invoiceItem, showToast, () => {}, showCachet, invoiceNumberToUse);
+      }
+      
+      // Remove from combined items map if it was there
+      if (combinedItemsMap.has(item.id)) {
+        const newCombinedMap = new Map(combinedItemsMap);
+        newCombinedMap.delete(item.id);
+        setCombinedItemsMap(newCombinedMap);
+      }
+      
+      // Update local state immediately without waiting for API
+      if (!existing.generated) {
+        setGeneratedItems(prev => {
+          const newSet = new Set(prev);
+          newSet.add(item.id);
+          return newSet;
+        });
+        
+        // Async save to database (don't await - let it run in background)
+        dispatch(saveIndividualInvoice({ 
+          clientId: client.id, 
+          itemId: item.id,
+          invoiceNumber: invoiceNumberToUse 
+        })).catch(console.error);
+      }
+      
+      // Handle counter increment
+      if (shouldIncrement) {
+        showToast(`Facture générée avec le numéro ${invoiceNumberToUse}`, 'success');
+        
+        // Get new counter value
+        const counterInfo = await dispatch(fetchCounterInfo()).unwrap();
+        const nextNumber = counterInfo.info.invoice.formatted;
         const numericValue = parseInt(nextNumber.replace('F', ''), 10);
         setCurrentInvoiceNumber(numericValue);
         setCustomInvoiceNumber(nextNumber);
-      } catch (e) {
-        console.error('Fallback also failed:', e);
+      } else {
+        showToast(`Facture régénérée avec le numéro ${invoiceNumberToUse}`, 'success');
+      }
+      
+    } catch (error) {
+      console.error('Error generating invoice:', error);
+      showToast('Erreur lors de la génération de la facture', 'error');
+    } finally {
+      setGeneratingInvoice(null);
+    }
+  };
+  
+  // Generate combined invoice for selected items - REUSES EXISTING NUMBER FOR SAME COMBINATION
+  const handleGenerateCombinedInvoice = async (showCachet) => {
+    const selected = filteredItems.filter(item => selectedRows.has(item.id));
+    if (selected.length === 0) {
+      showToast('Veuillez sélectionner au moins un élément', 'error');
+      return;
+    }
+    
+    const selectedItemIds = selected.map(item => item.id);
+    selectedItemIds.sort(); // sort for consistent hashing
+    
+    // Check if a combined invoice already exists for this exact set of items
+    const existing = await checkExistingCombinedInvoice(client.id, selectedItemIds);
+    
+    let invoiceNumberToUse;
+    let isNew = false;
+    
+    if (existing.exists && existing.invoice_number) {
+      invoiceNumberToUse = existing.invoice_number;
+      isNew = false;
+      showToast(`Réutilisation de la facture combinée existante n°${invoiceNumberToUse}`, 'info');
+    } else {
+      invoiceNumberToUse = customInvoiceNumber;
+      isNew = true;
+    }
+    
+    console.log('Generating combined invoice for items:', selectedItemIds);
+    console.log('Using invoice number:', invoiceNumberToUse, 'isNew:', isNew);
+    
+    setGeneratingCombined(true);
+    let element = null;
+    try {
+      const companyInfo = getCompanyInfo();
+      const [logoBase64, cacheImageBase64] = await Promise.all([
+        (async () => {
+          try {
+            const response = await fetch('/logo.png');
+            if (response.ok) {
+              const blob = await response.blob();
+              return new Promise(resolve => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.readAsDataURL(blob);
+              });
+            }
+            return null;
+          } catch (e) { return null; }
+        })(),
+        getCacheImageBase64()
+      ]);
+      
+      let totalQuantity = 0;
+      let totalHT = 0;
+      
+      for (const item of selected) {
+        if (item.isGroup) {
+          const groupQty = (item.totalProductQuantity || 0) + item.activations.length;
+          const groupHT = item.grandTotalTTC / (1 + TVA_RATE);
+          totalQuantity += groupQty;
+          totalHT += groupHT;
+        } else {
+          const itemHT = item.displayPriceTTC / (1 + TVA_RATE);
+          totalQuantity += 1;
+          totalHT += itemHT;
+        }
+      }
+      
+      const unitPriceHT = totalQuantity > 0 ? totalHT / totalQuantity : 0;
+      const totalTTC = calculateTTC(totalHT);
+      const tvaAmount = totalTTC - totalHT;
+      const invoiceDate = new Date().toLocaleDateString('fr-FR');
+      const finalInvoiceNumber = invoiceNumberToUse;
+      const description = `ACTIVATION GPS`;
+      
+      const html = generateCombinedInvoiceHTML(client, selected, totalQuantity, unitPriceHT, totalHT, totalTTC, tvaAmount, invoiceDate, finalInvoiceNumber, description, logoBase64, cacheImageBase64, companyInfo, showCachet);
+      
+      element = document.createElement('div');
+      element.innerHTML = html;
+      document.body.appendChild(element);
+      
+      const opt = {
+        margin: [6, 8, 6, 8],
+        filename: `Facture_Combinee_${client.nom.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: 'avoid-all' }
+      };
+      
+      await html2pdf().set(opt).from(element).save();
+      showToast(`Facture combinée générée avec succès (${selected.length} élément(s))${!showCachet ? ' (sans cachet)' : ''}`, 'success');
+      
+      // Save the combined invoice record to backend
+      const token = localStorage.getItem('token');
+      await axios.post(
+        `${API_URL}/invoices/track-combined`,
+        {
+          client_id: client.id,
+          invoice_number: finalInvoiceNumber,
+          item_ids: selectedItemIds
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      // Update frontend state: mark all selected items as combined (red button)
+      const newCombinedMap = new Map(combinedItemsMap);
+      selectedItemIds.forEach(id => newCombinedMap.set(id, finalInvoiceNumber));
+      setCombinedItemsMap(newCombinedMap);
+      
+      // Remove these items from generatedItems (individual) if they were there
+      setGeneratedItems(prev => {
+        const newSet = new Set(prev);
+        selectedItemIds.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+      
+      // Clear selection
+      setSelectedRows(new Set());
+      
+      // If this is a new combined invoice, increment the counter
+      if (isNew) {
+        // Get updated counter from backend
+        try {
+          const counterInfo = await dispatch(fetchCounterInfo()).unwrap();
+          const nextNumber = counterInfo.info.invoice.formatted;
+          const numericValue = parseInt(nextNumber.replace('F', ''), 10);
+          setCurrentInvoiceNumber(numericValue);
+          setCustomInvoiceNumber(nextNumber);
+          showToast(`Prochain numéro de facture: ${nextNumber}`, 'info');
+        } catch (error) {
+          console.error('Error getting next invoice number:', error);
+        }
+      }
+      
+    } catch (error) {
+      console.error('Combined PDF error:', error);
+      showToast('Erreur lors de la génération de la facture combinée', 'error');
+    } finally {
+      setGeneratingCombined(false);
+      if (element && element.parentNode) {
+        document.body.removeChild(element);
       }
     }
-    
-    // Force a final refresh of the data to ensure consistency
-    await loadInvoiceData();
-    
-  } catch (error) {
-    console.error('Combined PDF error:', error);
-    showToast('Erreur lors de la génération de la facture combinée', 'error');
-  } finally {
-    setGeneratingCombined(false);
-    if (element && element.parentNode) {
-      document.body.removeChild(element);
-    }
-  }
-};
-
-// Helper function to generate combined invoice HTML
-const generateCombinedInvoiceHTML = (client, selected, totalQuantity, unitPriceHT, totalHT, totalTTC, tvaAmount, invoiceDate, finalInvoiceNumber, description, logoBase64, cacheImageBase64, companyInfo, showCachet) => {
-  return `
-    <!DOCTYPE html>
-    <html lang="fr">
-    <head>
-      <meta charset="UTF-8">
-      <title>Facture ${finalInvoiceNumber}</title>
-      <style>
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          color: #1e293b;
-          background-color: #ffffff;
-          line-height: 1.5;
-          padding: 35px 40px 60px 40px;
-          font-size: 12px;
-        }
-        .invoice-container { max-width: 850px; margin: 0 auto; box-sizing: border-box; page-break-after: avoid; position: relative; min-height: 100%; }
-        .header-top { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 25px; }
-        .logo-wrapper { width: 130px; height: 130px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 8px; }
-        .invoice-logo { width: 100%; height: 100%; object-fit: cover; }
-        .company-name-placeholder { font-size: 20px; font-weight: 700; color: #0f172a; font-family: 'Playfair Display', serif; }
-        .corporate-meta-box { text-align: right; }
-        .document-type-badge { font-family: 'Playfair Display', serif; font-size: 28px; font-style: italic; color: #0f172a; margin-bottom: 4px; font-weight: 600; }
-        .invoice-id-badge { font-size: 14px; font-weight: 700; color: #475569; letter-spacing: 0.05em; margin-bottom: 4px; }
-        .invoice-date-line { font-size: 12px; color: #94a3b8; }
-        .parties-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 30px; }
-        .party-card .block-title { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; }
-        .party-card .party-name { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
-        .party-card .party-details { color: #475569; line-height: 1.5; font-size: 12px; }
-        .table-wrapper { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 25px; }
-        .invoice-table { width: 100%; border-collapse: collapse; }
-        .invoice-table th { background-color: #f8fafc; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; padding: 12px 8px; border-bottom: 1px solid #e2e8f0; text-align: left; }
-        .invoice-table td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; color: #334155; font-size: 12px; }
-        .invoice-table tr:last-child td { border-bottom: 1px solid #e2e8f0; }
-        .text-center { text-align: center; }
-        .text-right { text-align: right; }
-        .summary-container { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; margin-bottom: 25px; }
-        .legal-wordings { border-left: 2px solid #e2e8f0; padding-left: 18px; margin-top: 5px; }
-        .wording-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.05em; margin-bottom: 4px; }
-        .wording-value { font-family: 'Playfair Display', serif; font-size: 14px; font-style: italic; color: #334155; font-weight: 600; line-height: 1.4; }
-        .financial-math { width: 100%; border-collapse: collapse; }
-        .financial-math td { padding: 6px 8px; font-size: 12px; color: #475569; }
-        .financial-math tr.premium-total td { font-size: 16px; font-weight: 700; color: #0f172a; border-top: 1px solid #e2e8f0; padding-top: 10px; padding-bottom: 10px; }
-        .payment-routing { border-top: 1px solid #e2e8f0; padding-top: 15px; margin-bottom: 30px; }
-        .routing-title { font-size: 11px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
-        .routing-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; font-size: 11px; color: #475569; }
-        .routing-item strong { color: #0f172a; display: block; margin-bottom: 2px; }
-        .executive-footer { border-top: 2px solid #0f172a; padding-top: 15px; padding-bottom: 10px; text-align: center; font-size: 10px; color: #64748b; line-height: 1.6; margin-top: 20px; }
-        .bank-info { margin-top: 12px; font-size: 11px; color: #475569; border-top: 1px dashed #e2e8f0; padding-top: 10px; }
-        .bank-info strong { color: #0f172a; }
-        .signature-section { margin-top: 40px; margin-bottom: 30px; display: flex; justify-content: flex-end; padding-right: 20px; }
-        .signature-box { text-align: center; width: 200px; }
-        .signature-label { font-size: 11px; font-weight: bold; margin-bottom: 10px; text-decoration: underline; color: #1f2937; }
-        .signature-image { margin-top: 10px; display: flex; justify-content: center; }
-        .signature-img { max-width: 150px; max-height: 80px; object-fit: contain; }
-        @media print { body { padding: 0; } .executive-footer { position: fixed; bottom: 0; left: 0; right: 0; background: white; } }
-      </style>
-    </head>
-    <body>
-      <div class="invoice-container">
-        <div class="header-top">
-          <div class="logo-wrapper">
-            ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" class="invoice-logo"/>` : `<span class="company-name-placeholder">${companyInfo.name}</span>`}
-          </div>
-          <div class="corporate-meta-box">
-            <div class="document-type-badge">FACTURE</div>
-            <div class="invoice-id-badge">N° ${currentYear}/${finalInvoiceNumber}</div>
-            <div class="invoice-date-line">Date: ${invoiceDate}</div>
-          </div>
-        </div>
-        
-        <div class="parties-grid">
-          <div class="party-card">
-            <div class="block-title">Émetteur</div>
-            <div class="party-name">${companyInfo.name}</div>
-            <div class="party-details">
-              ${companyInfo.address}<br>
-              Téléphone: ${companyInfo.phone}<br>
-              Email: ${companyInfo.email}
+  };
+  
+  // Helper function to generate combined invoice HTML
+  const generateCombinedInvoiceHTML = (client, selected, totalQuantity, unitPriceHT, totalHT, totalTTC, tvaAmount, invoiceDate, finalInvoiceNumber, description, logoBase64, cacheImageBase64, companyInfo, showCachet) => {
+    return `
+      <!DOCTYPE html>
+      <html lang="fr">
+      <head>
+        <meta charset="UTF-8">
+        <title>Facture ${finalInvoiceNumber}</title>
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            color: #1e293b;
+            background-color: #ffffff;
+            line-height: 1.5;
+            padding: 35px 40px 60px 40px;
+            font-size: 12px;
+          }
+          .invoice-container { max-width: 850px; margin: 0 auto; box-sizing: border-box; page-break-after: avoid; position: relative; min-height: 100%; }
+          .header-top { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 25px; }
+          .logo-wrapper { width: 130px; height: 130px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 8px; }
+          .invoice-logo { width: 100%; height: 100%; object-fit: cover; }
+          .company-name-placeholder { font-size: 20px; font-weight: 700; color: #0f172a; font-family: 'Playfair Display', serif; }
+          .corporate-meta-box { text-align: right; }
+          .document-type-badge { font-family: 'Playfair Display', serif; font-size: 28px; font-style: italic; color: #0f172a; margin-bottom: 4px; font-weight: 600; }
+          .invoice-id-badge { font-size: 14px; font-weight: 700; color: #475569; letter-spacing: 0.05em; margin-bottom: 4px; }
+          .invoice-date-line { font-size: 12px; color: #94a3b8; }
+          .parties-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 30px; }
+          .party-card .block-title { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; }
+          .party-card .party-name { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+          .party-card .party-details { color: #475569; line-height: 1.5; font-size: 12px; }
+          .table-wrapper { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 25px; }
+          .invoice-table { width: 100%; border-collapse: collapse; }
+          .invoice-table th { background-color: #f8fafc; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; padding: 12px 8px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+          .invoice-table td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; color: #334155; font-size: 12px; }
+          .invoice-table tr:last-child td { border-bottom: 1px solid #e2e8f0; }
+          .text-center { text-align: center; }
+          .text-right { text-align: right; }
+          .summary-container { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; margin-bottom: 25px; }
+          .legal-wordings { border-left: 2px solid #e2e8f0; padding-left: 18px; margin-top: 5px; }
+          .wording-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.05em; margin-bottom: 4px; }
+          .wording-value { font-family: 'Playfair Display', serif; font-size: 14px; font-style: italic; color: #334155; font-weight: 600; line-height: 1.4; }
+          .financial-math { width: 100%; border-collapse: collapse; }
+          .financial-math td { padding: 6px 8px; font-size: 12px; color: #475569; }
+          .financial-math tr.premium-total td { font-size: 16px; font-weight: 700; color: #0f172a; border-top: 1px solid #e2e8f0; padding-top: 10px; padding-bottom: 10px; }
+          .payment-routing { border-top: 1px solid #e2e8f0; padding-top: 15px; margin-bottom: 30px; }
+          .routing-title { font-size: 11px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+          .routing-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; font-size: 11px; color: #475569; }
+          .routing-item strong { color: #0f172a; display: block; margin-bottom: 2px; }
+          .executive-footer { border-top: 2px solid #0f172a; padding-top: 15px; padding-bottom: 10px; text-align: center; font-size: 10px; color: #64748b; line-height: 1.6; margin-top: 20px; }
+          .bank-info { margin-top: 12px; font-size: 11px; color: #475569; border-top: 1px dashed #e2e8f0; padding-top: 10px; }
+          .bank-info strong { color: #0f172a; }
+          .signature-section { margin-top: 40px; margin-bottom: 30px; display: flex; justify-content: flex-end; padding-right: 20px; }
+          .signature-box { text-align: center; width: 200px; }
+          .signature-label { font-size: 11px; font-weight: bold; margin-bottom: 10px; text-decoration: underline; color: #1f2937; }
+          .signature-image { margin-top: 10px; display: flex; justify-content: center; }
+          .signature-img { max-width: 150px; max-height: 80px; object-fit: contain; }
+          @media print { body { padding: 0; } .executive-footer { position: fixed; bottom: 0; left: 0; right: 0; background: white; } }
+        </style>
+      </head>
+      <body>
+        <div class="invoice-container">
+          <div class="header-top">
+            <div class="logo-wrapper">
+              ${logoBase64 ? `<img src="${logoBase64}" alt="Logo" class="invoice-logo"/>` : `<span class="company-name-placeholder">${companyInfo.name}</span>`}
+            </div>
+            <div class="corporate-meta-box">
+              <div class="document-type-badge">FACTURE</div>
+              <div class="invoice-id-badge">N° ${currentYear}/${finalInvoiceNumber}</div>
+              <div class="invoice-date-line">Date: ${invoiceDate}</div>
             </div>
           </div>
-          <div class="party-card">
-            <div class="block-title">Facturé à</div>
-            <div class="party-name">${client.nom}</div>
-            <div class="party-details">
-              ${client.adresse ? `${client.adresse}<br>` : ''}
-              Téléphone: ${client.telephone || '-'}<br>
-              ${client.ice_client ? `ICE: ${client.ice_client}<br>` : ''}
-              ${client.email ? `Email: ${client.email}` : ''}
+          
+          <div class="parties-grid">
+            <div class="party-card">
+              <div class="block-title">Émetteur</div>
+              <div class="party-name">${companyInfo.name}</div>
+              <div class="party-details">
+                ${companyInfo.address}<br>
+                Téléphone: ${companyInfo.phone}<br>
+                Email: ${companyInfo.email}
+              </div>
+            </div>
+            <div class="party-card">
+              <div class="block-title">Facturé à</div>
+              <div class="party-name">${client.nom}</div>
+              <div class="party-details">
+                ${client.adresse ? `${client.adresse}<br>` : ''}
+                Téléphone: ${client.telephone || '-'}<br>
+                ${client.ice_client ? `ICE: ${client.ice_client}<br>` : ''}
+                ${client.email ? `Email: ${client.email}` : ''}
+              </div>
             </div>
           </div>
-        </div>
-        
-        <div class="table-wrapper">
-          <table class="invoice-table">
-            <thead>
-              <tr>
-                <th style="width: 60%;">Désignation</th>
-                <th class="text-center" style="width: 10%;">Qté</th>
-                <th class="text-right" style="width: 15%;">P.U HT</th>
-                <th class="text-right" style="width: 15%;">Montant HT</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><strong>${description}</strong><br>
-                  <span style="font-size: 10px; color: #6b7280;">
-                    ${selected.map(item => {
-                      if (item.isGroup) {
-                        return item.activations.map(a => `${a.matricule} (${PLAN_LABEL[a.plan] || a.plan || 'Standard'})`).join(', ');
-                      } else {
-                        return `${item.matricule} (${PLAN_LABEL[item.plan] || item.plan || 'Standard'})`;
-                      }
-                    }).join(', ')}
-                  </span>
-                </td>
-                <td class="text-center"><strong>${totalQuantity}</strong></td>
-                <td class="text-right">${safeToFixed(unitPriceHT)} MAD</td>
-                <td class="text-right"><strong>${safeToFixed(totalHT)} MAD</strong></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        
-        <div class="summary-container">
-          <div class="legal-wordings">
-            <div class="wording-label">Arrêté la présente facture à la somme de :</div>
-            <div class="wording-value">${convertToFrenchWords(totalTTC)}</div>
-            <div class="bank-info" style="margin-top: 15px;">
-              <strong>Informations de paiement</strong><br>
-              ${companyInfo.rib ? `RIB: ${companyInfo.rib}` : ''}
-            </div>
-          </div>
-          <div>
-            <table class="financial-math">
-              <tr><td>Montant HT</td><td class="text-right">${safeToFixed(totalHT)} MAD</td></tr>
-              <tr><td>TVA (20%)</td><td class="text-right">${safeToFixed(tvaAmount)} MAD</td></tr>
-              <tr class="premium-total"><td><strong>TOTAL TTC</strong></td><td class="text-right"><strong>${safeToFixed(totalTTC)} MAD</strong></td></tr>
+          
+          <div class="table-wrapper">
+            <table class="invoice-table">
+              <thead>
+                <tr>
+                  <th style="width: 60%;">Désignation</th>
+                  <th class="text-center" style="width: 10%;">Qté</th>
+                  <th class="text-right" style="width: 15%;">P.U HT</th>
+                  <th class="text-right" style="width: 15%;">Montant HT</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>${description}</strong><br>
+                    <span style="font-size: 10px; color: #6b7280;">
+                      ${selected.map(item => {
+                        if (item.isGroup) {
+                          return item.activations.map(a => `${a.matricule} (${PLAN_LABEL[a.plan] || a.plan || 'Standard'})`).join(', ');
+                        } else {
+                          return `${item.matricule} (${PLAN_LABEL[item.plan] || item.plan || 'Standard'})`;
+                        }
+                      }).join(', ')}
+                    </span>
+                  </td>
+                  <td class="text-center"><strong>${totalQuantity}</strong></td>
+                  <td class="text-right">${safeToFixed(unitPriceHT)} MAD</strong></td>
+                  <td class="text-right"><strong>${safeToFixed(totalHT)} MAD</strong></strong></td>
+                </tr>
+              </tbody>
             </table>
           </div>
-        </div>
-        
-        <div class="signature-section">
-          <div class="signature-box">
-            <div class="signature-label">Cachet & signature</div>
-            ${showCachet && cacheImageBase64 ? `<div class="signature-image"><img src="${cacheImageBase64}" alt="Cachet" class="signature-img" /></div>` : '<div style="height: 50px;"></div>'}
+          
+          <div class="summary-container">
+            <div class="legal-wordings">
+              <div class="wording-label">Arrêté la présente facture à la somme de :</div>
+              <div class="wording-value">${convertToFrenchWords(totalTTC)}</div>
+              <div class="bank-info" style="margin-top: 15px;">
+                <strong>Informations de paiement</strong><br>
+                ${companyInfo.rib ? `RIB: ${companyInfo.rib}` : ''}
+              </div>
+            </div>
+            <div>
+              <table class="financial-math">
+                <tr><td>Montant HT</td><td class="text-right">${safeToFixed(totalHT)} MAD</td></tr>
+                <tr><td>TVA (20%)</td><td class="text-right">${safeToFixed(tvaAmount)} MAD</td></tr>
+                <tr class="premium-total"><td><strong>TOTAL TTC</strong></td><td class="text-right"><strong>${safeToFixed(totalTTC)} MAD</strong></td></tr>
+              </table>
+            </div>
           </div>
-        </div>
-        
-        <div class="payment-routing">
-          <div class="routing-title">Règlement & Informations Légales</div>
-          <div class="routing-grid">
-            <div class="routing-item"><strong>ICE</strong> ${companyInfo.ice || '-'}</div>
-            <div class="routing-item"><strong>RC</strong> ${companyInfo.rc || '-'}</div>
-            <div class="routing-item"><strong>Patente</strong> ${companyInfo.patente || '-'}</div>
-            <div class="routing-item"><strong>IF</strong> ${companyInfo.tax_number || '-'}</div>
-            <div class="routing-item"><strong>CNSS</strong> ${companyInfo.cnss || '-'}</div>
+          
+          <div class="signature-section">
+            <div class="signature-box">
+              <div class="signature-label">Cachet & signature</div>
+              ${showCachet && cacheImageBase64 ? `<div class="signature-image"><img src="${cacheImageBase64}" alt="Cachet" class="signature-img" /></div>` : '<div style="height: 50px;"></div>'}
+            </div>
           </div>
+          
+          <div class="payment-routing">
+            <div class="routing-title">Règlement & Informations Légales</div>
+            <div class="routing-grid">
+              <div class="routing-item"><strong>ICE</strong> ${companyInfo.ice || '-'}</div>
+              <div class="routing-item"><strong>RC</strong> ${companyInfo.rc || '-'}</div>
+              <div class="routing-item"><strong>Patente</strong> ${companyInfo.patente || '-'}</div>
+              <div class="routing-item"><strong>IF</strong> ${companyInfo.tax_number || '-'}</div>
+              <div class="routing-item"><strong>CNSS</strong> ${companyInfo.cnss || '-'}</div>
+            </div>
+          </div>
+          
+          <div class="executive-footer"></div>
         </div>
-        
-        <div class="executive-footer"></div>
-      </div>
-    </body>
-    </html>
-  `;
-};
+      </body>
+      </html>
+    `;
+  };
   
   const openCachetChoiceCombined = () => {
     if (selectedRows.size === 0) {
@@ -3841,7 +3820,10 @@ const generateCombinedInvoiceHTML = (client, selected, totalQuantity, unitPriceH
   
   const handleResetInvoiceNumber = async () => {
     try {
-      await dispatch(resetInvoiceCounterAction()).unwrap();
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_URL}/invoices/reset-counter`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setCurrentInvoiceNumber(1);
       setCustomInvoiceNumber('F01');
       showToast('Compteur de factures réinitialisé à F01', 'success');
@@ -3929,7 +3911,7 @@ const generateCombinedInvoiceHTML = (client, selected, totalQuantity, unitPriceH
                   <button 
                     onClick={openCachetChoiceCombined} 
                     disabled={selectedRows.size === 0} 
-                    className={`modern-btn ${combinedGenerated ? 'modern-btn-red' : 'modern-btn-success'}`}
+                    className="modern-btn modern-btn-success"
                   >
                     {generatingCombined ? <Loader size={14} className="spinning" /> : <Printer size={14} />}
                     {generatingCombined ? 'Génération...' : `Combiner (${selectedRows.size})`}
@@ -3981,7 +3963,7 @@ const generateCombinedInvoiceHTML = (client, selected, totalQuantity, unitPriceH
                 </button>
                 <div className="date-filter-field" style={{ marginLeft: 'auto' }}>
                   <span style={{ fontSize: '0.7rem', color: '#475569' }}>
-                    Total: ${filteredItems.length} élément(s) | HT: ${safeToFixed(totalHTFiltered)} MAD | TTC: ${safeToFixed(totalTTCFiltered)} MAD
+                    Total: {filteredItems.length} élément(s) | HT: {safeToFixed(totalHTFiltered)} MAD | TTC: {safeToFixed(totalTTCFiltered)} MAD
                   </span>
                 </div>
               </div>
@@ -4018,29 +4000,29 @@ const generateCombinedInvoiceHTML = (client, selected, totalQuantity, unitPriceH
                       
                       // Determine button style based on database tracking
                       const isSelected = selectedRows.has(item.id);
-                      const isCombinedIncluded = combinedIncludedItems.has(item.id);
+                      const isCombinedIncluded = combinedItemsMap.has(item.id);
                       const isItemGenerated = generatedItems.has(item.id);
                       
                       let buttonClass = 'modern-btn-success'; // Default blue for new/available
-let buttonTitle = 'Générer facture';
+                      let buttonTitle = 'Générer facture';
 
-if (isSelected) {
-  // Selected for combined invoice - shows red selection indicator
-  buttonClass = 'modern-btn-red';
-  buttonTitle = 'Sélectionné pour combinaison';
-} else if (isCombinedIncluded) {
-  // Already part of a combined invoice - RED (highest priority)
-  buttonClass = 'modern-btn-red';
-  buttonTitle = 'Facture combinée générée';
-} else if (isItemGenerated) {
-  // Individual invoice generated - GRAY
-  buttonClass = 'modern-btn-gray';
-  buttonTitle = 'Facture individuelle générée';
-} else {
-  // No invoice generated - BLUE
-  buttonClass = 'modern-btn-success';
-  buttonTitle = 'Générer facture';
-}
+                      if (isSelected) {
+                        // Selected for combined invoice - shows red selection indicator
+                        buttonClass = 'modern-btn-red';
+                        buttonTitle = 'Sélectionné pour combinaison';
+                      } else if (isCombinedIncluded) {
+                        // Already part of a combined invoice - RED
+                        buttonClass = 'modern-btn-red';
+                        buttonTitle = 'Facture combinée générée';
+                      } else if (isItemGenerated) {
+                        // Individual invoice generated - GRAY
+                        buttonClass = 'modern-btn-gray';
+                        buttonTitle = 'Facture individuelle générée';
+                      } else {
+                        // No invoice generated - BLUE
+                        buttonClass = 'modern-btn-success';
+                        buttonTitle = 'Générer facture';
+                      }
                       
                       return (
                         <React.Fragment key={item.id}>
@@ -4058,7 +4040,7 @@ if (isSelected) {
                                   <ChevronRight size={14} className={isExpanded ? 'rotated' : ''} />
                                 </span>
                               )}
-                                                        </td>
+                            </td>
                             <td>
                               {isGroup ? item.activations.map(a => a.matricule).join(', ') : item.matricule}
                               {isGroup && item.activations.length > 1 && (

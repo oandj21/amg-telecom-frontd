@@ -61,7 +61,7 @@ const styles = `
   }
   
   .activation-subtitle {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #6b7280;
     margin-top: 0.25rem;
   }
@@ -111,7 +111,7 @@ const styles = `
     padding: 0.5rem 0.75rem 0.5rem 2.25rem;
     border: 1px solid #d1d5db;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     outline: none;
     transition: all 0.2s;
   }
@@ -125,7 +125,7 @@ const styles = `
     padding: 0.5rem 0.75rem;
     border: 1px solid #d1d5db;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     background: white;
     cursor: pointer;
     width: auto;
@@ -174,7 +174,7 @@ const styles = `
   .activation-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
   
   .activation-table th {
@@ -237,7 +237,7 @@ const styles = `
     gap: 0.5rem;
     padding: 0.625rem 1.25rem;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -455,7 +455,7 @@ const styles = `
   }
   
   .confirmation-message {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #6b7280;
     margin-bottom: 1.5rem;
   }
@@ -466,7 +466,7 @@ const styles = `
     padding: 0.75rem;
     margin: 1rem 0;
     text-align: left;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
   
   .confirmation-buttons {
@@ -528,7 +528,7 @@ const styles = `
   
   .history-action {
     font-weight: 600;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
   
   .history-date {
@@ -620,7 +620,7 @@ const styles = `
     padding: 0.5rem 0.75rem;
     border: 1px solid #d1d5db;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     outline: none;
     transition: all 0.15s;
   }
@@ -634,7 +634,7 @@ const styles = `
     padding: 0.5rem 0.75rem;
     border: 1px solid #d1d5db;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     background: white;
     cursor: pointer;
   }
@@ -684,7 +684,7 @@ const styles = `
   .mb-4 { margin-bottom: 1rem; }
   .ml-2 { margin-left: 0.5rem; }
   .p-2 { padding: 0.5rem; }
-  .text-sm { font-size: 0.875rem; }
+  .text-sm { font-size: 0.75rem; }
   .font-medium { font-weight: 500; }
   
   .expandable-row {
@@ -722,7 +722,7 @@ const styles = `
     padding: 0.75rem;
     margin-bottom: 1rem;
     color: #dc2626;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
   
   .success-message {
@@ -732,7 +732,7 @@ const styles = `
     padding: 0.75rem;
     margin-bottom: 1rem;
     color: #16a34a;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
   
   .action-buttons {
@@ -790,7 +790,7 @@ const styles = `
   
   .alert-banner-content {
     flex: 1;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #9a3412;
   }
   
@@ -832,7 +832,7 @@ const styles = `
     border: 1px solid #d1d5db;
     background: white;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: #374151;
     cursor: pointer;
@@ -858,7 +858,7 @@ const styles = `
   
   .activation-pagination-info {
     padding: 0.5rem 1rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #6b7280;
   }
   
@@ -941,7 +941,7 @@ const styles = `
     justify-content: center;
     gap: 0.5rem;
     color: #4b5563;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
   }
   

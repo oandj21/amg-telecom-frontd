@@ -125,7 +125,7 @@ const styles = `
   }
   
   .users-subtitle {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #64748b;
     display: flex;
     align-items: center;
@@ -251,7 +251,7 @@ const styles = `
   }
   
   .users-stat-label {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: #64748b;
     margin-bottom: 0.5rem;
@@ -315,7 +315,7 @@ const styles = `
     padding: 0 1rem 0 2.75rem;
     border: 1px solid #e2e8f0;
     border-radius: 0.75rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     background: white;
     color: #0f172a;
     outline: none;
@@ -353,7 +353,7 @@ const styles = `
     padding: 0 2rem 0 2.5rem;
     border: 1px solid #e2e8f0;
     border-radius: 0.75rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     background: white;
     color: #0f172a;
     cursor: pointer;
@@ -399,7 +399,7 @@ const styles = `
   .users-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
   
   .users-table thead tr {
@@ -486,7 +486,7 @@ const styles = `
   
   .users-empty-text {
     color: #94a3b8;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
   
   /* Loading State */
@@ -516,7 +516,7 @@ const styles = `
     gap: 0.5rem;
     padding: 0.5rem 1rem;
     border-radius: 0.875rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -704,7 +704,7 @@ const styles = `
   }
   
   .users-dialog-description {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #64748b;
     margin-top: 0.25rem;
   }
@@ -753,7 +753,7 @@ const styles = `
   }
   
   .users-label {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: #0f172a;
   }
@@ -769,7 +769,7 @@ const styles = `
     padding: 0.625rem 0.875rem;
     border: 1px solid #e2e8f0;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     background: white;
     color: #0f172a;
     outline: none;
@@ -786,7 +786,7 @@ const styles = `
     padding: 0.625rem 0.875rem;
     border: 1px solid #e2e8f0;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     background: white;
     color: #0f172a;
     outline: none;
@@ -803,7 +803,7 @@ const styles = `
     padding: 0.625rem 0.875rem;
     border: 1px solid #e2e8f0;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     background: white;
     color: #0f172a;
     outline: none;
@@ -831,7 +831,7 @@ const styles = `
   }
   
   .users-toggle-label {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: #0f172a;
   }
@@ -933,7 +933,7 @@ const styles = `
   
   .users-toast-message {
     flex: 1;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #0f172a;
   }
   
@@ -952,7 +952,7 @@ const styles = `
     border-radius: 0.75rem;
     padding: 0.75rem 1rem;
     color: #dc2626;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -978,7 +978,7 @@ const styles = `
   }
   
   .delete-warning-text {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #92400e;
   }
   
@@ -1002,7 +1002,7 @@ const styles = `
     border: 1px solid #e2e8f0;
     background: white;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: #0f172a;
     cursor: pointer;
@@ -1021,7 +1021,7 @@ const styles = `
   
   .users-pagination-info {
     padding: 0.5rem 1rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #64748b;
   }
   
@@ -1082,7 +1082,7 @@ const styles = `
   .users-payment-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
   
   .users-payment-table thead tr {
@@ -1161,7 +1161,7 @@ const styles = `
   }
   
   .file-upload-text {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #64748b;
   }
   
@@ -1346,7 +1346,7 @@ const styles = `
   }
   
   .notes-text {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #0f172a;
   }
   

@@ -191,7 +191,7 @@ const Login = () => {
 
         .login-label {
           display: block;
-          font-size: 0.875rem;
+          font-size: 0.75rem;
           font-weight: 600;
           color: #475569;
           margin-bottom: 0.5rem;

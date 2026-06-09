@@ -59,7 +59,7 @@ const styles = `
   }
   
   .profile-subtitle {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #64748b;
     display: flex;
     align-items: center;
@@ -159,7 +159,7 @@ const styles = `
   }
   
   .profile-stat-label {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: #64748b;
     margin-bottom: 0.5rem;
@@ -223,7 +223,7 @@ const styles = `
   }
   
   .profile-label {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: #0f172a;
   }
@@ -254,7 +254,7 @@ const styles = `
     padding: 0.625rem 0.875rem 0.625rem 2.5rem;
     border: 1px solid #e2e8f0;
     border-radius: 0.75rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     background: white;
     color: #0f172a;
     outline: none;
@@ -280,7 +280,7 @@ const styles = `
     gap: 0.5rem;
     padding: 0.625rem 1.25rem;
     border-radius: 0.75rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -409,7 +409,7 @@ const styles = `
   }
   
   .profile-info-label {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #64748b;
     display: flex;
     align-items: center;
@@ -417,7 +417,7 @@ const styles = `
   }
   
   .profile-info-value {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: #0f172a;
   }
@@ -485,7 +485,7 @@ const styles = `
   
   .profile-toast-message {
     flex: 1;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #0f172a;
   }
   

@@ -32,7 +32,7 @@ const styles = `
   }
   
   .settings-simple-subtitle {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #6b7280;
     margin-top: 0.25rem;
   }
@@ -67,7 +67,7 @@ const styles = `
   
   .settings-simple-label {
     display: block;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: #374151;
     margin-bottom: 0.25rem;
@@ -78,7 +78,7 @@ const styles = `
     padding: 0.5rem 0.75rem;
     border: 1px solid #d1d5db;
     border-radius: 0.375rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     background: white;
   }
   
@@ -111,7 +111,7 @@ const styles = `
   .settings-simple-btn {
     padding: 0.5rem 1rem;
     border-radius: 0.375rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     cursor: pointer;
     border: none;
@@ -144,7 +144,7 @@ const styles = `
   .settings-simple-alert {
     padding: 0.75rem;
     border-radius: 0.375rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     margin-bottom: 1rem;
   }
   

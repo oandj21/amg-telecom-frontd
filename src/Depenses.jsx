@@ -96,7 +96,7 @@ const styles = `
   }
   
   .page-subtitle {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #64748b;
     margin-top: 0.25rem;
     display: flex;
@@ -256,7 +256,7 @@ const styles = `
     padding: 0 1rem 0 2.5rem;
     border: 1px solid #e2e8f0;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     background: white;
     color: #0f172a;
     outline: none;
@@ -290,7 +290,7 @@ const styles = `
     padding: 0 2rem 0 2.25rem;
     border: 1px solid #e2e8f0;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     background: white;
     color: #0f172a;
     cursor: pointer;
@@ -312,7 +312,7 @@ const styles = `
     gap: 0.5rem;
     padding: 0.5rem 1rem;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -381,7 +381,7 @@ const styles = `
   .data-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
   
   .data-table thead tr {
@@ -432,7 +432,7 @@ const styles = `
     border: 1px solid #e2e8f0;
     background: white;
     border-radius: 0.375rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: #0f172a;
     cursor: pointer;
@@ -522,7 +522,7 @@ const styles = `
   
   .form-label {
     display: block;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: #0f172a;
     margin-bottom: 0.375rem;
@@ -539,7 +539,7 @@ const styles = `
     padding: 0.5rem 0.75rem;
     border: 1px solid #e2e8f0;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     background: white;
     color: #0f172a;
     outline: none;
@@ -562,7 +562,7 @@ const styles = `
     border-radius: 0.5rem;
     padding: 0.75rem;
     color: #dc2626;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -656,7 +656,7 @@ const styles = `
   .gap-1 { gap: 0.25rem; }
   .gap-2 { gap: 0.5rem; }
   .gap-3 { gap: 0.75rem; }
-  .text-sm { font-size: 0.875rem; }
+  .text-sm { font-size: 0.75rem; }
   .text-xs { font-size: 0.75rem; }
   .text-gray-400 { color: #94a3b8; }
   .text-gray-500 { color: #64748b; }

@@ -575,7 +575,7 @@ const styles = `
   }
   
   .page-subtitle {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #64748b;
     margin-top: 0.25rem;
     display: flex;
@@ -590,7 +590,7 @@ const styles = `
     gap: 0.5rem;
     padding: 0.5rem 1rem;
     border-radius: 0.75rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -873,7 +873,7 @@ const styles = `
   
   .welcome-text {
     color: #94a3b8;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
   
   .info-box {
@@ -1057,7 +1057,7 @@ const styles = `
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
   
   .saved-report-meta {
@@ -1212,7 +1212,7 @@ const styles = `
     padding: 0.5rem 2rem 0.5rem 0.75rem;
     border: 1px solid #d1d5db;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     background: white;
     color: #111827;
     cursor: pointer;
@@ -1952,8 +1952,9 @@ const PremiumInvoiceModal = ({ isOpen, onClose, showToast, clients = [] }) => {
                         type="number"
                         step="1"
                         min="1"
+                        placeholder='qantity'
                         className="report-input"
-                        value={row.quantity}
+                        value={row.quantity||""}
                         onChange={e => updateRow(row.id, 'quantity', parseInt(e.target.value) || 0)}
                         style={{ fontSize: '0.75rem', textAlign: 'center' }}
                       />
@@ -1963,8 +1964,9 @@ const PremiumInvoiceModal = ({ isOpen, onClose, showToast, clients = [] }) => {
                         type="number"
                         step="0.01"
                         min="0"
+                        placeholder='0.00 DH'
                         className="report-input"
-                        value={row.unitPrice}
+                        value={row.unitPrice||""}
                         onChange={e => updateRow(row.id, 'unitPrice', parseFloat(e.target.value) || 0)}
                         style={{ fontSize: '0.75rem', textAlign: 'right' }}
                       />

@@ -40,7 +40,7 @@ const styles = `
   }
   
   .invoices-subtitle {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #6b7280;
     margin-top: 0.25rem;
   }
@@ -67,7 +67,7 @@ const styles = `
   .invoices-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
   
   .invoices-table thead tr {
@@ -130,7 +130,7 @@ const styles = `
     text-align: center;
     color: #9ca3af;
     padding: 3rem 0;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
   
   .invoices-empty-icon {

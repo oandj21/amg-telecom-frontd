@@ -49,7 +49,7 @@ const styles = `
   }
   
   .products-subtitle {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #6b7280;
     margin-top: 0.25rem;
   }
@@ -99,7 +99,7 @@ const styles = `
     padding: 0.5rem 0.75rem 0.5rem 2.25rem;
     border: 1px solid #d1d5db;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     outline: none;
     transition: all 0.2s;
   }
@@ -113,7 +113,7 @@ const styles = `
     padding: 0.5rem 0.75rem;
     border: 1px solid #d1d5db;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     background: white;
     cursor: pointer;
     width: auto;
@@ -165,7 +165,7 @@ const styles = `
   .products-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
   
   .products-table thead tr {
@@ -263,7 +263,7 @@ const styles = `
     gap: 0.5rem;
     white-space: nowrap;
     border-radius: 0.875rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     transition: all 0.2s ease;
     outline: none;
@@ -395,7 +395,7 @@ const styles = `
     cursor: pointer;
     padding: 0.25rem 0.5rem;
     border-radius: 0.375rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #2563eb;
     transition: all 0.2s ease;
   }
@@ -501,7 +501,7 @@ const styles = `
   }
   
   .products-dialog-description {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #6b7280;
     margin-top: 0.25rem;
   }
@@ -591,7 +591,7 @@ const styles = `
   }
   
   .delete-warning-text {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #78350f;
     line-height: 1.5;
   }
@@ -603,7 +603,7 @@ const styles = `
   
   /* Form Styles */
   .products-label {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     line-height: 1;
     color: #374151;
@@ -621,7 +621,7 @@ const styles = `
     padding: 0.5rem 0.75rem;
     border: 1px solid #d1d5db;
     border-radius: 0.375rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     background: white;
     color: #111827;
     outline: none;
@@ -649,7 +649,7 @@ const styles = `
     padding: 0.5rem 0.75rem;
     border: 1px solid #d1d5db;
     border-radius: 0.375rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     background: white;
     color: #111827;
     outline: none;
@@ -693,7 +693,7 @@ const styles = `
     border: 1px solid #d1d5db;
     background: white;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: #374151;
     cursor: pointer;
@@ -713,7 +713,7 @@ const styles = `
   
   .products-pagination-info {
     padding: 0.5rem 1rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #6b7280;
   }
   
@@ -785,7 +785,7 @@ const styles = `
   
   .products-toast-message {
     flex: 1;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #374151;
   }
   
@@ -809,7 +809,7 @@ const styles = `
     border-radius: 0.5rem;
     padding: 0.75rem 1rem;
     color: #dc2626;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -821,7 +821,7 @@ const styles = `
     border-radius: 0.5rem;
     padding: 0.75rem 1rem;
     color: #059669;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -913,7 +913,7 @@ const styles = `
   .confirm-btn {
     padding: 0.625rem 1.25rem;
     border-radius: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -987,7 +987,7 @@ const styles = `
   }
   
   .add-device-title {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: #1e293b;
     margin-bottom: 1rem;
@@ -1007,7 +1007,7 @@ const styles = `
   
   .imei-input {
     font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     letter-spacing: 0.5px;
     background: #ffffff;
     border: 2px solid #e2e8f0;
@@ -1041,7 +1041,7 @@ const styles = `
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
   
   .devices-table thead tr {
@@ -1316,7 +1316,7 @@ const styles = `
     padding: 0.625rem 1rem;
     border: 2px solid #e2e8f0;
     border-radius: 0.75rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     background: white;
     cursor: pointer;
@@ -1337,7 +1337,7 @@ const styles = `
     padding: 0.625rem 1.5rem;
     border-radius: 0.75rem;
     font-weight: 600;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     cursor: pointer;
     display: inline-flex;
     align-items: center;

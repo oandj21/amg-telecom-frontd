@@ -995,7 +995,7 @@ const Sidebar = () => {
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             transition: all 0.3s ease;
             font-weight: 600;
-            font-size: 0.875rem;
+            font-size: 0.75rem;
           }
 
           .mobile-menu-btn .menu-badge {
@@ -1182,7 +1182,7 @@ const Sidebar = () => {
             gap: 0.75rem;
             padding: 0.625rem 0.75rem;
             border-radius: 0.875rem;
-            font-size: 0.875rem;
+            font-size: 0.75rem;
             font-weight: 500;
             transition: all 0.2s;
             color: #cbd5e1;
@@ -1218,7 +1218,7 @@ const Sidebar = () => {
           }
 
           .sidebar-user-name {
-            font-size: 0.875rem;
+            font-size: 0.75rem;
             color: white;
             font-weight: 600;
           }
@@ -1247,7 +1247,7 @@ const Sidebar = () => {
             gap: 0.75rem;
             padding: 0.625rem 0.75rem;
             border-radius: 0.875rem;
-            font-size: 0.875rem;
+            font-size: 0.75rem;
             font-weight: 500;
             background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
             border: none;
