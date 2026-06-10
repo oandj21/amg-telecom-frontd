@@ -153,7 +153,7 @@ const styles = `
   }
   .report-table th,
   .report-table td {
-    padding: 8px 6px;
+    padding: 8px 4.3px;
     border-bottom: 1px solid #f1f5f9;
     font-size: 0.7rem;
     vertical-align: middle;
@@ -180,7 +180,7 @@ const styles = `
     padding: 6px 8px;
     border: 1px solid #e2e8f0;
     border-radius: 12px;
-    font-size: 0.6rem;
+    font-size: 0.75rem;
     transition: all 0.2s;
     background: white;
     box-sizing: border-box;
@@ -336,7 +336,7 @@ const styles = `
     }
   }
   .saved-report-meta {
-    font-size: 0.6rem;
+    font-size: 0.75rem;
     color: #64748b;
     display: flex;
     gap: 12px;
@@ -393,7 +393,7 @@ const styles = `
   .pdf-modal-body, .edit-modal-body {
     flex: 1;
     overflow-y: auto;
-    padding: 16px;
+    padding: 1.5px;
   }
   .pdf-iframe {
     width: 100%;
