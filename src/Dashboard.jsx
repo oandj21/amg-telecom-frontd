@@ -575,7 +575,7 @@ const styles = `
   }
   
   .page-subtitle {
-    font-size: 0.75rem;
+    font-size: 0.875rem;
     color: #64748b;
     margin-top: 0.25rem;
     display: flex;
@@ -590,7 +590,7 @@ const styles = `
     gap: 0.5rem;
     padding: 0.5rem 1rem;
     border-radius: 0.75rem;
-    font-size: 0.75rem;
+    font-size: 0.875rem;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -873,7 +873,7 @@ const styles = `
   
   .welcome-text {
     color: #94a3b8;
-    font-size: 0.75rem;
+    font-size: 0.875rem;
   }
   
   .info-box {
@@ -1057,7 +1057,7 @@ const styles = `
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 0.75rem;
+    font-size: 0.875rem;
   }
   
   .saved-report-meta {
@@ -1212,7 +1212,7 @@ const styles = `
     padding: 0.5rem 2rem 0.5rem 0.75rem;
     border: 1px solid #d1d5db;
     border-radius: 0.5rem;
-    font-size: 0.75rem;
+    font-size: 0.875rem;
     background: white;
     color: #111827;
     cursor: pointer;
@@ -1952,9 +1952,8 @@ const PremiumInvoiceModal = ({ isOpen, onClose, showToast, clients = [] }) => {
                         type="number"
                         step="1"
                         min="1"
-                        placeholder='qantity'
                         className="report-input"
-                        value={row.quantity||""}
+                        value={row.quantity}
                         onChange={e => updateRow(row.id, 'quantity', parseInt(e.target.value) || 0)}
                         style={{ fontSize: '0.75rem', textAlign: 'center' }}
                       />
@@ -1964,9 +1963,8 @@ const PremiumInvoiceModal = ({ isOpen, onClose, showToast, clients = [] }) => {
                         type="number"
                         step="0.01"
                         min="0"
-                        placeholder='0.00 DH'
                         className="report-input"
-                        value={row.unitPrice||""}
+                        value={row.unitPrice}
                         onChange={e => updateRow(row.id, 'unitPrice', parseFloat(e.target.value) || 0)}
                         style={{ fontSize: '0.75rem', textAlign: 'right' }}
                       />
@@ -3122,7 +3120,7 @@ const Dashboard = () => {
   const { list: gpsDevices } = useSelector((state) => state.gpsDevices);
   const { list: vehicles } = useSelector((state) => state.vehicles);
   const { list: activations } = useSelector((state) => state.activations);
-  const { list: depenses } = useSelector(selectDepenses);
+  const depenses = useSelector((state) => state.depenses.list);
   const { user } = useSelector((state) => state.auth);
   
   // Refresh Data - memoized with useCallback to avoid dependency loops
@@ -3177,18 +3175,15 @@ const Dashboard = () => {
     return total;
   };
 
-  const getActivationTotalPaid = (act) => {
-    let total = safeNumber(act.amount_paid);
-    if (act.payment_history && Array.isArray(act.payment_history)) {
-      act.payment_history.forEach(payment => {
-        if ((payment.method === 'cheque' || payment.method === 'check') && payment.remise_status === 'encaisse') {
-          total += safeNumber(payment.amount);
-        }
-      });
-    }
-    return total;
-  };
+const getActivationTotalPaid = (act) => {
+  // amount_paid already includes all payments (cash, card, and cashed cheques from remise)
+  return safeNumber(act.amount_paid);
+};
 
+const getSaleTotalPaid = (sale) => {
+  // amount_paid already includes all payments (cash, card, and cashed cheques from remise)
+  return safeNumber(sale.amount_paid);
+};
   const financialStats = useMemo(() => {
     const salesArray = Array.isArray(sales) ? sales : [];
     const activationsArray = Array.isArray(activations) ? activations : [];
@@ -3220,28 +3215,53 @@ const Dashboard = () => {
     else if (totalExpectedRevenueCurrent > 0) revenueGrowth = 100;
     
     const currentMonthSalesPaid = salesArray
-      .filter(s => s && s.created_at && s.created_at.slice(0, 7) === currentMonth)
-      .reduce((sum, s) => sum + safeNumber(s?.amount_paid), 0);
+  .filter(s => s && s.created_at && s.created_at.slice(0, 7) === currentMonth)
+  .reduce((sum, s) => sum + getSaleTotalPaid(s), 0);
     const currentMonthActivationsPaid = activationsArray
       .filter(a => a && a.created_at && a.created_at.slice(0, 7) === currentMonth)
       .reduce((sum, a) => sum + getActivationTotalPaid(a), 0);
     const totalPaidRevenueCurrent = currentMonthSalesPaid + currentMonthActivationsPaid;
     
     const lastMonthSalesPaid = salesArray
-      .filter(s => s && s.created_at && s.created_at.slice(0, 7) === lastMonth)
-      .reduce((sum, s) => sum + safeNumber(s?.amount_paid), 0);
+  .filter(s => s && s.created_at && s.created_at.slice(0, 7) === lastMonth)
+  .reduce((sum, s) => sum + getSaleTotalPaid(s), 0);  // ✅ CORRECT - using getSaleTotalPaid
     const lastMonthActivationsPaid = activationsArray
       .filter(a => a && a.created_at && a.created_at.slice(0, 7) === lastMonth)
       .reduce((sum, a) => sum + getActivationTotalPaid(a), 0);
     const totalPaidRevenueLast = lastMonthSalesPaid + lastMonthActivationsPaid;
     
-    const currentMonthExpenses = depensesArray
-      .filter(d => d && d.date && d.date.slice(0, 7) === currentMonth)
-      .reduce((sum, d) => sum + safeNumber(d?.amount), 0);
-    const lastMonthExpenses = depensesArray
-      .filter(d => d && d.date && d.date.slice(0, 7) === lastMonth)
-      .reduce((sum, d) => sum + safeNumber(d?.amount), 0);
-    
+    // Calculate current month expenses - MORE ROBUST
+const currentMonthExpenses = depensesArray
+  .filter(d => {
+    if (!d) return false;
+    // Use the date field (which is what Depenses.jsx uses)
+    const expenseDate = d.date;
+    if (!expenseDate) return false;
+    // Make sure the date format is YYYY-MM-DD
+    const expenseMonth = expenseDate.slice(0, 7);
+    return expenseMonth === currentMonth;
+  })
+  .reduce((sum, d) => sum + safeNumber(d?.amount), 0);
+
+// Calculate last month expenses
+const lastMonthExpenses = depensesArray
+  .filter(d => {
+    if (!d) return false;
+    const expenseDate = d.date;
+    if (!expenseDate) return false;
+    const expenseMonth = expenseDate.slice(0, 7);
+    return expenseMonth === lastMonth;
+  })
+  .reduce((sum, d) => sum + safeNumber(d?.amount), 0);
+
+    // After calculating currentMonthExpenses, add this debug:
+console.log('=== DEPENSES DEBUG ===');
+console.log('Total depenses:', depensesArray.length);
+console.log('Current month:', currentMonth);
+console.log('Filtered expenses count:', depensesArray.filter(d => d?.date?.slice(0, 7) === currentMonth).length);
+console.log('Current month expenses total:', currentMonthExpenses);
+console.log('Last month expenses total:', lastMonthExpenses);
+console.log('First 3 depenses:', depensesArray.slice(0, 3).map(d => ({ date: d.date, amount: d.amount, title: d.title })));
     const profitCurrent = totalPaidRevenueCurrent - currentMonthExpenses;
     const profitLast = totalPaidRevenueLast - lastMonthExpenses;
     
@@ -3259,8 +3279,8 @@ const Dashboard = () => {
     
     const totalPendingRevenue = pendingRevenue + pendingActivationRevenue;
     
-    const collectedRevenue = salesArray.reduce((sum, s) => sum + safeNumber(s?.amount_paid), 0) +
-      activationsArray.reduce((sum, a) => sum + getActivationTotalPaid(a), 0);
+    const collectedRevenue = salesArray.reduce((sum, s) => sum + getSaleTotalPaid(s), 0) +
+  activationsArray.reduce((sum, a) => sum + getActivationTotalPaid(a), 0);
     
     const totalTransactions = salesArray.length + activationsArray.length;
     let averageOrderValue = 0;
@@ -3538,17 +3558,17 @@ const Dashboard = () => {
         </div>
         
         {/* Main Stats Cards */}
-        <div className="stats-grid">
-          <StatCard 
-            label="CHIFFRE D'AFFAIRES" 
-            value={financialStats.currentRevenue} 
-            icon={DollarSign} 
-            color="blue" 
-            subtitle={`💰 Collecté: ${financialStats.collectedRevenue.toLocaleString()} MAD`} 
-            trend={financialStats.growth > 0 ? 'up' : (financialStats.growth < 0 ? 'down' : undefined)} 
-            trendValue={financialStats.growth !== 0 ? Math.abs(financialStats.growth) : undefined} 
-            onClick={() => navigate('/ventes')} 
-          />
+<div className="stats-grid">
+  <StatCard 
+    label="CHIFFRE D'AFFAIRES" 
+    value={financialStats.currentRevenue} 
+    icon={DollarSign} 
+    color="blue" 
+    subtitle={`💰 Collecté: ${financialStats.collectedRevenue.toLocaleString()} MAD`} 
+    trend={financialStats.growth > 0 ? 'up' : (financialStats.growth < 0 ? 'down' : undefined)} 
+    trendValue={financialStats.growth !== 0 ? Math.abs(financialStats.growth) : undefined} 
+    onClick={() => navigate('/ventes')} 
+  />
           <StatCard 
             label="PROFIT NET" 
             value={financialStats.currentProfit} 

@@ -1,3 +1,4 @@
+// Activation.jsx
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
@@ -27,7 +28,7 @@ import {
 // ==================== CONSTANTS ====================
 const PLAN_LABEL = { '1m': '1 mois', '3m': '3 mois', '6m': '6 mois', '12m': '12 mois' };
 const PLAN_OPTIONS = [
-   { value: '', label: '-- Sélectionner un plan --' },
+  { value: '', label: '-- Sélectionner un plan --' },
   { value: '1m', label: '1 mois' },
   { value: '3m', label: '3 mois' },
   { value: '6m', label: '6 mois' },
@@ -79,12 +80,26 @@ const safeParseNumber = (value) => {
   const num = parseFloat(value);
   return isNaN(num) ? 0 : num;
 };
-
+const safeNumber = (value) => {
+  const num = Number(value);
+  return isNaN(num) ? 0 : num;
+};
 const formatDate = (dateString) => {
   if (!dateString) return '-';
   return new Date(dateString).toLocaleDateString('fr-FR', {
     day: '2-digit', month: '2-digit', year: 'numeric'
   });
+};
+
+const getDisplayPrice = (activation) => {
+  // After invoicing, activation.price already contains the TTC amount.
+  // Before invoicing, it contains the HT amount.
+  return safeNumber(activation.price);
+};
+
+// Helper for editable value: always the original HT
+const getEditablePrice = (activation) => {
+  return safeNumber(activation.price);
 };
 
 // ==================== STYLES ====================
@@ -1225,7 +1240,7 @@ const styles = `
       padding: 0.5rem;
     }
     .payment-summary-label {
-      font-size: 0.6rem;
+      font-size: 0.75rem;
     }
     .payment-summary-value {
       font-size: 0.9rem;
@@ -1459,7 +1474,7 @@ const HistoryModal = ({ isOpen, onClose, activation, history }) => {
               <div><strong>N° SIM:</strong> {activation.numero_sim || '-'}</div>
               <div><strong>Opérateur:</strong> {activation.operateur || '-'}</div>
               <div><strong>Plan:</strong> {PLAN_LABEL[activation.plan_abonnement] || '-'}</div>
-              <div><strong>Prix activation:</strong> {safeFormatPrice(activation.price)} MAD</div>
+              <div><strong>Prix activation:</strong> {safeFormatPrice(getDisplayPrice(activation))} MAD</div>
               <div><strong>Total payé:</strong> <span className="text-green-600 font-bold">{safeFormatPrice(activation.total_price_paid || activation.price)} MAD</span></div>
               <div><strong>Client:</strong> {activation.vente?.client?.nom || activation.client?.nom || '-'}</div>
               <div><strong>Matricule:</strong> {activation.matricule || '-'}</div>
@@ -1535,40 +1550,95 @@ const ActivationPaymentHistoryModal = ({
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
 
-  const loadPayments = async () => {
-    if (isLoading) return;
-    
-    setIsLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/activations/${activation.id}/payments`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        
-        setLocalPayments(data.payment_history || []);
-        setLocalTotal(data.total_price || activation.total_price_paid || 0);
-        setLocalOriginalPrice(data.original_price || activation.price || 0);
-        setLocalRenewalTotal(data.renewal_total || (data.total_price - data.original_price) || 0);
-        setLocalAmountPaid(data.amount_paid || 0);
-        setLocalRemaining(data.remaining_amount || 0);
-        setLocalOriginalPaid(data.original_paid || 0);
-        setLocalRenewalPaid(data.renewal_paid || 0);
-        setLocalOriginalRemaining(data.original_remaining || activation.price || 0);
-        setLocalRenewalRemaining(data.renewal_remaining || 0);
-        setHasLoaded(true);
-      } else {
-        const error = await response.json();
-        if (showToast) showToast(error.message || 'Erreur de chargement', 'error');
+ const loadPayments = async () => {
+  if (isLoading) return;
+  setIsLoading(true);
+  try {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_URL}/activations/${activation.id}/payments`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (response.ok) {
+      const data = await response.json();
+
+      setLocalPayments(data.payment_history || []);
+
+      // Prix d'activation (déjà en TTC si facturée, HT sinon)
+      let activationPrice = safeNumber(activation.price);
+      
+      // Total des renouvellements (appliquer TVA si facturée)
+      let totalRenewals = 0;
+      if (activation.renewal_history && Array.isArray(activation.renewal_history)) {
+        for (const entry of activation.renewal_history) {
+          if (entry.action === 'renewal') {
+            let renewalPrice = safeNumber(entry.price);
+            if (activation.is_invoiced) {
+              renewalPrice = renewalPrice * 1.2; // TVA si facturée
+            }
+            totalRenewals += renewalPrice;
+          }
+        }
       }
-    } catch (err) {
-      console.error('Error loading payments:', err);
-      if (showToast) showToast('Erreur lors du chargement des paiements', 'error');
-    } finally {
-      setIsLoading(false);
+
+      let sumActivationPayments = 0;
+      let sumRenewalPayments = 0;
+      const paymentHistory = data.payment_history || [];
+
+      for (const payment of paymentHistory) {
+        const amount = safeNumber(payment.amount);
+        const method = payment.method;
+        const remiseStatus = payment.remise_status;
+        const paymentType = payment.payment_type || 'activation';
+
+        // Règle :
+        // - Activation : toujours compter (même chèque non encaissé)
+        // - Renouvellement : compter seulement si pas un chèque ou si chèque encaissé
+        let isCounted = false;
+        if (paymentType === 'activation') {
+          isCounted = true;
+        } else { // 'renewal'
+          if (method !== 'cheque' || remiseStatus === 'encaisse') {
+            isCounted = true;
+          }
+        }
+
+        if (isCounted) {
+          if (paymentType === 'renewal') {
+            sumRenewalPayments += amount;
+          } else {
+            sumActivationPayments += amount;
+          }
+        }
+      }
+
+      const originalRemaining = Math.max(0, activationPrice - sumActivationPayments);
+      const renewalRemaining = Math.max(0, totalRenewals - sumRenewalPayments);
+      const totalToPay = activationPrice + totalRenewals;
+      const amountPaid = sumActivationPayments + sumRenewalPayments;
+      const remaining = totalToPay - amountPaid;
+
+      setLocalTotal(totalToPay);
+      setLocalOriginalPrice(activationPrice);
+      setLocalRenewalTotal(totalRenewals);
+      setLocalAmountPaid(amountPaid);
+      setLocalRemaining(Math.max(0, remaining));
+      setLocalOriginalRemaining(originalRemaining);
+      setLocalRenewalRemaining(renewalRemaining);
+      setLocalOriginalPaid(sumActivationPayments);
+      setLocalRenewalPaid(sumRenewalPayments);
+
+      setHasLoaded(true);
+    } else {
+      const error = await response.json();
+      if (showToast) showToast(error.message || 'Erreur de chargement', 'error');
     }
-  };
+  } catch (err) {
+    console.error('Error loading payments:', err);
+    if (showToast) showToast('Erreur lors du chargement des paiements', 'error');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   useEffect(() => {
     if (isOpen && activation?.id && !hasLoaded) {
@@ -2143,7 +2213,7 @@ const RenewalModal = ({ state, onClose, onConfirm, loading }) => {
             <p className="text-sm mb-1"><strong>Client:</strong> {state.activation.vente?.client?.nom || state.activation.client?.nom || '-'}</p>
             <p className="text-sm mb-1"><strong>Plan actuel:</strong> {PLAN_LABEL[state.activation.plan_abonnement]}</p>
             <p className="text-sm"><strong>Expire le:</strong> {formatDate(state.activation.expires_at)}</p>
-            <p className="text-sm mt-2"><strong>Prix d'activation original:</strong> {safeFormatPrice(state.activation.price)} MAD</p>
+            <p className="text-sm mt-2"><strong>Prix d'activation original:</strong> {safeFormatPrice(getDisplayPrice(state.activation))} MAD</p>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="activation-form-group">
@@ -2177,7 +2247,7 @@ const RenewalModal = ({ state, onClose, onConfirm, loading }) => {
           <div className="mt-4 p-3 bg-blue-50 rounded-lg text-sm">
             <p className="font-medium text-blue-800 mb-1">Information:</p>
             <p className="text-blue-700">Le renouvellement ajoutera <strong>{PLAN_LABEL[selectedPlan]}</strong> à l'abonnement actuel.</p>
-            <p className="text-blue-700">Le prix d'activation original ({safeFormatPrice(state.activation.price)} MAD) restera inchangé.</p>
+            <p className="text-blue-700">Le prix d'activation original ({safeFormatPrice(getDisplayPrice(state.activation))} MAD) restera inchangé.</p>
             {price > 0 && (
               <p className="text-blue-700 mt-1">Montant du renouvellement: <strong>{safeFormatPrice(price)} MAD</strong></p>
             )}
@@ -2281,6 +2351,7 @@ const Activation = () => {
       const cacheTime = localStorage.getItem('activations_cache_time');
       const now = Date.now();
       
+      // Only use cache if NOT forcing refresh and cache is valid
       if (!forceRefresh && cached && cacheTime && (now - parseInt(cacheTime)) < 30000) {
         const cachedData = JSON.parse(cached);
         setAllActivations(cachedData);
@@ -2455,9 +2526,14 @@ const Activation = () => {
   
   const startEditing = (activationId, field, currentValue, currentImeiType = null) => {
     setEditingCell({ id: activationId, field });
-    let displayValue = currentValue !== null && currentValue !== undefined ? currentValue.toString() : '';
     
-    if (field === 'plan_abonnement' && currentValue && PLAN_LABEL[currentValue]) {
+    let displayValue = currentValue !== null && currentValue !== undefined ? currentValue.toString() : '';
+    if (field === 'price') {
+      const activation = allActivations.find(a => a.id === activationId);
+      if (activation) {
+        displayValue = activation.price?.toString() || '';
+      }
+    } else if (field === 'plan_abonnement' && currentValue && PLAN_LABEL[currentValue]) {
       displayValue = currentValue;
     }
     
@@ -2522,11 +2598,11 @@ const Activation = () => {
         }
       }
       
-      await dispatch(updateActivation({ id: activationId, ...updateData })).unwrap();
+      const updatedActivation = await dispatch(updateActivation({ id: activationId, ...updateData })).unwrap();
       showToast(`${getFieldLabel(field)} mis à jour avec succès`, 'success');
       
       setAllActivations(prev => prev.map(act => 
-        act.id === activationId ? { ...act, ...updateData } : act
+        act.id === activationId ? updatedActivation : act
       ));
       
       localStorage.removeItem('activations_cache');
@@ -2734,7 +2810,7 @@ const Activation = () => {
     setErrorMessage(null);
     
     try {
-      await dispatch(updateActivation({ 
+      const updatedActivation = await dispatch(updateActivation({ 
         id: activation.id, 
         plan_abonnement: selectedPlan, 
         renew: true,
@@ -2744,7 +2820,7 @@ const Activation = () => {
       showToast(`Abonnement renouvelé avec +${PLAN_LABEL[selectedPlan]} pour ${safeFormatPrice(price)} MAD`, 'success');
       
       setAllActivations(prev => prev.map(act => 
-        act.id === activation.id ? { ...act, plan_abonnement: selectedPlan } : act
+        act.id === activation.id ? updatedActivation : act
       ));
       
       localStorage.removeItem('activations_cache');
@@ -2764,11 +2840,11 @@ const Activation = () => {
     
     try {
       const statusText = newStatus === 'suspended' ? 'suspendue' : 'réactivée';
-      await dispatch(updateActivation({ id: activation.id, status: newStatus })).unwrap();
+      const updatedActivation = await dispatch(updateActivation({ id: activation.id, status: newStatus })).unwrap();
       showToast(`Activation ${statusText} avec succès`, 'success');
       
       setAllActivations(prev => prev.map(act => 
-        act.id === activation.id ? { ...act, status: newStatus } : act
+        act.id === activation.id ? updatedActivation : act
       ));
       
       localStorage.removeItem('activations_cache');
@@ -2793,7 +2869,7 @@ const Activation = () => {
           <p><strong>IMEI Client:</strong> {activation.client_imei || '-'}</p>
           <p><strong>N° SIM:</strong> {activation.numero_sim || '-'}</p>
           <p><strong>Client:</strong> {activation.vente?.client?.nom || activation.client?.nom || '-'}</p>
-          <p><strong>Prix activation original:</strong> {safeFormatPrice(activation.price)} MAD</p>
+          <p><strong>Prix activation original:</strong> {safeFormatPrice(getDisplayPrice(activation))} MAD</p>
           <p><strong>Total payé (avec renouvellements):</strong> {safeFormatPrice(activation.total_price_paid || activation.price)} MAD</p>
           <p><strong>Nombre de renouvellements:</strong> {activation.renewal_count || 0}</p>
           <p className="text-red-600 mt-2">⚠️ Cette action est irréversible.</p>
@@ -2995,7 +3071,7 @@ const Activation = () => {
       const headers = [
         'Client', 'Type IMEI', 'IMEI', 'IMEI Client', 'N° SIM', 'Opérateur', 'Plan',
         'Prix Activation', 'Total Payé', 'Nb Renouv.', 'Montant Payé', 'Reste à Payer', 'Statut Paiement',
-        'Matricule', 'Date Activation', 'Expiration', 'Statut', 'Champs manquants'
+        'Matricule', 'Date Activation', 'Expiration', 'Statut', 'Champs manquants', 'Facturé'
       ];
       const headerRow = worksheet.addRow(headers);
       headerRow.eachCell((cell) => {
@@ -3011,6 +3087,7 @@ const Activation = () => {
         const emptyFields = getEmptyFields(activation);
         const totalPaid = activation.total_price_paid || activation.price;
         const renewalCount = activation.renewal_count || 0;
+        const displayPrice = getDisplayPrice(activation);
         
         worksheet.addRow([
           activation.vente?.client?.nom || activation.client?.nom || '-',
@@ -3020,7 +3097,7 @@ const Activation = () => {
           activation.numero_sim || '-',
           activation.operateur || '-',
           PLAN_LABEL[activation.plan_abonnement] || '-',
-          safeFormatPrice(activation.price),
+          safeFormatPrice(displayPrice),
           safeFormatPrice(totalPaid),
           renewalCount,
           safeFormatPrice(activation.amount_paid || 0),
@@ -3030,7 +3107,8 @@ const Activation = () => {
           formatDate(activation.activated_at),
           formatDate(activation.expires_at),
           activation.status === 'active' ? 'Actif' : activation.status === 'suspended' ? 'Suspendu' : activation.status === 'expired' ? 'Expiré' : 'En attente',
-          emptyFields.length > 0 ? emptyFields.join(', ') : '-'
+          emptyFields.length > 0 ? emptyFields.join(', ') : '-',
+          activation.is_invoiced ? 'Oui' : 'Non'
         ]);
       });
       
@@ -3141,14 +3219,29 @@ const Activation = () => {
         
         <div className="activation-stats-grid">
           <StatCard icon={Satellite} label="Total Activations" value={allActivations.length || 0} color="primary" />
-          <StatCard 
-            icon={DollarSign} 
-            label="Chiffre d'affaires" 
-            value={`${safeFormatPrice(
-              allActivations.reduce((sum, act) => sum + (act.amount_paid || 0), 0)
-            )} MAD`} 
-            color="success" 
-          />
+          <StatCard
+  icon={DollarSign}
+  label="Chiffre d'affaires"
+  value={`${allActivations.reduce((sum, act) => {
+    const paymentsTotal = (act.payment_history || []).reduce((paymentSum, payment) => {
+      if (payment.method === 'check' || payment.method === 'cheque') {
+        return payment.remise_status === 'encaisse'
+          ? paymentSum + (parseFloat(payment.amount) || 0)
+          : paymentSum;
+      }
+
+      return paymentSum + (parseFloat(payment.amount) || 0);
+    }, 0);
+
+    const directPaid =
+      (!act.payment_history || act.payment_history.length === 0)
+        ? (parseFloat(act.amount_paid) || 0)
+        : 0;
+
+    return sum + paymentsTotal + directPaid;
+  }, 0)} MAD`}
+  color="success"
+/>
           <StatCard icon={CheckCircle2} label="Actives" value={stats?.active_activations || allActivations.filter(a => a.status === 'active').length} color="success" />
           <StatCard icon={Clock} label="Expirent bientôt" value={expiringCount} color="warning" />
           <StatCard icon={AlertTriangle} label="Incomplètes" value={incompleteCount} color="danger" />
@@ -3237,6 +3330,7 @@ const Activation = () => {
                   <th>Matricule</th>
                   <th>Expiration</th>
                   <th>Statut</th>
+                  <th>Facturé</th>
                   <th style={{ width: '180px' }}>Actions</th>
                 </tr>
               </thead>
@@ -3251,6 +3345,9 @@ const Activation = () => {
                   const emptyFields = getEmptyFields(activation);
                   const totalPaid = activation.total_price_paid || activation.price;
                   const renewalCount = activation.renewal_count || 0;
+                  const displayPrice = getDisplayPrice(activation);
+                  const displayPricePaid = activation.is_invoiced ? activation.amount_paid : activation.amount_paid;
+                  const displayRemaining = activation.is_invoiced ? activation.remaining_amount : activation.remaining_amount;
                   
                   return (
                     <tr key={activation.id} className={`${isExpiringSoon ? 'expiring-row' : ''} ${isIncomplete ? 'incomplete-row' : ''}`}>
@@ -3261,40 +3358,76 @@ const Activation = () => {
                             ⚠️
                           </span>
                         )}
-                                            </td>
+                      </td>
                       <td>{imeiTypeLabel}</td>
                       <td>{renderEditableCell(activation, 'imei', activation.imei || activation.client_imei, 'text')}</td>
                       <td>{renderEditableCell(activation, 'numero_sim', activation.numero_sim, 'text')}</td>
                       <td>{renderEditableCell(activation, 'operateur', activation.operateur, 'select')}</td>
                       <td>{renderEditableCell(activation, 'plan_abonnement', activation.plan_abonnement, 'select')}</td>
                       <td>
-                        {renderEditableCell(activation, 'price', activation.price, 'number')}
+                        {renderEditableCell(activation, 'price', displayPrice, 'number')}
                         {renewalCount > 0 && (
                           <div className="text-xs text-gray-500 mt-1">
-                            (original: {safeFormatPrice(activation.price)} MAD)
+                            (original: {safeFormatPrice(activation.price)/1.2} MAD)
                           </div>
                         )}
                       </td>
                       <td className="text-green-600 font-medium">
-                        {safeFormatPrice(totalPaid)} MAD
-                        {renewalCount > 0 && (
-                          <span className="text-xs text-gray-500 block">
-                            +{renewalCount} renouvellement(s)
-                          </span>
-                        )}
-                      </td>
+  {(() => {
+    const displayActivationPrice = getDisplayPrice(activation);
+    let displayRenewalsTotal = 0;
+    if (activation.renewal_history && Array.isArray(activation.renewal_history)) {
+      displayRenewalsTotal = activation.renewal_history.reduce((sum, entry) => {
+        if (entry.action === 'renewal') {
+          let renewalPrice = safeNumber(entry.price);
+          if (activation.is_invoiced) {
+            renewalPrice = renewalPrice * 1.2;  // Apply TVA when invoiced
+          }
+          return sum + renewalPrice;
+        }
+        return sum;
+      }, 0);
+    }
+    const totalToPay = displayActivationPrice + displayRenewalsTotal;
+    return `${safeFormatPrice(totalToPay)} MAD`;
+  })()}
+</td>
                       <td className={activation.payment_status === 'paid' ? 'text-green-600 font-medium' : activation.payment_status === 'partial' ? 'text-orange-500' : 'text-red-500'}>
-                        {safeFormatPrice(activation.amount_paid || 0)} MAD
+                        {safeFormatPrice(displayPricePaid)} MAD
                       </td>
                       <td className="text-red-500 font-medium">
-                        {safeFormatPrice(activation.remaining_amount || 0)} MAD
-                      </td>
+  {(() => {
+    const displayActivationPrice = getDisplayPrice(activation);
+    let displayRenewalsTotal = 0;
+    if (activation.renewal_history && Array.isArray(activation.renewal_history)) {
+      displayRenewalsTotal = activation.renewal_history.reduce((sum, entry) => {
+        if (entry.action === 'renewal') {
+          let renewalPrice = safeNumber(entry.price);
+          if (activation.is_invoiced) {
+            renewalPrice = renewalPrice * 1.2;
+          }
+          return sum + renewalPrice;
+        }
+        return sum;
+      }, 0);
+    }
+    const totalToPay = displayActivationPrice + displayRenewalsTotal;
+    const amountPaid = safeNumber(activation.amount_paid);
+    const remaining = Math.max(0, totalToPay - amountPaid);
+    return `${safeFormatPrice(remaining)} MAD`;
+  })()}
+</td>
                       <td>{renderEditableCell(activation, 'matricule', activation.matricule, 'text')}</td>
                       <td className={daysRemaining <= 30 && daysRemaining > 0 ? 'text-red-600' : ''}>
                         {formatDate(activation.expires_at)}
                         {daysRemaining > 0 && daysRemaining < 999 && <span className="text-xs ml-2">({daysRemaining}j{isExpiringSoon && ' ⚠️'})</span>}
                       </td>
                       <td>{getStatusBadge(activation)}</td>
+                                            <td>
+                        <Badge variant={activation.is_invoiced ? 'success' : 'secondary'}>
+                          {activation.is_invoiced ? 'Facturée (TTC)' : 'Non facturée (HT)'}
+                        </Badge>
+                      </td>
                       <td>
                         <div className="action-buttons">
                           <button onClick={() => setShowDetailModal(activation)} className="activation-icon-btn" title="Détails">
@@ -3329,7 +3462,7 @@ const Activation = () => {
                 })}
                 {paginatedActivations.length === 0 && (
                   <tr>
-                    <td colSpan={14} className="activation-empty">
+                    <td colSpan={15} className="activation-empty">
                       <Satellite size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.5 }} />
                       {showIncompleteOnly ? 'Aucune activation incomplète trouvée' : 'Aucune activation trouvée'}
                     </td>
@@ -3397,7 +3530,8 @@ const Activation = () => {
                 <div><strong>Date activation:</strong> {formatDate(showDetailModal.activated_at)}</div>
                 <div><strong>Expiration:</strong> {formatDate(showDetailModal.expires_at)}</div>
                 <div><strong>Statut:</strong> {getStatusBadge(showDetailModal)}</div>
-                <div><strong>Prix Activation Original:</strong> <span className="text-blue-600 font-medium">{safeFormatPrice(showDetailModal.price)} MAD</span></div>
+                <div><strong>Prix Activation (HT):</strong> <span className="text-blue-600 font-medium">{safeFormatPrice(showDetailModal.price)} MAD</span></div>
+                <div><strong>Prix affiché:</strong> <span className="text-blue-600 font-medium">{safeFormatPrice(getDisplayPrice(showDetailModal))} MAD {showDetailModal.is_invoiced ? '(TTC)' : '(HT)'}</span></div>
                 <div><strong>Total payé (avec renouvellements):</strong> <span className="text-green-600 font-bold">{safeFormatPrice(showDetailModal.total_price_paid || showDetailModal.price)} MAD</span></div>
                 <div><strong>Montant payé:</strong> <span className="text-green-600">{safeFormatPrice(showDetailModal.amount_paid || 0)} MAD</span></div>
                 <div><strong>Reste à payer:</strong> <span className="text-red-600">{safeFormatPrice(showDetailModal.remaining_amount || 0)} MAD</span></div>
@@ -3410,6 +3544,7 @@ const Activation = () => {
                     {showDetailModal.payment_status === 'paid' ? 'Payé' : showDetailModal.payment_status === 'partial' ? 'Partiel' : 'Impayé'}
                   </span>
                 </div>
+                <div><strong>Facturé:</strong> {showDetailModal.is_invoiced ? 'Oui (TTC affiché)' : 'Non (HT affiché)'}</div>
                 <div><strong>Nombre de renouvellements:</strong> {showDetailModal.renewal_count || 0}</div>
               </div>
               {showDetailModal.renewal_history && showDetailModal.renewal_history.length > 0 && (

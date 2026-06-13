@@ -1517,6 +1517,51 @@ export const deleteCombinedTrackingAction = createAsyncThunk("invoices/deleteCom
   }
 });
 // ==============================================
+// 🎯 UI SLICE (simple refresh counter)
+// ==============================================
+const uiSlice = createSlice({
+  name: "ui",
+  initialState: { refreshCounter: 0 },
+  reducers: {
+    triggerSidebarRefresh: (state) => {
+      state.refreshCounter += 1;
+    },
+  },
+});
+
+export const { triggerSidebarRefresh } = uiSlice.actions;
+
+// ==============================================
+// 🔁 MIDDLEWARE – listens for successful mutations
+// ==============================================
+const refreshMiddleware = (store) => (next) => (action) => {
+  const result = next(action);
+  const actionTypes = [
+    "checks/create/fulfilled",
+    "checks/update/fulfilled",
+    "checks/delete/fulfilled",
+    "technicianPayments/deletePayment/fulfilled",
+    "technicianPayments/addWithFiles/fulfilled",
+    "activations/createStandalone/fulfilled",
+    "activations/createInstallation/fulfilled",
+    "activations/update/fulfilled",
+    "activations/delete/fulfilled",
+    "sales/create/fulfilled",
+    "sales/update/fulfilled",
+    "sales/delete/fulfilled",
+    "sales/addPayment/fulfilled",
+    "sales/updatePayment/fulfilled",
+    "sales/deletePayment/fulfilled",
+    "activations/addPayment/fulfilled",
+    "activations/updatePayment/fulfilled",
+    "activations/deletePayment/fulfilled",
+  ];
+  if (actionTypes.includes(action.type)) {
+    store.dispatch(triggerSidebarRefresh());
+  }
+  return result;
+};
+// ==============================================
 // 🎯 SLICES
 // ==============================================
 
@@ -3033,11 +3078,12 @@ export const store = configureStore({
     technicianReports: technicianReportsSlice.reducer,
     reports: reportsSlice.reducer, 
     invoices: invoicesSlice.reducer,
+    ui: uiSlice.reducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: false,
-    }),
+    }).concat(refreshMiddleware),
 });
 
 // ==============================================
@@ -3201,6 +3247,8 @@ export const selectIsIndividualGenerated = (state, clientId, itemId) =>
 export const selectCombinedGenerated = (state, clientId) => state.invoices.combinedGenerated[clientId] || false;
 export const selectCombinedNumber = (state, clientId) => state.invoices.combinedNumbers[clientId];
 export const selectCombinedItems = (state, clientId) => state.invoices.combinedItems[clientId] || [];
+export const selectRefreshCounter = (state) => state.ui.refreshCounter;
+
 export const selectIsItemInCombined = (state, clientId, itemId) => 
   state.invoices.combinedItems[clientId]?.includes(itemId) || false;
 export default store;

@@ -1,4 +1,4 @@
-// Sales.tsx - Updated with cache.png under Cachet & signature section
+// Sales.tsx - Updated with is_invoiced logic
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
@@ -934,7 +934,7 @@ const styles = `
     }
     
     .payment-summary-label {
-      font-size: 0.6rem;
+      font-size: 0.75rem;
     }
     
     .payment-summary-value {
@@ -3394,7 +3394,7 @@ const Sales = () => {
                     <th>ID</th>
                     <th>Date</th>
                     <th>Client</th>
-                    <th className="text-right">Total TTC</th>
+                    <th className="text-right">Total</th>
                     <th className="text-right">Payé</th>
                     <th className="text-right">Reste</th>
                     <th>Statut</th>
@@ -3409,15 +3409,19 @@ const Sales = () => {
                     const paidAmount = safeNumber(sale.amount_paid);
                     const remainingAmount = safeNumber(sale.remaining_amount || (totalAmount - paidAmount));
                     const showActions = shouldShowActionsForSale(sale);
+                    // Display logic: if sale is invoiced -> show TTC (totalAmount), else show HT (totalAmount / 1.2)
+                    const displayTotal = totalAmount;
+const displayPaid = paidAmount;
+const displayRemaining = remainingAmount;
                     
                     return (
                       <tr key={sale.id}>
                         <td className="font-mono">#{sale.id}</td>
                         <td>{formatDate(sale.created_at)}</td>
                         <td>{sale.client?.nom || '-'}</td>
-                        <td className="text-right font-semibold">{safeToFixed(totalAmount)} MAD</td>
-                        <td className="text-right text-green-600">{safeToFixed(paidAmount)} MAD</td>
-                        <td className="text-right text-orange-500">{safeToFixed(remainingAmount)} MAD</td>
+                        <td className="text-right font-semibold">{safeToFixed(displayTotal)} MAD</td>
+                        <td className="text-right text-green-600">{safeToFixed(displayPaid)} MAD</td>
+                        <td className="text-right text-orange-500">{safeToFixed(displayRemaining)} MAD</td>
                         <td>{statusBadge(sale.status)}</td>
                         <td>{getPaymentStatusBadge(sale.payment_status)}</td>
                         <td>{getChequeStatusBadge(sale.cheque_status)}</td>
@@ -3454,7 +3458,7 @@ const Sales = () => {
                               </>
                             )}
                           </div>
-                          </td>
+                        </td>
                       </tr>
                     );
                   })}
@@ -3595,7 +3599,7 @@ const Sales = () => {
 
               <div className="sales-total-box" style={{ marginTop: '1rem' }}>
                 <div className="sales-total-row">
-                  <span>Sous-total</span>
+                  <span>Sous-total HT</span>
                   <span>{safeToFixed(view.subtotal || (safeNumber(view.total) / 1.2))} MAD</span>
                 </div>
                 <div className="sales-total-row">
@@ -3603,7 +3607,7 @@ const Sales = () => {
                   <span>{safeToFixed(view.tva || (safeNumber(view.total) - (safeNumber(view.total) / 1.2)))} MAD</span>
                 </div>
                 <div className="sales-total-final">
-                  <span>Total</span>
+                  <span>Total TTC</span>
                   <span>{safeToFixed(view.total)} MAD</span>
                 </div>
               </div>
@@ -3789,7 +3793,7 @@ const Sales = () => {
                               <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
                                 Catégorie: {item.categorie}
                               </div>
-                              </td>
+                            </td>
                             <td>
                               <input 
                                 type="number" 
@@ -3798,7 +3802,7 @@ const Sales = () => {
                                 onChange={(e) => updateQuantity(item.productId, e.target.value)} 
                                 className="modern-item-input" 
                               />
-                              </td>
+                            </td>
                             <td>
                               <input 
                                 type="number" 
@@ -3807,7 +3811,7 @@ const Sales = () => {
                                 step="0.01" 
                                 className="modern-item-input" 
                               />
-                              </td>
+                            </td>
                             <td className="text-right font-semibold">
                               {safeToFixed(item.unitPrice * item.quantity)} MAD
                             </td>
