@@ -2497,16 +2497,17 @@ const Activation = () => {
     }
     
     if (search) {
-      const searchLower = search.toLowerCase();
-      filtered = filtered.filter(act => 
-        act.imei?.toLowerCase().includes(searchLower) ||
-        act.client_imei?.toLowerCase().includes(searchLower) ||
-        act.numero_sim?.toLowerCase().includes(searchLower) ||
-        act.matricule?.toLowerCase().includes(searchLower) ||
-        act.vente?.client?.nom?.toLowerCase().includes(searchLower) ||
-        act.vente?.id?.toString().includes(search)
-      );
-    }
+  const searchLower = search.toLowerCase();
+  filtered = filtered.filter(act => 
+    act.imei?.toLowerCase().includes(searchLower) ||
+    act.client_imei?.toLowerCase().includes(searchLower) ||
+    act.numero_sim?.toLowerCase().includes(searchLower) ||
+    act.matricule?.toLowerCase().includes(searchLower) ||
+    act.vente?.client?.nom?.toLowerCase().includes(searchLower) ||
+    act.client?.nom?.toLowerCase().includes(searchLower) ||   // 👈 add this line
+    act.vente?.id?.toString().includes(search)
+  );
+}
     
     return filtered;
   }, [allActivations, search, statusFilter, operatorFilter, showExpiringOnly, showIncompleteOnly, expiringActivations, incompleteActivations]);

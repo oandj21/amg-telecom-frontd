@@ -1651,7 +1651,7 @@ const convertToFrenchWords = (total) => {
   return convertToWords(integerPart) + ' DIRHAMS';
 };
 
-// ==================== INSTALLATION INVOICE GENERATION ====================
+// ==================== INSTALLATION INVOICE GENERATION (Styled like Combined) ====================
 const generateInstallationInvoiceHTML = (client, group, companyInfo, logoBase64 = null, cacheImageBase64 = null, showCachet = true, invoiceNumber = null, isInvoiced = false) => {
   const invoiceDate = new Date().toLocaleDateString('fr-FR');
   const finalInvoiceNumber = invoiceNumber || 'F01';
@@ -1675,6 +1675,11 @@ const generateInstallationInvoiceHTML = (client, group, companyInfo, logoBase64 
   const unitPriceHT = totalQuantity > 0 ? totalHT / totalQuantity : 0;
   const description = `Installation complète`;
   
+  // Build activation details string
+  const activationDetails = group.activations.map(act => 
+    `${act.matricule} (${PLAN_LABEL[act.plan] || act.plan || 'Standard'})`
+  ).join(', ');
+
   return `
     <!DOCTYPE html>
     <html lang="fr">
@@ -1765,7 +1770,7 @@ const generateInstallationInvoiceHTML = (client, group, companyInfo, logoBase64 
         .signature-img { max-width: 150px; max-height: 80px; object-fit: contain; }
         
         @media print {
-          body { padding: 0 0 40px 0; }
+          body { padding: 0; }
           .executive-footer { position: fixed; bottom: 0; left: 0; right: 0; background: white; }
         }
       </style>
@@ -1817,13 +1822,12 @@ const generateInstallationInvoiceHTML = (client, group, companyInfo, logoBase64 
             </thead>
             <tbody>
               <tr>
-                <td><strong>${description}</strong><br>
-                  <span style="font-size: 10px; color: #6b7280;">
-                    ${group.activations.map(act => `${act.matricule} (${PLAN_LABEL[act.plan] || act.plan || 'Standard'})`).join(', ')}
-                  </span>
-                  </td>
+                <td>
+                  <strong>${description}</strong><br>
+                  <span style="font-size: 10px; color: #6b7280;">${activationDetails}</span>
+                </td>
                 <td class="text-center"><strong>${totalQuantity}</strong></td>
-                <td class="text-right">${safeToFixed(unitPriceHT)} MAD</strong></td>
+                <td class="text-right">${safeToFixed(unitPriceHT)} MAD</td>
                 <td class="text-right"><strong>${safeToFixed(totalHT)} MAD</strong></td>
               </tr>
             </tbody>
@@ -1843,11 +1847,11 @@ const generateInstallationInvoiceHTML = (client, group, companyInfo, logoBase64 
             <table class="financial-math">
               <tr>
                 <td><strong>Montant HT</strong></td>
-                <td class="text-right">${safeToFixed(totalHT)} MAD</strong></td>
+                <td class="text-right">${safeToFixed(totalHT)} MAD</td>
               </tr>
               <tr>
                 <td><strong>TVA (20%)</strong></td>
-                <td class="text-right">${safeToFixed(tvaAmount)} MAD</strong></td>
+                <td class="text-right">${safeToFixed(tvaAmount)} MAD</td>
               </tr>
               <tr class="premium-total">
                 <td><strong>TOTAL TTC</strong></td>
@@ -1887,7 +1891,7 @@ const generateInstallationInvoiceHTML = (client, group, companyInfo, logoBase64 
   `;
 };
 
-// ==================== SIMPLE ACTIVATION INVOICE GENERATION ====================
+// ==================== SIMPLE ACTIVATION INVOICE GENERATION (Styled like Combined) ====================
 const generateSimpleActivationInvoiceHTML = (client, activation, companyInfo, logoBase64 = null, cacheImageBase64 = null, showCachet = true, invoiceNumber = null, isInvoiced = false) => {
   const invoiceDate = new Date().toLocaleDateString('fr-FR');
   const finalInvoiceNumber = invoiceNumber || 'F01';
@@ -1908,7 +1912,7 @@ const generateSimpleActivationInvoiceHTML = (client, activation, companyInfo, lo
   const QUANTITY = 1;
   const planLabel = PLAN_LABEL[activation.plan] || activation.plan || 'Standard';
   const description = `Activation ${activation.type === 'Renouvellement' ? 'Renouvellement' : "d'abonnement"} - ${activation.matricule || '-'}`;
-  
+
   return `
     <!DOCTYPE html>
     <html lang="fr">
@@ -1916,7 +1920,92 @@ const generateSimpleActivationInvoiceHTML = (client, activation, companyInfo, lo
       <meta charset="UTF-8">
       <title>Facture ${finalInvoiceNumber}</title>
       <style>
-        /* same styles as above */
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          color: #1e293b;
+          background-color: #ffffff;
+          line-height: 1.5;
+          padding: 35px 40px 60px 40px;
+          font-size: 12px;
+        }
+        .invoice-container { 
+          max-width: 850px; 
+          margin: 0 auto; 
+          box-sizing: border-box; 
+          page-break-after: avoid;
+          position: relative;
+          min-height: 100%;
+        }
+        .header-top { 
+          display: flex; 
+          justify-content: space-between; 
+          align-items: flex-start; 
+          border-bottom: 1px solid #e2e8f0; 
+          padding-bottom: 20px; 
+          margin-bottom: 25px; 
+        }
+        .logo-wrapper { 
+          width: 130px; 
+          height: 130px; 
+          display: flex; 
+          align-items: center; 
+          justify-content: center; 
+          overflow: hidden; 
+          border-radius: 8px; 
+        }
+        .invoice-logo { width: 100%; height: 100%; object-fit: cover; }
+        .company-name-placeholder { font-size: 20px; font-weight: 700; color: #0f172a; font-family: 'Playfair Display', serif; }
+        .corporate-meta-box { text-align: right; }
+        .document-type-badge { font-family: 'Playfair Display', serif; font-size: 28px; font-style: italic; color: #0f172a; margin-bottom: 4px; font-weight: 600; }
+        .invoice-id-badge { font-size: 14px; font-weight: 700; color: #475569; letter-spacing: 0.05em; margin-bottom: 4px; }
+        .invoice-date-line { font-size: 12px; color: #94a3b8; }
+        .parties-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 30px; }
+        .party-card .block-title { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; }
+        .party-card .party-name { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+        .party-card .party-details { color: #475569; line-height: 1.5; font-size: 12px; }
+        .table-wrapper { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 25px; }
+        .invoice-table { width: 100%; border-collapse: collapse; }
+        .invoice-table th { background-color: #f8fafc; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; padding: 12px 8px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+        .invoice-table td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; color: #334155; font-size: 12px; }
+        .invoice-table tr:last-child td { border-bottom: 1px solid #e2e8f0; }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .summary-container { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; margin-bottom: 25px; }
+        .legal-wordings { border-left: 2px solid #e2e8f0; padding-left: 18px; margin-top: 5px; }
+        .wording-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.05em; margin-bottom: 4px; }
+        .wording-value { font-family: 'Playfair Display', serif; font-size: 14px; font-style: italic; color: #334155; font-weight: 600; line-height: 1.4; }
+        .financial-math { width: 100%; border-collapse: collapse; }
+        .financial-math td { padding: 6px 8px; font-size: 12px; color: #475569; }
+        .financial-math tr.premium-total td { font-size: 16px; font-weight: 700; color: #0f172a; border-top: 1px solid #e2e8f0; padding-top: 10px; padding-bottom: 10px; }
+        .payment-routing { border-top: 1px solid #e2e8f0; padding-top: 15px; margin-bottom: 30px; }
+        .routing-title { font-size: 11px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+        .routing-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; font-size: 11px; color: #475569; }
+        .routing-item strong { color: #0f172a; display: block; margin-bottom: 2px; }
+        .executive-footer { 
+          border-top: 2px solid #0f172a; 
+          padding-top: 15px; 
+          padding-bottom: 10px;
+          text-align: center; 
+          font-size: 10px; 
+          color: #64748b; 
+          line-height: 1.6;
+          margin-top: 20px;
+        }
+        .executive-footer .footer-company-name { font-weight: 700; color: #0f172a; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .bank-info { margin-top: 12px; font-size: 11px; color: #475569; border-top: 1px dashed #e2e8f0; padding-top: 10px; }
+        .bank-info strong { color: #0f172a; }
+        .signature-section { margin-top: 40px; margin-bottom: 30px; display: flex; justify-content: flex-end; padding-right: 20px; }
+        .signature-box { text-align: center; width: 200px; }
+        .signature-label { font-size: 11px; font-weight: bold; margin-bottom: 10px; text-decoration: underline; color: #1f2937; }
+        .signature-image { margin-top: 10px; display: flex; justify-content: center; }
+        .signature-img { max-width: 150px; max-height: 80px; object-fit: contain; }
+        
+        @media print {
+          body { padding: 0; }
+          .executive-footer { position: fixed; bottom: 0; left: 0; right: 0; background: white; }
+        }
       </style>
     </head>
     <body>
@@ -1960,15 +2049,18 @@ const generateSimpleActivationInvoiceHTML = (client, activation, companyInfo, lo
               <tr>
                 <th style="width: 60%;">Désignation</th>
                 <th class="text-center" style="width: 10%;">Qté</th>
-                <th class="text-right" style="width: 15%;">Prix HT</th>
+                <th class="text-right" style="width: 15%;">P.U HT</th>
                 <th class="text-right" style="width: 15%;">Montant HT</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td><strong>${description}</strong> (${planLabel})</strong></td>
+                <td>
+                  <strong>${description}</strong><br>
+                  <span style="font-size: 10px; color: #6b7280;">${planLabel}</span>
+                </td>
                 <td class="text-center"><strong>${QUANTITY}</strong></td>
-                <td class="text-right">${safeToFixed(priceHT)} MAD</strong></td>
+                <td class="text-right">${safeToFixed(priceHT)} MAD</td>
                 <td class="text-right"><strong>${safeToFixed(priceHT)} MAD</strong></td>
               </tr>
             </tbody>
@@ -1988,11 +2080,11 @@ const generateSimpleActivationInvoiceHTML = (client, activation, companyInfo, lo
             <table class="financial-math">
               <tr>
                 <td><strong>Montant HT</strong></td>
-                <td class="text-right">${safeToFixed(priceHT)} MAD</strong></td>
+                <td class="text-right">${safeToFixed(priceHT)} MAD</td>
               </tr>
               <tr>
                 <td><strong>TVA (20%)</strong></td>
-                <td class="text-right">${safeToFixed(tvaAmount)} MAD</strong></td>
+                <td class="text-right">${safeToFixed(tvaAmount)} MAD</td>
               </tr>
               <tr class="premium-total">
                 <td><strong>TOTAL TTC</strong></td>
