@@ -1,4 +1,5 @@
 // Clients.jsx - Full script with corrected HT/TVA/TTC invoice generation
+// INCLUDING FIXED invoice counter update
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
@@ -35,7 +36,8 @@ import {
   saveCombinedInvoice,
   fetchCounterInfo,
   fetchClientDevis,
-  fetchCompanyInfo
+  fetchCompanyInfo,
+  updateInvoiceCounter // <--- NEW IMPORT
 } from './Store/store';
 import axios from 'axios';
 
@@ -2627,6 +2629,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   // INVOICE NUMBER STATE
   const [currentInvoiceNumber, setCurrentInvoiceNumber] = useState(1);
   const [customInvoiceNumber, setCustomInvoiceNumber] = useState('F01');
+  const [inputInvoiceNumber, setInputInvoiceNumber] = useState(1); // <-- NEW STATE
   
   // Track generated individual invoices from DATABASE
   const [generatedItems, setGeneratedItems] = useState(new Set());
@@ -2652,6 +2655,34 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   const [showPaid, setShowPaid] = useState(true);
   const [showPartial, setShowPartial] = useState(true);
   const [showUnpaid, setShowUnpaid] = useState(true);
+
+  // ==================== SYNC INPUT WITH CURRENT COUNTER ====================
+  useEffect(() => {
+    setInputInvoiceNumber(currentInvoiceNumber);
+  }, [currentInvoiceNumber]);
+
+  // ==================== HANDLE SET COUNTER ====================
+  const handleSetInvoiceNumber = async (newValue) => {
+    const currentValue = currentInvoiceNumber;
+    if (newValue < currentValue) {
+      showToast('Le numéro doit être supérieur ou égal au numéro actuel', 'error');
+      setInputInvoiceNumber(currentValue);
+      return;
+    }
+    if (newValue === currentValue) return;
+
+    try {
+      await dispatch(updateInvoiceCounter(newValue)).unwrap();
+      setCurrentInvoiceNumber(newValue);
+      setCustomInvoiceNumber('F' + newValue.toString().padStart(2, '0'));
+      showToast(`Compteur mis à jour à F${newValue.toString().padStart(2, '0')}`, 'success');
+      // Rafraîchir les infos du compteur
+      await dispatch(fetchCounterInfo()).unwrap();
+    } catch (error) {
+      showToast('Erreur lors de la mise à jour du compteur', 'error');
+      setInputInvoiceNumber(currentValue);
+    }
+  };
   
   // ==================== HELPER: CHECK EXISTING COMBINED INVOICE ====================
   const checkExistingCombinedInvoice = async (clientId, itemIds) => {
@@ -3805,8 +3836,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
     if (/^\d*$/.test(value)) {
       const numValue = parseInt(value, 10);
       if (!isNaN(numValue) && numValue >= 1 && numValue <= 999) {
-        setCurrentInvoiceNumber(numValue);
-        setCustomInvoiceNumber('F' + numValue.toString().padStart(2, '0'));
+        setInputInvoiceNumber(numValue);
       }
     }
   };
@@ -3819,6 +3849,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       });
       setCurrentInvoiceNumber(1);
       setCustomInvoiceNumber('F01');
+      setInputInvoiceNumber(1);
       showToast('Compteur de factures réinitialisé à F01', 'success');
     } catch (error) {
       console.error('Error resetting counter:', error);
@@ -3856,14 +3887,27 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
             <div className="invoice-number-input-wrapper">
               <span className="invoice-number-prefix">F</span>
               <input
-                type="number"
-                min="1"
-                max="999"
-                value={currentInvoiceNumber}
-                onChange={handleInvoiceNumberChange}
-                className="invoice-number-input"
-                style={{ width: '70px' }}
-              />
+  type="number"
+  min="1"
+  max="999"
+  value={inputInvoiceNumber}
+  onChange={handleInvoiceNumberChange}
+  onBlur={() => {
+    const newVal = inputInvoiceNumber;
+    if (newVal !== currentInvoiceNumber) {
+      handleSetInvoiceNumber(newVal);
+    } else {
+      setInputInvoiceNumber(currentInvoiceNumber);
+    }
+  }}
+  onKeyDown={(e) => {
+    if (e.key === 'Enter') {
+      e.target.blur();
+    }
+  }}
+  className="invoice-number-input"
+  style={{ width: '70px' }}
+/>
             </div>
             <button onClick={handleResetInvoiceNumber} className="btn-invoice-init">
               <RefreshCw size={14} />
