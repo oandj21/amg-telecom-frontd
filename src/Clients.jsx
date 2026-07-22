@@ -2612,8 +2612,7 @@ const formatDate = (dateString) => {
   });
 };
 
-// ==================== ACTIVATIONS DETAILS MODAL ====================
-// ==================== ACTIVATIONS DETAILS MODAL (with full pagination & fallback fetch) ====================
+// ==================== ACTIVATIONS DETAILS MODAL (FULL, with pagination & all functions) ====================
 const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   const dispatch = useDispatch();
   const [loading, setLoading] = useState(true);
@@ -3176,6 +3175,40 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   useEffect(() => {
     setModalPage(1);
   }, [startDate, endDate]);
+
+  // ==================== TOTALS AND HELPERS ====================
+  const getEffectivePriceForPDF = (item, includeTVA) => {
+    const storedPrice = item.isGroup ? item.grandTotalTTC : item.displayPriceTTC;
+    if (includeTVA) {
+      return item.is_invoiced ? storedPrice : storedPrice * 1.20;
+    } else {
+      return item.is_invoiced ? storedPrice / 1.20 : storedPrice;
+    }
+  };
+
+  const totalTTCFiltered = useMemo(() => {
+    let total = 0;
+    for (const item of filteredItems) {
+      if (item.isGroup) {
+        total += item.grandTotalTTC;
+      } else {
+        total += item.displayPriceTTC;
+      }
+    }
+    return total;
+  }, [filteredItems]);
+
+  const totalHTFiltered = useMemo(() => {
+    let total = 0;
+    for (const item of filteredItems) {
+      if (item.isGroup) {
+        total += item.grandTotalTTC;
+      } else {
+        total += item.displayPriceTTC;
+      }
+    }
+    return total;
+  }, [filteredItems]);
 
   // ==================== GENERATE SUMMARY PDF ====================
   const generateSummaryPDF = async (includeTVA = true) => {
