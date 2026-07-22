@@ -41,7 +41,7 @@ import {
 } from './Store/store';
 import axios from 'axios';
 
-const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
+const API_URL = window.REACT_APP_API_URL || "http://127.0.0.1:8000/api";
 
 // ==================== STYLES ====================
 const styles = `
@@ -2612,7 +2612,7 @@ const formatDate = (dateString) => {
   });
 };
 
-// ==================== ACTIVATIONS DETAILS MODAL ====================
+// ==================== ACTIVATIONS DETAILS MODAL ====================// ==================== ACTIVATIONS DETAILS MODAL (with fallback & 20‑item pagination) ====================
 const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   const dispatch = useDispatch();
   const [loading, setLoading] = useState(true);
@@ -2625,36 +2625,40 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   const [editingPrice, setEditingPrice] = useState(null);
   const [tempPrice, setTempPrice] = useState('');
   const [cachetChoiceItem, setCachetChoiceItem] = useState(null);
-  
+
   // INVOICE NUMBER STATE
   const [currentInvoiceNumber, setCurrentInvoiceNumber] = useState(1);
   const [customInvoiceNumber, setCustomInvoiceNumber] = useState('F01');
-  const [inputInvoiceNumber, setInputInvoiceNumber] = useState(1); // <-- NEW STATE
-  
+  const [inputInvoiceNumber, setInputInvoiceNumber] = useState(1);
+
   // Track generated individual invoices from DATABASE
   const [generatedItems, setGeneratedItems] = useState(new Set());
-  
+
   // Track items that are part of ANY combined invoice (red button)
-  const [combinedItemsMap, setCombinedItemsMap] = useState(new Map()); // itemId -> invoiceNumber
-  
+  const [combinedItemsMap, setCombinedItemsMap] = useState(new Map());
+
   // Filter states
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  
+
   // Checkbox selection
   const [selectedRows, setSelectedRows] = useState(new Set());
-  
+
   // Cachet choice for combined invoice
   const [showCachetPromptCombined, setShowCachetPromptCombined] = useState(false);
-  
+
   // Flat list with groups and renewals
   const [displayItems, setDisplayItems] = useState([]);
   const [expandedGroups, setExpandedGroups] = useState({});
-  
+
   // Payment status filters for PDF summary
   const [showPaid, setShowPaid] = useState(true);
   const [showPartial, setShowPartial] = useState(true);
   const [showUnpaid, setShowUnpaid] = useState(true);
+
+  // Modal pagination (20 per page)
+  const [modalPage, setModalPage] = useState(1);
+  const modalItemsPerPage = 20;
 
   // ==================== SYNC INPUT WITH CURRENT COUNTER ====================
   useEffect(() => {
@@ -2676,14 +2680,13 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       setCurrentInvoiceNumber(newValue);
       setCustomInvoiceNumber('F' + newValue.toString().padStart(2, '0'));
       showToast(`Compteur mis à jour à F${newValue.toString().padStart(2, '0')}`, 'success');
-      // Rafraîchir les infos du compteur
       await dispatch(fetchCounterInfo()).unwrap();
     } catch (error) {
       showToast('Erreur lors de la mise à jour du compteur', 'error');
       setInputInvoiceNumber(currentValue);
     }
   };
-  
+
   // ==================== HELPER: CHECK EXISTING COMBINED INVOICE ====================
   const checkExistingCombinedInvoice = async (clientId, itemIds) => {
     try {
@@ -2703,18 +2706,16 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   // ==================== LOAD INVOICE DATA FROM DATABASE ====================
   const loadInvoiceData = useCallback(async () => {
     if (!client?.id) return;
-    
+
     try {
       const token = localStorage.getItem('token');
       console.log('📦 Loading invoice data for client:', client.id);
-      
-      // Load generated individual items from API
+
       const result = await dispatch(fetchGeneratedIndividualItems(client.id)).unwrap();
       const generatedIds = result.items || [];
       setGeneratedItems(new Set(generatedIds));
       console.log('📦 Loaded generated items from API:', generatedIds);
-      
-      // Load ALL combined items (any combined invoice) - new endpoint
+
       const allCombinedResponse = await axios.get(
         `${API_URL}/invoices/track-combined/all-items/${client.id}`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -2724,19 +2725,18 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       combinedItemIds.forEach(id => combinedMap.set(id, 'combined'));
       setCombinedItemsMap(combinedMap);
       console.log('📦 Loaded combined items from API:', combinedItemIds);
-      
-      // Load counter info
+
       const counterInfo = await dispatch(fetchCounterInfo()).unwrap();
       const currentNumber = counterInfo.info.invoice.formatted;
       const numericValue = parseInt(currentNumber.replace('F', ''), 10);
       setCurrentInvoiceNumber(numericValue);
       setCustomInvoiceNumber(currentNumber);
-      
+
     } catch (error) {
       console.error('Error loading invoice data:', error);
     }
   }, [client?.id, dispatch]);
-  
+
   // Load initial invoice number from API
   useEffect(() => {
     const loadInitialInvoiceNumber = async () => {
@@ -2750,24 +2750,24 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       }
     };
     loadInitialInvoiceNumber();
-    
+
     if (client?.id) {
       loadInvoiceData();
     }
   }, [client?.id, dispatch, loadInvoiceData]);
-  
+
   // ==================== INVOICE TRACKING FUNCTIONS ====================
-  
+
   const markInvoiceGeneratedAPI = async (clientId, itemId, invoiceNumber) => {
     try {
       console.log('💾 SAVING to database:', { clientId, itemId, invoiceNumber });
-      
-      const result = await dispatch(saveIndividualInvoice({ 
-        clientId, 
+
+      const result = await dispatch(saveIndividualInvoice({
+        clientId,
         itemId: itemId,
-        invoiceNumber 
+        invoiceNumber
       })).unwrap();
-      
+
       console.log('✅ Save API response:', result);
       return true;
     } catch (error) {
@@ -2776,7 +2776,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       return false;
     }
   };
-  
+
   const checkIndividualExistsAPI = async (clientId, itemId) => {
     try {
       const result = await dispatch(checkIndividualInvoiceStatus({ clientId, itemId })).unwrap();
@@ -2786,45 +2786,79 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       return { generated: false, invoiceNumber: null };
     }
   };
-  
-  // ==================== LOAD ACTIVATIONS DATA ====================
-  
+
+  // ==================== LOAD ACTIVATIONS DATA (with fallback per_page) ====================
+
   useEffect(() => {
     const loadClientActivations = async () => {
       setLoading(true);
       setLoadingProgress(0);
-      
+
       try {
         const token = localStorage.getItem('token');
-        
+
         setLoadingProgress(10);
-        const [activationsResponse, salesResponse] = await Promise.all([
-          fetch(`${API_URL}/activations?client_id=${client.id}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          }),
-          fetch(`${API_URL}/ventes?client_id=${client.id}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          })
-        ]);
-        
+
+        // ---------- FALLBACK LOGIC ----------
+        let activationsResponse, salesResponse;
+        let perPage = 500; // start with 500
+
+        try {
+          [activationsResponse, salesResponse] = await Promise.all([
+            fetch(`${API_URL}/activations?client_id=${client.id}&per_page=${perPage}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            }),
+            fetch(`${API_URL}/ventes?client_id=${client.id}&per_page=${perPage}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            })
+          ]);
+        } catch (err) {
+          console.warn('Fetch with per_page=500 failed, retrying with per_page=100', err);
+          try {
+            [activationsResponse, salesResponse] = await Promise.all([
+              fetch(`${API_URL}/activations?client_id=${client.id}&per_page=100`, {
+                headers: { Authorization: `Bearer ${token}` }
+              }),
+              fetch(`${API_URL}/ventes?client_id=${client.id}&per_page=100`, {
+                headers: { Authorization: `Bearer ${token}` }
+              })
+            ]);
+          } catch (err2) {
+            console.warn('Still failing, fallback to no per_page (default limit)', err2);
+            [activationsResponse, salesResponse] = await Promise.all([
+              fetch(`${API_URL}/activations?client_id=${client.id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+              }),
+              fetch(`${API_URL}/ventes?client_id=${client.id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+              })
+            ]);
+            showToast('⚠️ Chargement partiel – seules les dernières activations sont affichées', 'info');
+          }
+        }
+
         setLoadingProgress(30);
-        
+
         let allActivations = [];
         let clientSales = [];
-        
+
         if (activationsResponse.ok) {
           const data = await activationsResponse.json();
           allActivations = data.data || data.activations || [];
+        } else {
+          console.error('Activations response not OK:', activationsResponse.status, await activationsResponse.text());
         }
-        
+
         if (salesResponse.ok) {
           const data = await salesResponse.json();
           clientSales = data.ventes || data.data || [];
+        } else {
+          console.error('Sales response not OK:', salesResponse.status, await salesResponse.text());
         }
-        
+
         const uniqueActivationIds = [...new Set(allActivations.map(a => a.id))];
         setLoadingProgress(50);
-        
+
         // Load payment data for each activation
         const paymentPromises = uniqueActivationIds.map(async (activationId) => {
           try {
@@ -2840,52 +2874,44 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
             return { activationId, data: null };
           }
         });
-        
+
         const paymentResults = await Promise.all(paymentPromises);
         setLoadingProgress(70);
-        
+
         const paymentMap = {};
         paymentResults.forEach(result => {
           if (result.data) {
             paymentMap[result.activationId] = result.data;
           }
         });
-        
+
         // Group activations by sale (installation)
         const groups = new Map();
         const standaloneItems = [];
-        
+
         for (const activation of allActivations) {
           const associatedSale = clientSales.find(s => s.id === activation.vente_id);
           const paymentInfo = paymentMap[activation.id] || {};
-          
+
           const paymentStatus = paymentInfo.payment_status || 'unpaid';
           const amountPaid = safeNumber(paymentInfo.amount_paid);
-          const activationPrice = safeNumber(activation.price); // stored price (HT if not invoiced, TTC if invoiced)
-          
-          // Get total to pay (original price + renewals)
-          const totalToPay = paymentInfo.total_price || activationPrice;
-          const renewalTotal = totalToPay - activationPrice;
-          
-          // For display: use stored activation price
+          const activationPrice = safeNumber(activation.price);
+
           const displayPrice = activationPrice;
-          
-          // IMPORTANT: Get sale total from the sale's total column (database)
+
           let saleTotalPrice = 0;
           let totalProductQuantity = 0;
-          
+
           if (associatedSale) {
-            // Use the stored total from ventes table
             saleTotalPrice = safeNumber(associatedSale.total);
-            // Still need product quantity for display
             for (const product of (associatedSale.produits || [])) {
               const productQuantity = product.pivot?.quantite || 1;
               totalProductQuantity += productQuantity;
             }
           }
-          
+
           const groupKey = activation.vente_id ? `sale_${activation.vente_id}` : null;
-          
+
           if (groupKey) {
             if (!groups.has(groupKey)) {
               groups.set(groupKey, {
@@ -2896,16 +2922,14 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                 saleTotalPrice: saleTotalPrice,
                 totalProductQuantity: totalProductQuantity,
                 activations: [],
-                // NEW: store sale payment info
                 saleAmountPaid: associatedSale ? safeNumber(associatedSale.amount_paid) : 0,
                 salePaymentStatus: associatedSale ? associatedSale.payment_status : 'unpaid',
-                // NEW: is_invoiced flag for the sale
                 is_invoiced: associatedSale ? associatedSale.is_invoiced : false,
               });
             }
-            
+
             const group = groups.get(groupKey);
-            
+
             let itemPaymentStatus = 'unpaid';
             let itemAmountPaid = 0;
             if (paymentStatus === 'paid') {
@@ -2920,7 +2944,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                 itemAmountPaid = amountPaid;
               }
             }
-            
+
             group.activations.push({
               id: activation.id,
               type: 'Activation',
@@ -2942,7 +2966,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
               paymentHistory: paymentInfo.payment_history || [],
               is_invoiced: activation.is_invoiced,
             });
-            
+
             // Add renewals as standalone items
             if (activation.renewal_history && Array.isArray(activation.renewal_history)) {
               for (let idx = 0; idx < activation.renewal_history.length; idx++) {
@@ -2963,7 +2987,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                       renewalAmountPaid = amountPaid;
                     }
                   }
-                  
+
                   standaloneItems.push({
                     id: `renewal_${activation.id}_${idx}`,
                     originalId: activation.id,
@@ -3003,7 +3027,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                 itemAmountPaid = amountPaid;
               }
             }
-            
+
             standaloneItems.push({
               id: `standalone_${activation.id}`,
               originalId: activation.id,
@@ -3024,7 +3048,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
               venteId: null,
               is_invoiced: activation.is_invoiced,
             });
-            
+
             // Add renewals for standalone
             if (activation.renewal_history && Array.isArray(activation.renewal_history)) {
               for (let idx = 0; idx < activation.renewal_history.length; idx++) {
@@ -3045,7 +3069,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                       renewalAmountPaid = amountPaid;
                     }
                   }
-                  
+
                   standaloneItems.push({
                     id: `renewal_${activation.id}_${idx}`,
                     originalId: activation.id,
@@ -3071,7 +3095,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
             }
           }
         }
-        
+
         // Process groups to calculate totals INCLUDING SALE PAYMENTS
         const groupsArray = Array.from(groups.values()).map(group => {
           let totalActivation = 0;
@@ -3080,7 +3104,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
           let hasActivationPaid = false;
           let hasActivationPartial = false;
           let hasActivationUnpaid = false;
-          
+
           group.activations.forEach(act => {
             totalActivation += act.displayPriceTTC;
             totalActivationPaid += act.amountPaid;
@@ -3089,15 +3113,14 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
             else if (act.paymentStatus === 'partial') hasActivationPartial = true;
             else hasActivationUnpaid = true;
           });
-          
+
           const saleRemaining = group.saleTotalPrice - group.saleAmountPaid;
           const totalPaid = group.saleAmountPaid + totalActivationPaid;
           const totalRemaining = saleRemaining + totalActivationRemaining;
-          
-          // Determine overall payment status based on both sale and activations
+
           let overallPaymentStatus = 'unpaid';
           const saleStatus = group.salePaymentStatus;
-          
+
           if (saleStatus === 'paid' && !hasActivationUnpaid && !hasActivationPartial) {
             overallPaymentStatus = 'paid';
           } else if (saleStatus === 'partial' || hasActivationPartial || (hasActivationPaid && !hasActivationUnpaid)) {
@@ -3109,7 +3132,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
           } else if (totalPaid >= (group.saleTotalPrice + totalActivation)) {
             overallPaymentStatus = 'paid';
           }
-          
+
           return {
             ...group,
             totalActivation,
@@ -3121,15 +3144,15 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
             is_invoiced: group.is_invoiced || group.activations.some(a => a.is_invoiced),
           };
         });
-        
+
         // Sort groups and standalone items by date descending
         groupsArray.sort((a, b) => new Date(b.date) - new Date(a.date));
         standaloneItems.sort((a, b) => new Date(b.date) - new Date(a.date));
-        
+
         const combined = [...groupsArray, ...standaloneItems];
         setDisplayItems(combined);
         setLoadingProgress(100);
-        
+
       } catch (err) {
         console.error('Error loading client activations:', err);
         showToast('Erreur lors du chargement des données', 'error');
@@ -3137,12 +3160,12 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
         setLoading(false);
       }
     };
-    
+
     if (client?.id) {
       loadClientActivations();
     }
   }, [client, showToast]);
-  
+
   // Filter items by date
   const filteredItems = useMemo(() => {
     let filtered = [...displayItems];
@@ -3160,24 +3183,28 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
     }
     return filtered;
   }, [displayItems, startDate, endDate]);
-  
+
+  // Compute current page items (20 per page)
+  const currentModalItems = useMemo(() => {
+    const start = (modalPage - 1) * modalItemsPerPage;
+    return filteredItems.slice(start, start + modalItemsPerPage);
+  }, [filteredItems, modalPage]);
+
+  // Reset to page 1 when date filters change
+  useEffect(() => {
+    setModalPage(1);
+  }, [startDate, endDate]);
+
   // Helper to get effective price for PDF (TTC or HT) based on item's invoiced status
   const getEffectivePriceForPDF = (item, includeTVA) => {
-    // storedPrice is the price as stored in DB (HT if not invoiced, TTC if invoiced)
     const storedPrice = item.isGroup ? item.grandTotalTTC : item.displayPriceTTC;
     if (includeTVA) {
-      // We want TTC
-      // If already invoiced, storedPrice is already TTC
-      // If not invoiced, storedPrice is HT, so apply TVA
       return item.is_invoiced ? storedPrice : storedPrice * 1.20;
     } else {
-      // We want HT
-      // If already invoiced, storedPrice is TTC, so remove TVA
-      // If not invoiced, storedPrice is already HT
       return item.is_invoiced ? storedPrice / 1.20 : storedPrice;
     }
   };
-  
+
   // Total amounts for filtered items (for display, not used in PDF totals)
   const totalHTFiltered = useMemo(() => {
     let total = 0;
@@ -3190,7 +3217,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
     }
     return total;
   }, [filteredItems]);
-  
+
   const totalTTCFiltered = useMemo(() => {
     let total = 0;
     for (const item of filteredItems) {
@@ -3202,19 +3229,19 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
     }
     return total;
   }, [filteredItems]);
-  
-  // ==================== GENERATE SUMMARY PDF WITH CORRECT TTC/HT CONVERSION ====================
+
+  // ==================== GENERATE SUMMARY PDF ====================
   const generateSummaryPDF = async (includeTVA = true) => {
     try {
       if (includeTVA) setGeneratingPdfTTC(true);
       else setGeneratingPdfHT(true);
-      
+
       const { jsPDF } = await import('jspdf');
       const autoTable = (await import('jspdf-autotable')).default;
-      
+
       const doc = new jsPDF('p', 'mm', 'a4');
       const companyInfo = getCompanyInfo();
-      
+
       let logoBase64 = null;
       try {
         const response = await fetch('/logo.png');
@@ -3225,11 +3252,11 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
           reader.readAsDataURL(blob);
         });
       } catch (e) {}
-      
+
       if (logoBase64) {
         doc.addImage(logoBase64, 'PNG', 87.5, 10, 35, 30);
       }
-      
+
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(12);
       doc.text(companyInfo.name.toUpperCase(), 12, 50);
@@ -3239,7 +3266,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       doc.text(addressLines, 12, 56);
       doc.text(`Tél: ${companyInfo.phone}`, 12, 68);
       doc.text(`Email: ${companyInfo.email}`, 12, 73);
-      
+
       doc.setFont('helvetica', 'bold');
       doc.text('RELEVÉ POUR :', 130, 50);
       doc.setFont('times', 'bold');
@@ -3247,14 +3274,14 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       doc.text(client.nom.toUpperCase(), 130, 57);
       doc.setFont('times', 'normal');
       doc.setFontSize(10);
-      
+
       let y = 63;
       if (client.adresse) { doc.text(client.adresse, 130, y); y += 5; }
       if (client.telephone) { doc.text(`Tél: ${client.telephone}`, 130, y); y += 5; }
       doc.text(`DATE : ${new Date().toLocaleDateString('fr-FR')}`, 130, y + 5);
-      
+
       const formatMoney = (val) => `${Number(val || 0).toFixed(2)} DH`;
-      
+
       // Filter by payment status for PDF summary
       const filteredForPDF = filteredItems.filter(item => {
         if (item.isGroup) {
@@ -3269,22 +3296,18 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
           return false;
         }
       });
-      
+
       // FLATTEN: each activation inside a group becomes its own row
       const rows = [];
       let total = 0;
-      
+
       for (const item of filteredForPDF) {
         if (item.isGroup) {
-          // For groups, we can either show each activation separately or the whole group.
-          // Original code shows each activation separately with product price distributed equally.
           const productPricePerActivation = item.saleTotalPrice / item.activations.length;
-          
+
           for (const act of item.activations) {
-            // Calculate total price for this activation row: distributed product price + activation price
-            const activationPrice = act.displayPriceTTC; // stored price (HT or TTC depending on invoicing)
+            const activationPrice = act.displayPriceTTC;
             const totalStoredPrice = productPricePerActivation + activationPrice;
-            // Create a temporary item-like object to compute effective price
             const tempItem = {
               isGroup: false,
               displayPriceTTC: totalStoredPrice,
@@ -3292,13 +3315,13 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
             };
             const price = getEffectivePriceForPDF(tempItem, includeTVA);
             total += price;
-            
+
             const priceColor = (() => {
               if (act.paymentStatus === 'paid') return [5, 150, 105];
               if (act.paymentStatus === 'partial') return [217, 119, 6];
               return [220, 38, 38];
             })();
-            
+
             rows.push([
               formatDate(act.date),
               'Installation + Activation',
@@ -3310,13 +3333,13 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
         } else {
           const price = getEffectivePriceForPDF(item, includeTVA);
           total += price;
-          
+
           const priceColor = (() => {
             if (item.paymentStatus === 'paid') return [5, 150, 105];
             if (item.paymentStatus === 'partial') return [217, 119, 6];
             return [220, 38, 38];
           })();
-          
+
           rows.push([
             formatDate(item.date),
             item.typeLabel || 'Activation',
@@ -3326,14 +3349,14 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
           ]);
         }
       }
-      
+
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(14);
-      const titleText = includeTVA 
+      const titleText = includeTVA
         ? 'DÉTAIL DES ACTIVATIONS (Prix TTC - TVA incluse)'
         : 'DÉTAIL DES ACTIVATIONS (Prix HT - TVA exclue)';
       doc.text(titleText, 105, 108, { align: 'center' });
-      
+
       autoTable(doc, {
         startY: 116,
         head: [[
@@ -3357,7 +3380,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
         margin: { left: 10, right: 10 },
         didDrawPage: () => { doc.setDrawColor(200); doc.rect(5, 5, 200, 287); }
       });
-      
+
       const finalY = doc.lastAutoTable.finalY + 15;
       doc.setFillColor(248, 250, 252);
       doc.roundedRect(145, finalY - 9, 55, 14, 3, 3, 'FD');
@@ -3367,11 +3390,11 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       doc.text(totalLabel, 150, finalY);
       doc.setFont('times', 'bold');
       doc.text(formatMoney(total), 192, finalY, { align: 'right' });
-      
+
       const fileNameSuffix = includeTVA ? 'TTC' : 'HT';
       doc.save(`Releve_${client.nom.replace(/\s+/g, '_')}_${fileNameSuffix}.pdf`);
       showToast(`PDF généré avec succès (${includeTVA ? 'TTC - TVA incluse' : 'HT - TVA exclue'})`, 'success');
-      
+
     } catch (err) {
       console.error(err);
       showToast('Erreur lors de la génération du PDF', 'error');
@@ -3380,7 +3403,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       else setGeneratingPdfHT(false);
     }
   };
-  
+
   // Handle checkbox selection
   const toggleRowSelection = (rowId) => {
     const newSelected = new Set(selectedRows);
@@ -3391,7 +3414,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
     }
     setSelectedRows(newSelected);
   };
-  
+
   const selectAllFiltered = () => {
     if (selectedRows.size === filteredItems.length && filteredItems.length > 0) {
       setSelectedRows(new Set());
@@ -3400,13 +3423,13 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       setSelectedRows(new Set(allIds));
     }
   };
-  
+
   // Edit price for an activation inside a group or standalone
   const startEditPrice = (itemId, currentPriceTTC) => {
     setEditingPrice(itemId);
     setTempPrice(currentPriceTTC.toString());
   };
-  
+
   const saveTempPrice = (itemId) => {
     const newPriceTTC = parseFloat(tempPrice);
     if (!isNaN(newPriceTTC) && newPriceTTC > 0) {
@@ -3445,12 +3468,12 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
     setEditingPrice(null);
     setTempPrice('');
   };
-  
+
   const cancelEdit = () => {
     setEditingPrice(null);
     setTempPrice('');
   };
-  
+
   const resetAllPrices = () => {
     setDisplayItems(prev => prev.map(item => {
       if (item.isGroup) {
@@ -3472,12 +3495,11 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
     }));
     showToast('Tous les prix ont été réinitialisés', 'info');
   };
-  
+
   const handleGenerateSingleInvoice = async (item, showCachet) => {
     let invoiceNumberToUse = customInvoiceNumber;
     let shouldIncrement = true;
 
-    // Check if individual invoice already exists for this item
     const existing = await checkIndividualExistsAPI(client.id, item.id);
 
     if (existing.generated && existing.invoiceNumber) {
@@ -3491,7 +3513,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       if (item.isGroup) {
         const groupForInvoice = {
           type: item.type,
-          saleTotalPrice: item.saleTotalPrice,  // Use the stored total from ventes table
+          saleTotalPrice: item.saleTotalPrice,
           totalProductQuantity: item.totalProductQuantity,
           activations: item.activations.map(act => ({
             matricule: act.matricule,
@@ -3512,7 +3534,6 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
         await generateSimpleActivationInvoicePDF(client, invoiceItem, showToast, () => {}, showCachet, invoiceNumberToUse, item.is_invoiced);
       }
 
-      // Mark as invoiced in backend
       const token = localStorage.getItem('token');
       if (item.isGroup && item.venteId) {
         await axios.post(`${API_URL}/ventes/${item.venteId}/mark-invoiced`, {}, {
@@ -3530,14 +3551,12 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
         ));
       }
 
-      // Remove from combined map if it was there
       if (combinedItemsMap.has(item.id)) {
         const newCombinedMap = new Map(combinedItemsMap);
         newCombinedMap.delete(item.id);
         setCombinedItemsMap(newCombinedMap);
       }
 
-      // Update local generated items
       if (!existing.generated) {
         setGeneratedItems(prev => {
           const newSet = new Set(prev);
@@ -3551,7 +3570,6 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
         })).catch(console.error);
       }
 
-      // Increment counter if new invoice
       if (shouldIncrement) {
         showToast(`Facture générée avec le numéro ${invoiceNumberToUse}`, 'success');
         const counterInfo = await dispatch(fetchCounterInfo()).unwrap();
@@ -3570,7 +3588,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       setGeneratingInvoice(null);
     }
   };
-  
+
   const handleGenerateCombinedInvoice = async (showCachet) => {
     const selected = filteredItems.filter(item => selectedRows.has(item.id));
     if (selected.length === 0) {
@@ -3581,7 +3599,6 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
     const selectedItemIds = selected.map(item => item.id);
     selectedItemIds.sort();
 
-    // Check if combined invoice already exists for this exact set
     const existing = await checkExistingCombinedInvoice(client.id, selectedItemIds);
 
     let invoiceNumberToUse;
@@ -3737,7 +3754,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       };
 
       const html = generateCombinedInvoiceHTML(client, selected, totalQuantity, unitPriceHT, totalHT, totalTTC, tvaAmount, invoiceDate, finalInvoiceNumber, description, logoBase64, cacheImageBase64, companyInfo, showCachet);
-      
+
       element = document.createElement('div');
       element.innerHTML = html;
       document.body.appendChild(element);
@@ -3754,7 +3771,6 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       await html2pdf().set(opt).from(element).save();
       showToast(`Facture combinée générée avec succès (${selected.length} élément(s))${!showCachet ? ' (sans cachet)' : ''}`, 'success');
 
-      // Mark all sales and activations as invoiced
       const token = localStorage.getItem('token');
       const saleIds = [...new Set(selected.filter(i => i.isGroup && i.venteId).map(i => i.venteId))];
       const activationIds = [...new Set(selected.filter(i => !i.isGroup && i.originalId).map(i => i.originalId))];
@@ -3776,7 +3792,6 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
           : i
       ));
 
-      // Save combined invoice tracking
       await axios.post(
         `${API_URL}/invoices/track-combined`,
         {
@@ -3822,7 +3837,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       }
     }
   };
-  
+
   const getPaymentStatusColor = (paymentStatus) => {
     switch (paymentStatus) {
       case 'paid': return { color: '#059669', bg: '#d1fae5', label: 'Payé' };
@@ -3830,7 +3845,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       default: return { color: '#dc2626', bg: '#fee2e2', label: 'Non payé' };
     }
   };
-  
+
   const handleInvoiceNumberChange = (e) => {
     const value = e.target.value;
     if (/^\d*$/.test(value)) {
@@ -3840,7 +3855,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       }
     }
   };
-  
+
   const handleResetInvoiceNumber = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -3856,22 +3871,22 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
       showToast('Erreur lors de la réinitialisation', 'error');
     }
   };
-  
+
   const toggleGroup = (groupId) => {
     setExpandedGroups(prev => ({
       ...prev,
       [groupId]: !prev[groupId]
     }));
   };
-  
-  // MODAL WITH OVERLAY AND PORTALS
+
+  // ==================== MODAL RENDER ====================
   return (
     <div className="clients-overlay" onClick={onClose}>
       <div className="clients-dialog" style={{ maxWidth: '1400px' }} onClick={e => e.stopPropagation()}>
         <div className="clients-dialog-header">
           <h2 className="clients-dialog-title">
             <Smartphone size={20} className="text-blue-600" />
-            Détails des Activations - ${client.nom}
+            Détails des Activations - {client.nom}
           </h2>
           <button className="clients-dialog-close" onClick={onClose}>
             <X size={18} />
@@ -3887,27 +3902,27 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
             <div className="invoice-number-input-wrapper">
               <span className="invoice-number-prefix">F</span>
               <input
-  type="number"
-  min="1"
-  max="999"
-  value={inputInvoiceNumber}
-  onChange={handleInvoiceNumberChange}
-  onBlur={() => {
-    const newVal = inputInvoiceNumber;
-    if (newVal !== currentInvoiceNumber) {
-      handleSetInvoiceNumber(newVal);
-    } else {
-      setInputInvoiceNumber(currentInvoiceNumber);
-    }
-  }}
-  onKeyDown={(e) => {
-    if (e.key === 'Enter') {
-      e.target.blur();
-    }
-  }}
-  className="invoice-number-input"
-  style={{ width: '70px' }}
-/>
+                type="number"
+                min="1"
+                max="999"
+                value={inputInvoiceNumber}
+                onChange={handleInvoiceNumberChange}
+                onBlur={() => {
+                  const newVal = inputInvoiceNumber;
+                  if (newVal !== currentInvoiceNumber) {
+                    handleSetInvoiceNumber(newVal);
+                  } else {
+                    setInputInvoiceNumber(currentInvoiceNumber);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.target.blur();
+                  }
+                }}
+                className="invoice-number-input"
+                style={{ width: '70px' }}
+              />
             </div>
             <button onClick={handleResetInvoiceNumber} className="btn-invoice-init">
               <RefreshCw size={14} />
@@ -3917,7 +3932,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
               Prochaine facture: <strong>{customInvoiceNumber}</strong>
             </div>
           </div>
-          
+
           {loading ? (
             <div className="clients-loading">
               <div className="clients-loading-spinner" />
@@ -3945,9 +3960,9 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                   </button>
                 </div>
                 <div>
-                  <button 
-                    onClick={() => setShowCachetPromptCombined(true)} 
-                    disabled={selectedRows.size === 0} 
+                  <button
+                    onClick={() => setShowCachetPromptCombined(true)}
+                    disabled={selectedRows.size === 0}
                     className="modern-btn modern-btn-success"
                   >
                     {generatingCombined ? <Loader size={14} className="spinning" /> : <Printer size={14} />}
@@ -3955,7 +3970,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                   </button>
                 </div>
               </div>
-              
+
               {/* PDF Summary Buttons */}
               <div className="pdf-filter-group">
                 <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -3984,7 +3999,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                   </button>
                 </div>
               </div>
-              
+
               {/* Date Filter Row */}
               <div className="date-filter-row">
                 <div className="date-filter-field">
@@ -4004,7 +4019,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                   </span>
                 </div>
               </div>
-              
+
               {/* Main Table */}
               <div className="activations-table-container">
                 <table className="activations-table">
@@ -4026,7 +4041,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredItems.map((item) => {
+                    {currentModalItems.map((item) => {
                       const isGroup = item.isGroup;
                       const paymentColor = isGroup ? getPaymentStatusColor(item.overallPaymentStatus) : getPaymentStatusColor(item.paymentStatus);
                       const displayPrice = isGroup ? item.grandTotalTTC : item.displayPriceTTC;
@@ -4034,13 +4049,12 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                       const remaining = isGroup ? item.totalRemaining : item.remainingAmount;
                       const isGenerating = generatingInvoice === item.id;
                       const isExpanded = isGroup && expandedGroups[item.id];
-                      
-                      // Determine button style based on database tracking
+
                       const isSelected = selectedRows.has(item.id);
                       const isCombinedIncluded = combinedItemsMap.has(item.id);
                       const isItemGenerated = generatedItems.has(item.id);
-                      
-                      let buttonClass = 'modern-btn-success'; // Default blue for new/available
+
+                      let buttonClass = 'modern-btn-success';
                       let buttonTitle = 'Générer facture';
 
                       if (isSelected) {
@@ -4056,7 +4070,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                         buttonClass = 'modern-btn-success';
                         buttonTitle = 'Générer facture';
                       }
-                      
+
                       return (
                         <React.Fragment key={item.id}>
                           <tr className={isGroup ? `installation-row ${isExpanded ? 'expanded' : ''}` : ''}>
@@ -4066,14 +4080,14 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                             <td>{formatDate(item.date)}</td>
                             <td>
                               <span className="status-badge status-primary">
-                                ${isGroup ? item.type : (item.typeLabel || 'Activation')}
+                                {isGroup ? item.type : (item.typeLabel || 'Activation')}
                               </span>
                               {isGroup && (
                                 <span className="expand-icon" style={{ marginLeft: '8px', cursor: 'pointer' }} onClick={() => toggleGroup(item.id)}>
                                   <ChevronRight size={14} className={isExpanded ? 'rotated' : ''} />
                                 </span>
                               )}
-                             </td>
+                            </td>
                             <td>
                               {isGroup ? item.activations.map(a => a.matricule).join(', ') : item.matricule}
                               {isGroup && item.activations.length > 1 && (
@@ -4081,7 +4095,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                                   {item.activations.length} activations
                                 </span>
                               )}
-                             </td>
+                            </td>
                             <td>
                               {isGroup ? (
                                 <span style={{ fontSize: '0.7rem', color: '#6b7280' }}>
@@ -4090,7 +4104,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                               ) : (
                                 PLAN_LABEL[item.plan] || item.plan || '-'
                               )}
-                             </td>
+                            </td>
                             <td>
                               {editingPrice === item.id ? (
                                 <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
@@ -4103,26 +4117,26 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                                   {safeToFixed(displayPrice)} MAD
                                 </span>
                               )}
-                             </td>
+                            </td>
                             <td>
                               <span className="status-badge" style={{ background: paymentColor.bg, color: paymentColor.color }}>
                                 {paymentColor.label}
                               </span>
-                             </td>
+                            </td>
                             <td style={{ color: '#059669' }}>{safeToFixed(amountPaid)} MAD</td>
                             <td style={{ color: '#dc2626' }}>{safeToFixed(remaining)} MAD</td>
                             <td>
-                              <button 
-                                onClick={() => setCachetChoiceItem(item)} 
-                                disabled={isGenerating} 
-                                className={`modern-btn ${buttonClass}`} 
+                              <button
+                                onClick={() => setCachetChoiceItem(item)}
+                                disabled={isGenerating}
+                                className={`modern-btn ${buttonClass}`}
                                 style={{ padding: '4px 8px', fontSize: '11px' }}
                               >
                                 {isGenerating ? <Loader size={12} className="spinning" /> : <Download size={12} />}
                               </button>
                             </td>
                             <td></td>
-                            </tr>
+                          </tr>
                           {isGroup && isExpanded && item.activations.map((act, idx) => (
                             <tr key={`${item.id}_sub_${idx}`} className="activation-subrow">
                               <td colSpan="11" style={{ padding: '0 !important' }}>
@@ -4154,18 +4168,27 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                                     </tr>
                                   </tbody>
                                 </table>
-                               </td>
+                              </td>
                             </tr>
                           ))}
                         </React.Fragment>
                       );
                     })}
-                    {filteredItems.length === 0 && (
+                    {currentModalItems.length === 0 && (
                       <tr><td colSpan={11} className="clients-empty">Aucune activation ou renouvellement trouvé</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
+
+              {/* ---------- PAGINATION (using the existing Pagination component) ---------- */}
+              {filteredItems.length > modalItemsPerPage && (
+                <Pagination
+                  currentPage={modalPage}
+                  totalPages={Math.ceil(filteredItems.length / modalItemsPerPage)}
+                  onPageChange={setModalPage}
+                />
+              )}
             </>
           )}
         </div>
@@ -4173,7 +4196,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
           <button onClick={onClose} className="modern-btn modern-btn-secondary">Fermer</button>
         </div>
       </div>
-      
+
       {/* PORTALS FOR CACHET CHOICE DIALOGS */}
       {showCachetPromptCombined && ReactDOM.createPortal(
         <CachetChoicePrompt onClose={() => setShowCachetPromptCombined(false)} onConfirm={async (showCachet) => { setShowCachetPromptCombined(false); await handleGenerateCombinedInvoice(showCachet); }} />,
