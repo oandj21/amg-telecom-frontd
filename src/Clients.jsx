@@ -41,7 +41,7 @@ import {
 } from './Store/store';
 import axios from 'axios';
 
-const API_URL = window.REACT_APP_API_URL || "http://127.0.0.1:8000/api";
+const API_URL = window.REACT_APP_API_URL || "https://amg-telecom-backd-production.up.railway.app/api";
 
 // ==================== STYLES ====================
 const styles = `
@@ -2612,7 +2612,8 @@ const formatDate = (dateString) => {
   });
 };
 
-// ==================== ACTIVATIONS DETAILS MODAL ====================// ==================== ACTIVATIONS DETAILS MODAL (with fallback & 20‑item pagination) ====================
+// ==================== ACTIVATIONS DETAILS MODAL ====================
+// ==================== ACTIVATIONS DETAILS MODAL (with full pagination & fallback fetch) ====================
 const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   const dispatch = useDispatch();
   const [loading, setLoading] = useState(true);
@@ -2656,7 +2657,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
   const [showPartial, setShowPartial] = useState(true);
   const [showUnpaid, setShowUnpaid] = useState(true);
 
-  // Modal pagination (20 per page)
+  // ---------- PAGINATION STATE ----------
   const [modalPage, setModalPage] = useState(1);
   const modalItemsPerPage = 20;
 
@@ -2758,25 +2759,6 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
 
   // ==================== INVOICE TRACKING FUNCTIONS ====================
 
-  const markInvoiceGeneratedAPI = async (clientId, itemId, invoiceNumber) => {
-    try {
-      console.log('💾 SAVING to database:', { clientId, itemId, invoiceNumber });
-
-      const result = await dispatch(saveIndividualInvoice({
-        clientId,
-        itemId: itemId,
-        invoiceNumber
-      })).unwrap();
-
-      console.log('✅ Save API response:', result);
-      return true;
-    } catch (error) {
-      console.error('❌ Error saving invoice:', error);
-      showToast('Erreur lors de l\'enregistrement de la facture', 'error');
-      return false;
-    }
-  };
-
   const checkIndividualExistsAPI = async (clientId, itemId) => {
     try {
       const result = await dispatch(checkIndividualInvoiceStatus({ clientId, itemId })).unwrap();
@@ -2799,9 +2781,9 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
 
         setLoadingProgress(10);
 
-        // ---------- FALLBACK LOGIC ----------
+        // ---------- FALLBACK LOGIC: try per_page=500, then 100, then no limit ----------
         let activationsResponse, salesResponse;
-        let perPage = 500; // start with 500
+        let perPage = 500;
 
         try {
           [activationsResponse, salesResponse] = await Promise.all([
@@ -3166,7 +3148,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
     }
   }, [client, showToast]);
 
-  // Filter items by date
+  // ==================== FILTER ITEMS BY DATE ====================
   const filteredItems = useMemo(() => {
     let filtered = [...displayItems];
     if (startDate) {
@@ -3184,51 +3166,16 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
     return filtered;
   }, [displayItems, startDate, endDate]);
 
-  // Compute current page items (20 per page)
+  // ---------- COMPUTE CURRENT PAGE ITEMS ----------
   const currentModalItems = useMemo(() => {
     const start = (modalPage - 1) * modalItemsPerPage;
     return filteredItems.slice(start, start + modalItemsPerPage);
   }, [filteredItems, modalPage]);
 
-  // Reset to page 1 when date filters change
+  // Reset page when date filters change
   useEffect(() => {
     setModalPage(1);
   }, [startDate, endDate]);
-
-  // Helper to get effective price for PDF (TTC or HT) based on item's invoiced status
-  const getEffectivePriceForPDF = (item, includeTVA) => {
-    const storedPrice = item.isGroup ? item.grandTotalTTC : item.displayPriceTTC;
-    if (includeTVA) {
-      return item.is_invoiced ? storedPrice : storedPrice * 1.20;
-    } else {
-      return item.is_invoiced ? storedPrice / 1.20 : storedPrice;
-    }
-  };
-
-  // Total amounts for filtered items (for display, not used in PDF totals)
-  const totalHTFiltered = useMemo(() => {
-    let total = 0;
-    for (const item of filteredItems) {
-      if (item.isGroup) {
-        total += item.grandTotalTTC;
-      } else {
-        total += item.displayPriceTTC;
-      }
-    }
-    return total;
-  }, [filteredItems]);
-
-  const totalTTCFiltered = useMemo(() => {
-    let total = 0;
-    for (const item of filteredItems) {
-      if (item.isGroup) {
-        total += item.grandTotalTTC;
-      } else {
-        total += item.displayPriceTTC;
-      }
-    }
-    return total;
-  }, [filteredItems]);
 
   // ==================== GENERATE SUMMARY PDF ====================
   const generateSummaryPDF = async (includeTVA = true) => {
@@ -3404,7 +3351,8 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
     }
   };
 
-  // Handle checkbox selection
+  // ==================== CHECKBOX, EDIT PRICE, INVOICE GENERATION ====================
+
   const toggleRowSelection = (rowId) => {
     const newSelected = new Set(selectedRows);
     if (newSelected.has(rowId)) {
@@ -3424,7 +3372,6 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
     }
   };
 
-  // Edit price for an activation inside a group or standalone
   const startEditPrice = (itemId, currentPriceTTC) => {
     setEditingPrice(itemId);
     setTempPrice(currentPriceTTC.toString());
@@ -3879,7 +3826,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
     }));
   };
 
-  // ==================== MODAL RENDER ====================
+  // ==================== RENDER ====================
   return (
     <div className="clients-overlay" onClick={onClose}>
       <div className="clients-dialog" style={{ maxWidth: '1400px' }} onClick={e => e.stopPropagation()}>
@@ -4181,7 +4128,7 @@ const ActivationsDetailsModal = ({ client, onClose, showToast }) => {
                 </table>
               </div>
 
-              {/* ---------- PAGINATION (using the existing Pagination component) ---------- */}
+              {/* ========== PAGINATION ========== */}
               {filteredItems.length > modalItemsPerPage && (
                 <Pagination
                   currentPage={modalPage}
